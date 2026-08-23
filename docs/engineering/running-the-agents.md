@@ -149,16 +149,35 @@ So the order matters. A deep, proven ticket backlog first. Automation second.
 
 ### Recommended rhythm
 
+Cloud tasks are assigned through an account, not through a machine. Nothing has to be
+queued up before leaving the laptop — a browser or phone works from anywhere.
+
 ```text
-Morning, 30–45 min    Claude session — produce a batch of tickets
-Before leaving        Assign 2–4 to Codex cloud tasks. Close the laptop.
-During the day        PRs accumulate. Glance from a phone if you want to.
-Evening               Claude session — review. Codex fixes. Merge what is green.
+Morning, 30–45 min    Claude session on the laptop — produce a batch of tickets,
+                      push them as issues. Close the laptop.
+
+During the day        From a phone or any browser: assign a Codex cloud task.
+                      When its PR appears, assign the next. Answer any
+                      Decision Request. Nothing else.
+
+Evening               Claude session — review the accumulated PRs.
+                      Codex fixes. Merge what is green.
 ```
 
-This uses both ends of the day, needs no exotic automation, and keeps ambiguous work in
-front of a human. Revisit Actions-triggered automation once tickets are reliably good
-enough that unattended implementation has become boring.
+**Stagger the tasks; do not fire a batch.** Four tasks assigned at once consume quota
+simultaneously and can exhaust a rolling window in one go. Assigning them one at a time
+across the day spreads the burn and, more importantly, means a systematically bad ticket
+produces one discarded pull request rather than four.
+
+Early on, assign exactly one and look at what comes back before scaling up. Ticket quality
+is unproven until a ticket has actually produced a good PR without follow-up questions.
+
+The only two things worth doing from a phone are **assigning the next task** and
+**answering Decision Requests**. Both are the operator's job. Neither requires reading
+code.
+
+Revisit Actions-triggered automation once tickets are reliably good enough that unattended
+implementation has become boring.
 
 ## Managing context
 
