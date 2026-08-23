@@ -116,28 +116,39 @@ time a resolution was passed.
 ### `BODY_RESOLUTION` completion rule
 
 A fourth completion rule alongside `ALL`, `ANY_ONE` and `AT_LEAST_N`. When a stage is
-assigned to a Governance Body:
+assigned to a Governance Body, exactly **one** `ApprovalDecision` satisfies the stage:
 
-- exactly **one** `ApprovalDecision` satisfies the stage;
-- `decided_by_type` is `BODY`, and `decided_by_id` is the body;
-- `resolution_reference` is **required** — the minutes or protocol identifier;
-- `resolution_date` is required and may precede the date of entry, because boards meet
-  before anyone opens the software;
-- `recorded_by_user_id` is required — the authorised person who entered it, who must hold
-  the capability to record decisions for that body;
-- `recorded_at` is the system timestamp, and is distinct from `resolution_date`.
+| Field | Always | Notes |
+|---|---|---|
+| `decided_by_type = BODY`, `decided_by_id` | yes | The body is the approver |
+| `recorded_by_user_id` | yes | The authorised person who entered it, who must hold the capability to act for that body |
+| `recorded_at` | yes | System timestamp, distinct from the resolution date |
+| `resolution_reference` | **configurable** | Minutes or protocol identifier |
+| `resolution_date` | **configurable** | The date the body actually resolved |
+| `minutes_attachment` | **configurable** | The governed minutes document or file |
+| `attending_members` | **configurable** | Who sat on the body for that resolution |
 
-> **INV-APR-021 — A body resolution decision must carry a resolution reference, a
-> resolution date, and the identity of the authorised person who recorded it. The
-> recording person is never presented as the approver.**
+Only the first three are structural. Everything else is the customer's governance rule,
+not ours — a small organisation may want nothing more than "the board approved this",
+while a regulated one wants the protocol number, the resolution date and the minutes
+attached. See `configuration-model.md`.
 
-> **INV-APR-022 — `resolution_date` may precede `recorded_at`, but may not precede the
-> submission of the content revision being approved.** A board cannot have resolved on
-> text that did not yet exist.
+> **INV-APR-021 — A body resolution decision always distinguishes the deciding body from
+> the user who recorded it. The recorder is never presented as the approver.**
 
-That second rule is the interesting one. It is exactly the kind of backdating that
-regulated organisations do accidentally, and catching it deterministically is the sort of
-thing the product exists to do.
+> **INV-APR-024 — Which evidence fields a decision requires is tenant configuration, and
+> the configuration version in force at decision time is recorded with the decision.**
+
+That second rule is what keeps historical evidence interpretable. Without it, a decision
+recorded in 2026 cannot later be judged against the rules that applied in 2026.
+
+> **INV-APR-022 — Where a resolution date is recorded, it may precede `recorded_at` but
+> may not precede submission of the content revision being approved.** A board cannot have
+> resolved on text that did not yet exist.
+
+That last rule is the interesting one. It is exactly the kind of backdating that regulated
+organisations do accidentally, and catching it deterministically is the sort of thing the
+product exists to do.
 
 ## `GoverningFramework`
 

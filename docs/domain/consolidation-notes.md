@@ -54,6 +54,7 @@ actually governs its documents.
 | **`GovernanceBody` and `BODY_RESOLUTION`** — approval by a collective body | Both sources modelled approvers as users, roles or groups. "The Management Board resolved" is a different governance fact from "five people clicked approve", and European corporate governance runs on the former | `document-taxonomy.md`, INV-APR-021…023 |
 | **`GoverningFramework`** — the internal constitution that prescribes approval rules for every other type | Both sources treated workflow configuration as free-standing. In reality it derives from a document, and that provenance is what makes it auditable | `document-taxonomy.md`, INV-DOC-030 |
 | **Type-versus-title drift** — a document titled "SCA Guidelines v2" that is, in the taxonomy, a Manual | Both sources assumed clean metadata. Real estates arrive messy, and the product's job is to surface the mess without refusing the import | `document-taxonomy.md`, INV-DOC-005 |
+| **The configurable / invariant boundary, and governance profiles** | Both sources described governance rules as though one correct model existed. In reality a small fintech wanting version tracking and review reminders and a bank wanting board resolutions with minutes are the same product under different configuration. Neither source drew the line between what a customer may configure and what the product guarantees regardless | `configuration-model.md`, INV-CFG-001…006 |
 
 ## Deliberate departures from both sources
 

@@ -87,9 +87,23 @@ invariant already in force.
 | INV-APR-010 | A Workflow Template Version is immutable; editing creates a new version and never alters active or historical runs | Otherwise an admin edit rewrites the meaning of past approvals | I | V1 |
 | INV-APR-011 | Where configured, separation of duties prevents the author being the sole final approver | Standard control expectation in regulated organisations | I, E | V1 |
 | INV-APR-020 | A workflow may add approval requirements beyond its Document Type's mandated authority, never fewer | Makes the governing framework binding rather than advisory | U, I, E | MVP |
-| INV-APR-021 | A `BODY_RESOLUTION` decision carries a resolution reference, a resolution date and the authorised recording user; the recorder is never presented as the approver | "The Management Board approved" is a different fact from "five people clicked approve" | U, I, E | MVP |
-| INV-APR-022 | `resolution_date` may precede `recorded_at`, but never precedes submission of the revision it approves | A board cannot have resolved on text that did not yet exist | U, I | MVP |
+| INV-APR-021 | A `BODY_RESOLUTION` decision always distinguishes the deciding body from the user who recorded it; the recorder is never presented as the approver | "The Management Board approved" is a different fact from "a person clicked approve". Structural, not configurable. | U, I, E | MVP |
+| INV-APR-022 | Where a resolution date is recorded, it may precede `recorded_at` but never precedes submission of the revision it approves | A board cannot have resolved on text that did not yet exist | U, I | MVP |
 | INV-APR-023 | Recording a body resolution requires capability to act for that specific body | Otherwise anyone can assert a board decision | I, E | MVP |
+| INV-APR-024 | Which evidence fields a decision requires is tenant configuration; the configuration version in force at decision time is recorded with the decision | A simple tenant needs no minutes reference; a regulated one does. Evidence must stay interpretable under the rules that applied then. | I, E | MVP |
+
+## INV-CFG — Configuration
+
+Governance rules belong to the customer. Product invariants do not.
+
+| ID | Invariant | Why it matters | Test | Phase |
+|---|---|---|---|---|
+| INV-CFG-001 | No tenant configuration can disable, weaken or bypass any invariant in this registry | The line between customer policy and product guarantee must be absolute, or the guarantees are worthless | U, I | MVP |
+| INV-CFG-002 | Applying a governance profile **copies** configuration; it never creates a live link, and updating a profile never alters an existing tenant | Same principle as master documents: nothing silently re-governs a customer | I, E | MVP |
+| INV-CFG-003 | The configuration version in force at the time of a governed action is recorded with that action | Otherwise historical evidence cannot be interpreted — you cannot tell whether a 2026 approval satisfied the 2026 rules | I, E | MVP |
+| INV-CFG-004 | Every configuration change emits an audit event with actor, before and after state | Configuration is governance; changing it is a governed act | I | MVP |
+| INV-CFG-005 | Weakening a configured control — removing a mandated approver, disabling a required evidence field, shortening retention — requires elevated capability and a recorded reason | The easiest way to defeat a control is to quietly reconfigure it | I, E | V1 |
+| INV-CFG-006 | Configuration changes never retroactively alter completed governance records | Reconfiguring today must not rewrite what happened last year | I, E | MVP |
 
 ## INV-AUTH — Authorization
 
