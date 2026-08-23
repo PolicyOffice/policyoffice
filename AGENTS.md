@@ -61,6 +61,32 @@ Decision Request.
 - Agent authorship is attributed honestly in commit trailers. That is a feature of this
   project, not something to hide.
 
+## Picking up work
+
+Do not wait to be told which issue. Select it yourself.
+
+```bash
+gh issue list --label ready --state open
+```
+
+Selection rule, in order:
+
+1. Skip anything whose `Depends on:` issues are still open.
+2. Skip anything already labelled `in-progress` or with an open PR referencing it.
+3. Among what remains, take the lowest `POL-` number.
+
+Claim it before starting, and release it if you stop:
+
+```bash
+gh issue edit <n> --add-label in-progress
+```
+
+For review work, `gh pr list --state open` — review every PR with no review from you since
+its most recent commit.
+
+The operator should never need to know an issue number. If they do, the backlog is not
+selectable and that is a defect in the tickets.
+
 ## Escalate, do not improvise
 
 Open a **Decision Request** issue (template provided) and stop, when you hit:

@@ -26,29 +26,34 @@ conversation can pick up work and be immediately useful.
 
 ## What you actually type
 
+**You never need to know an issue or PR number.** The agents query the backlog themselves
+using the selection rule in `AGENTS.md`.
+
 **Starting implementation work.** Open Codex — a separate terminal, not the one Claude is
-in — and give it one line:
+in — and say:
 
 ```text
-Work on issue #14. Follow AGENTS.md.
+Pick up the next ready issue and implement it. Follow AGENTS.md.
 ```
 
-That is the whole instruction. Codex reads `AGENTS.md` on its own, reads the issue with
-`gh issue view 14`, finds the spec sections the issue cites, implements, tests, and opens
-a pull request. If the ticket needs more than one line of instruction from you, the ticket
-was not finished.
+Codex lists open issues labelled `ready`, skips any with unmet dependencies or work
+already in progress, claims the lowest-numbered one that remains, reads the spec sections
+it cites, implements, tests and opens a pull request.
 
 **Getting a review.** In a Claude session:
 
 ```text
-Review PR #23.
+Review any open PRs.
 ```
 
 **Fixing review comments.** Back in Codex:
 
 ```text
-Address the review comments on PR #23.
+Address the review comments on any PRs that have them.
 ```
+
+If a ticket ever needs more than one line of instruction from you, the ticket was not
+finished. That is a specification failure, not an operator failure.
 
 ## Local Codex or cloud Codex
 
@@ -82,6 +87,9 @@ git worktree remove ../pm-pol-014
 Only parallelise tickets with no dependency on each other. The ticket backlog states
 dependencies for exactly this reason.
 
+This is a tool for later. Until there is a backlog with genuinely independent tickets in
+it, there is nothing to run in parallel and no reason to create a worktree.
+
 ## A realistic day
 
 You will not run all of this every day. Most days are one box.
@@ -101,6 +109,56 @@ End         Merge what is green. Answer any Decision Request.
 
 The expensive part is the morning. Everything after it is cheap, and most of it happens
 without you.
+
+## Automation: what is actually possible
+
+Neither agent polls. Both are turn-based — they act when addressed and sit inert
+otherwise. "Leave them both running and they will find work" is not how either behaves
+natively.
+
+What does exist:
+
+| Mechanism | What it does | Verdict |
+|---|---|---|
+| **Codex cloud tasks** | Assign tickets; they run in their own containers and open PRs. Laptop can be closed. Several at once. | **Use this.** The right answer for "I am at work." |
+| **`/loop` in a Claude session** | Polls on an interval — check open PRs every 30 minutes and review them | Useful once there is steady PR flow. Costs quota on empty ticks. Not yet. |
+| **Scheduled cloud agents** | A cron-triggered session that clones the repo and performs a defined job | Viable. Premature. |
+| **Remote Control from a phone** | Drive a laptop session from your phone | Real, and the right tool if you want to intervene mid-day |
+| **GitHub Actions triggering agents** | Label an issue `ready`, a workflow runs the agent and opens the PR | The genuine end state. **Verify plan coverage before designing around it.** |
+
+### Cloud agents are not context-starved here
+
+The usual objection to cloud sessions is that they lack the project context sitting on your
+machine. **For this project that is false.** All context is the repository — `AGENTS.md`,
+the specification, the invariant registry, the tickets. A cloud agent clones it and knows
+exactly what a local one knows.
+
+That is a direct payoff of putting context in files rather than in conversations. It was
+not an accident, and it is what makes unattended work viable at all.
+
+### The bottleneck is not agent runtime
+
+Worth stating bluntly, because it changes what is worth automating: **unused quota is not
+the constraint. Specification quality is.**
+
+An agent grinding unsupervised through vague tickets produces pull requests that get
+discarded, costing more quota than idling ever saved. Automation multiplies whatever the
+backlog contains — including its mistakes, at scale, while nobody is reachable.
+
+So the order matters. A deep, proven ticket backlog first. Automation second.
+
+### Recommended rhythm
+
+```text
+Morning, 30–45 min    Claude session — produce a batch of tickets
+Before leaving        Assign 2–4 to Codex cloud tasks. Close the laptop.
+During the day        PRs accumulate. Glance from a phone if you want to.
+Evening               Claude session — review. Codex fixes. Merge what is green.
+```
+
+This uses both ends of the day, needs no exotic automation, and keeps ambiguous work in
+front of a human. Revisit Actions-triggered automation once tickets are reliably good
+enough that unattended implementation has become boring.
 
 ## Managing context
 
