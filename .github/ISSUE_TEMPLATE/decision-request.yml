@@ -1,0 +1,77 @@
+name: Decision Request
+description: A decision only the founder can make. Blocks the related work until answered.
+title: "[DECISION] "
+labels: ["decision-required"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Open this instead of guessing. A blocked ticket with a clear question is a good
+        outcome; a ticket that quietly redefined the product is not.
+        Keep it answerable in one line.
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Money (paid service or exceeded free tier)
+        - Scope (cannot be built as specified)
+        - Product rule (would contradict docs/domain/)
+        - Privacy or legal posture
+        - Irreversible or externally visible
+        - Deadlock (agents disagree, tests cannot arbitrate)
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: The question
+      description: One or two sentences. No preamble.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Why this came up
+      description: What was being built, and what it ran into.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      description: |
+        Each option with its consequence. Include cost in €/month where relevant, and
+        state plainly what breaks if we do nothing.
+      value: |
+        **A.** …
+        - Consequence:
+        - Cost:
+
+        **B.** …
+        - Consequence:
+        - Cost:
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommendation
+      description: Pick one and say why. Do not present a neutral menu.
+    validations:
+      required: true
+  - type: dropdown
+    id: reversibility
+    attributes:
+      label: How reversible is this?
+      options:
+        - Easily reversed later
+        - Reversible with meaningful rework
+        - Effectively one-way
+    validations:
+      required: true
+  - type: input
+    id: blocks
+    attributes:
+      label: Blocks
+      description: Issue and/or PR numbers held up by this.

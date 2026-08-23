@@ -1,0 +1,85 @@
+name: Implementation Ticket
+description: A complete contract an implementation agent can execute without redesigning the feature.
+title: "POL-000 "
+labels: ["implementation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every section must be filled. If the invariants or acceptance criteria cannot be
+        written, the specification is not ready and this ticket should not exist yet.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Authoritative spec sections and dependency issues.
+      value: |
+        Spec: `docs/domain/….md` §…
+        Depends on: #
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One sentence.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: In scope / Out of scope
+      value: |
+        **In scope**
+        -
+
+        **Out of scope**
+        -
+    validations:
+      required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Invariants that must not break
+      description: Stable IDs from docs/domain/invariants.md. Test names must contain them.
+      placeholder: INV-VER-003, INV-AUTH-011
+    validations:
+      required: true
+  - type: textarea
+    id: authorization
+    attributes:
+      label: Authorization
+      description: Capability and scope required. Include the deny path.
+    validations:
+      required: true
+  - type: textarea
+    id: audit
+    attributes:
+      label: Audit events to emit
+      description: Event types and the fields that must be populated.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Testable statements. "Given / when / then", not feature descriptions.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Required tests
+      value: |
+        - Unit:
+        - Integration:
+        - Playwright: yes / no —
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Likely files
