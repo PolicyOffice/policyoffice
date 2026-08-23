@@ -19,6 +19,41 @@ and kept; its number is never reused.
 **Phase** — `MVP` must hold in the Pilot · `V1` Commercial V1 · a phase never weakens an
 invariant already in force.
 
+## Enforcement ladder
+
+An invariant written only in a test is a rule the code is *checked against* afterwards. An
+invariant expressed as a schema constraint is a rule the code **cannot break**. Always
+prefer the latter.
+
+Levels, strongest first:
+
+| Level | Mechanism | Effect |
+|---:|---|---|
+| **1** | Structural — the violating state cannot be represented | Composite foreign keys that include `tenant_id`; required columns; no nullable escape hatch |
+| **2** | Database constraint, index or privilege | Exclusion constraint over effective intervals; partial unique index; trigger; `UPDATE`/`DELETE` revoked from the application role on append-only tables |
+| **3** | Type system | A released version's content is not typed as mutable; capabilities are not bare strings |
+| **4** | A single enforcement point in application code | One authorization evaluator, one supersession transaction, and no second path around either |
+| **5** | Test only | Asserted after the fact |
+
+> **Rule.** Every invariant is enforced at the strongest level that is practical. The
+> ticket implementing it records which level was chosen, and level 5 alone requires a
+> stated reason for why nothing stronger was feasible.
+
+Illustrative targets — to be confirmed once the database is selected:
+
+| Invariant | Target | Mechanism |
+|---|---:|---|
+| INV-TEN-003 no cross-tenant reference | 1 | Every foreign key composite with `tenant_id` |
+| INV-EFF-002 at most one effective version per scope | 2 | Exclusion constraint over the effective interval |
+| INV-VER-003 released content immutable | 2 | Trigger, or `UPDATE` revoked on released rows |
+| INV-AUD-002 audit append-only | 2 | `UPDATE`/`DELETE` revoked from the application role |
+| INV-TIME-003 optimistic concurrency | 2 | Version column with a conflict-raising update |
+| INV-AUTH-001 default deny | 4 | One evaluator; no code path that answers authorization independently |
+| INV-APL-001 deterministic resolution | 5 | Cannot be structurally enforced — property-based tests instead |
+
+This is the difference between an agent that has to *remember* that released content is
+immutable, and a system in which forgetting is not sufficient to cause harm.
+
 ---
 
 ## INV-TEN — Tenant isolation

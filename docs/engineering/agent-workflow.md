@@ -31,12 +31,31 @@ to make tickets good enough that Codex does not need Claude.
 **The reviewer is never the implementer.** This is the whole reason the two-agent split
 exists, and it is why this project does not need a fan-out of review subagents.
 
+### Two review passes, not one
+
+They answer different questions, and the cheap one runs first.
+
+| Pass | Reviewer | Question | Cost |
+|---|---|---|---|
+| **Implementation review** | Codex, on its own diff | Is this correct, safe and idiomatic code? Off-by-one, unhandled error, missing await, N+1 query, dead branch | cheap — same context, already loaded |
+| **Conformance review** | Claude, independent | Does this do what the specification says? Right invariants, right audit events, right authorization, no semantic drift from the ticket | expensive — reserve for it |
+
+A model reviewing its own output still catches a great deal, because reading and writing
+are different tasks. What it catches *less* reliably is its own misreading of the
+specification — a misunderstanding tends to persist across both passes. That is precisely
+the gap the independent conformance review exists to close, and why the two passes are not
+redundant.
+
+Running the cheap pass first means Claude's pass is not spent on missing null checks.
+
 ## The loop
 
 ```text
 Claude writes issue (complete contract)   →  label: ready
         ↓
 Codex branches, implements, tests, opens PR (Closes #N)
+        ↓
+Codex self-reviews its own diff for implementation defects
         ↓
 CI runs deterministic gates
         ↓
@@ -72,6 +91,18 @@ accounts to simulate a team.
 
 Tier 2 paths are enforced through `CODEOWNERS`, not memory.
 
+### Visual evidence on user-visible changes
+
+Any PR that changes something a user sees attaches Playwright screenshots of the affected
+screens, before and after where meaningful. CI already produces them; publishing them to
+the PR is close to free.
+
+This exists for one specific reason: it lets the founder do **product** review in ten
+seconds — glancing at three images and saying "that's wrong" — without reading a diff,
+running the application, or deploying anything. It is not code review, and it is not a
+merge gate. It is how the one judgement the founder is uniquely qualified to make gets
+made cheaply.
+
 ### Phasing
 
 - **Until the golden slice is complete and its invariant suite is proven:** tiers 1 and
@@ -101,6 +132,23 @@ Answers are recorded in the repository — as an ADR when architectural, otherwi
 closed issue with the founder's reasoning. **Think in chat, decide in GitHub.**
 
 ## The ticket contract
+
+### Specify outcomes, not implementations
+
+A ticket states **what must be true**, never **how to build it**. It defines behaviour,
+invariants, architectural boundaries and acceptance criteria. It does not say "create
+`FooService.ts`, implement method A using algorithm B."
+
+Two reasons. The implementing agent has the current repository loaded and Claude does not,
+so it is better placed to choose an approach that fits what actually exists. And a
+planner's mistaken assumption, written into a ticket as an instruction, propagates
+downstream unchallenged — whereas a stated outcome invites the implementer to notice the
+problem.
+
+The `Likely files` section is a navigation hint. It is never a specification.
+
+Prescribe implementation only where there is an architectural reason, and say what the
+reason is.
 
 A ticket is Codex-ready only when every section is filled. If the invariants or
 acceptance-criteria sections cannot be filled, the specification is not ready and the

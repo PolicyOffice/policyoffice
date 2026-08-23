@@ -83,3 +83,7 @@ body:
     id: files
     attributes:
       label: Likely files
+      description: >-
+        A navigation hint, not a specification. Choose whatever implementation actually
+        fits the repository as it stands. If this ticket prescribes an approach, it says
+        why.
