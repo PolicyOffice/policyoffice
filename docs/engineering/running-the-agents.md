@@ -185,17 +185,28 @@ Context is re-sent on every turn, so a long conversation costs more per message 
 short one, and eventually gets compacted — which loses detail. The instinct to manage this
 is correct. The fix, though, is **session hygiene, not compaction settings**.
 
-**One session, one coherent job.** Consolidating the spec is a session. Reviewing three
-PRs is a session. Debugging a failing migration is a session. When the job changes, clear
-and start fresh.
+**One session, one coherent job.** Consolidating the specification is a session.
+Reviewing today's pull requests is a session. Debugging a failing migration is a session.
 
-```text
-/clear      starting something new — wipes context, keeps the repo
-/compact    mid-task and running long — summarises, keeps continuity, loses detail
-```
+A session is closer to a branch than to a workspace. You would not do six months of work
+on one branch and periodically reset it.
 
-Prefer `/clear`. A fresh session that reads `AGENTS.md` and two spec files knows more,
-more accurately, than a stale session carrying 200k tokens of conversation about something
+| Action | When |
+|---|---|
+| **Start a new session** | A new unit of work. **The default.** |
+| **Resume a session** | Continuing the same unit of work later — mid-debug, back after lunch |
+| **`/clear`** | You are inside a session that has drifted or finished and you want to keep this window. Uncommon. |
+| **`/compact`** | Mid-task, running long, and continuity genuinely matters. Lossy — usually better to finish and start fresh. |
+
+Starting a new session costs no more than clearing one; both begin from zero context. What
+separate sessions buy is **history**. Each has its own title and transcript, so "the
+session where we settled the document taxonomy" is findable months later, and two sessions
+can run at once — one reviewing PRs while another writes specification. A single
+long-lived session that has been cleared twelve times has one title and a transcript
+nobody can navigate.
+
+Either way, a fresh session that reads `AGENTS.md` and two specification files knows more,
+and more accurately, than a stale one carrying 200k tokens of conversation about something
 else. The summary you would have paid to keep is usually worse than the documents it was
 summarising.
 
