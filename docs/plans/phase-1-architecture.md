@@ -43,15 +43,17 @@ threat model, and the ADRs that record why each is the way it is.
 - [x] `ADR-0005` — effectivity and supersession. The interval is claimed at publication, an
       exclusion constraint keyed on the variant enforces INV-EFF-002, and resolution reads
       the range rather than a state column
+- [x] `ADR-0006` — the audit ledger and outbound delivery. Written in the same transaction,
+      ordered by a gapless per-tenant sequence, append-only by revoked privilege, and read
+      forward by cursor for webhooks and SIEM
+- [x] `ADR-0007` — job execution and scheduling. At-least-once with idempotency in the
+      domain transaction, reference payloads, calendar-rule scheduling, and failure that
+      raises a governance exception rather than a log line
 
 ## Remaining — ADRs
 
 Roughly in dependency order. Each is small; several are a page.
 
-- [ ] `ADR-0006` — **Audit outbox.** Table design, delivery, and the total ordering
-      INV-AUD-009 requires. Carries INV-AUD-002, INV-AUD-004, INV-AUD-009
-- [ ] `ADR-0007` — **Job execution.** Queue choice, idempotency keys, retry and failure
-      semantics, and scheduling across DST. Carries INV-EFF-007, INV-TIME-002, INV-TIME-004
 - [ ] `ADR-0008` — **Evidence pack generation.** Assembly, determinism, streaming, storage
       and expiry. Carries INV-EVD-003, INV-EVD-006, INV-EVD-010
 - [ ] `ADR-0009` — **Migrations and environments.** Neon branching, seeding, and the
