@@ -28,9 +28,8 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 9 | Human-readable rendering in evidence packs | One line of the pack layout | Ship originals in the Pilot; amend the layout | Open — does not block |
 
 Decisions 1, 2, 6, 7 and 8 are answered. Phase 1 is complete and **Phase 2 is unblocked**.
-One detail remains before the licence file can be written: PolyForm Shield names a
-*licensor*, and whether that is a person or a company is not yet recorded. Decisions 3, 4
-and 5 shape Pilot scope and stop nothing.
+The licensor is recorded and `LICENSE` is committed. Decisions 3, 4 and 5 shape Pilot scope
+and stop nothing.
 
 ---
 
@@ -304,11 +303,16 @@ out of the zone and not purchasable. Confirm at a registrar before assuming.
 | **The `.com` is an option we do not control** | BrandBucket is a broker, not a business — no MX records, nobody operating it. The listed price will not inflate, but they sell to whoever pays first, and a competitor operating under the name would be a genuine problem. `.eu` is the primary regardless, and for a product positioned on regulated European companies that is a statement rather than a consolation |
 | **A crowded family** | PolicyStat, PolicyTech, PolicyHub, PolicyBridge and ClearPolicy already exist. `clearpolicy.app` is live and adjacent to what we do |
 
-### Still needed before the licence file
+### The licensor
 
-PolyForm Shield 1.0.0 (decision 6) names a **licensor**. Whether that is the founder
-personally or an Estonian company is not yet recorded, and the licence file cannot be
-written without it.
+Resolved 2026-08-25: the licensor is **Aksel Costa**, personally.
+
+Naming an entity that does not yet exist would have been worse than having no licence at
+all — a grant by an unregistered company is a grant by nobody. The operating company is
+expected to be *PolicyOffice OÜ*, matching the brand, the domain and the GitHub
+organisation exactly, so that contracts and the licence name one string rather than three
+variants. When it is incorporated, copyright is assigned to it and `LICENSE` is updated in
+the same commit.
 
 ---
 
@@ -356,7 +360,7 @@ file-centric* is a question that will be asked again.
 | 1 | Pilot `LegalEntity` capability | 2026-08-24 | Schema-complete, behaviour-minimal. `LegalEntity`, `OrgUnit` and `OrgMembership` exist from the first migration; one entity seeded per tenant; the resolver does no hierarchy traversal until V1 | `domain-model.md`, `multi-entity-model.md` Pilot scope |
 | 2 | Authoring model | 2026-08-24 | File-centric. The uploaded controlled file is the governed artefact and the thing hashed. Text extraction feeds comparison and materiality warnings and is never normative | `versioning.md`, `domain-model.md` |
 | 7 | Data residency | 2026-08-24 | One EU region, complete — application data, object storage, backups, search, audit, evidence packs, queues, DR replicas and observability all in-region | Phase 1: ADR-0000 and the infrastructure ADRs |
-| 6 | Licence | 2026-08-24 | PolyForm Shield 1.0.0, and the repository goes public | Phase 2: the licence file. Blocked on decision 8 for a licensor and a name |
+| 6 | Licence | 2026-08-24 | PolyForm Shield 1.0.0, and the repository goes public. Licensor: Aksel Costa, personally, pending incorporation | `LICENSE`, committed 2026-08-25 |
 | — | Application language | 2026-08-24 | TypeScript end to end. The founder reviews every agent-written pull request, and their fluency dominates any technical argument | `ADR-0000` |
 | — | Repository visibility | 2026-08-24 | Public. The CI gate list assumes unlimited Actions minutes | `ADR-0000`, and decisions 6 and 8 |
 | 8 | Product and repository name | 2026-08-25 | **PolicyOffice.** `.eu`, `.ee`, `.io` and the GitHub org are free; `.com` is held by a brand marketplace at roughly €7k and treated as a later option | Phase 2: the licence file, the repository name, package names |

@@ -47,5 +47,8 @@ documented in [`docs/engineering/agent-workflow.md`](docs/engineering/agent-work
 
 ## Licence
 
-**PolyForm Shield 1.0.0** — source-available: readable by anyone, not re-sellable as a
-competing service. The licence file lands in Phase 2, once the licensor is recorded.
+[PolyForm Shield 1.0.0](LICENSE) — source-available: readable by anyone, not re-sellable as
+a competing service.
+
+Licensor: **Aksel Costa**. Copyright will be assigned to the operating company once it is
+incorporated, and the licence updated in the same commit.
