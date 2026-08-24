@@ -65,6 +65,27 @@ actually governs its documents.
 | No per-PR preview environments in the Pilot | Playwright runs against the application inside the CI runner with a Postgres service container: full coverage, no infrastructure, €0. Preview deployments arrive when there is a design partner to show. |
 | `PolicyException` renamed **`Waiver`** | `PolicyException` reads as an error class in every mainstream language. The interface still shows the tenant's own label, commonly "policy exception". |
 
+## Refinements made while writing the domain chapters
+
+The eleven domain chapters forced decisions that neither blueprint stated, or that were
+stated inconsistently with a resolution already taken above. Each is recorded here because
+the reasoning is not obvious from the result.
+
+| # | Question | What the sources had | Resolution |
+|---:|---|---|---|
+| 15 | Are `DUE_SOON` and `OVERDUE` attestation states? | Master listed both among eight assignment states, adopted in contradiction 7 | **Derived, not stored.** The same reasoning as contradiction 4: a stored copy of a fact already implied by `due_at` is a second source of truth that can disagree with the first. `COMPLETED_LATE` stays stored, because its inputs — the deadline — can legitimately change afterwards and the fact must not |
+| 16 | Is `Archived` a version lifecycle state? | Master had `Superseded`, `Withdrawn` and `Cancelled` all transitioning to `Archived` | **A retention disposition, not a state.** A superseded version stays superseded permanently; overwriting that with `Archived` would make evidence say the wrong thing about how the version ended. Archival is recorded separately, with its own instant and access consequences |
+| 17 | Is `Space` an authorization scope? | Secondary made it one, with a Space Manager role. Contradiction 3 restricted Space to administration | **Not a scope.** `SPACE` is absent from the scope enumeration, and the Space Manager role is dropped. Made explicit as INV-AUTH-015 and INV-APL-010, so that the restriction is enforced rather than remembered |
+| 18 | One authorization primitive or two? | Master had `RoleAssignment` and `AccessRule` as separate entities; secondary had role assignments plus access rules | **One — `AccessGrant`, with an `effect`.** Two entities doing the same job with separate precedence rules is how permission systems become unpredictable. A role grant and a one-off deny are the same shape |
+| 19 | Does a narrower allow beat a broader deny? | Both said explicit deny overrides allow; neither said what happens when the allow is more specific | **Deny always wins, regardless of specificity.** Specificity ordering means administrators cannot answer *why can this person see this* without running the evaluator in their head |
+| 20 | Does resolution take a person or a scope? | Both algorithms were keyed on a user | **A scope.** A person maps to one or more scopes through dated memberships. Someone dual-hatted across two entities produces two contexts and two answers, which is a true statement rather than a conflict. Only ambiguity *within one scope* blocks anything |
+| 21 | Inheritance modes, or the specificity ladder? | Secondary had `MANDATORY`/`DEFAULT`/`LOCAL_ONLY`; master had the specificity ladder | **Both, doing different jobs.** Modes constrain what may be published; the ladder resolves what applies. `MANDATORY` now means no replacement may be published below it, only supplements — INV-APL-012 |
+| 22 | Can a content revision carry ungoverned attachments? | Neither ruled on it | **No.** Every attachment is governed content and participates in the digest (INV-VER-013). A "reference-only" attachment is a hole in exactly the thing the digest claims to prove |
+| 23 | May two candidates be open for one variant at once? | Neither ruled on it; both assumed one | **One** (INV-VER-012). Two open candidates raise an ordering question — which supersedes which, and what happens to the loser's approvals — that the model cannot answer. Lifting this later requires solving that first |
+| 24 | What happens to version numbers after a cancellation? | Neither ruled on it | **Gaps are permitted and never renumbered** (INV-VER-011). Renumbering would silently change what "version 4" refers to in every record that already names it |
+| 25 | Are governance exceptions stored? | Secondary stored an `UPSTREAM_CHANGE_REVIEW_REQUIRED` condition on the variant; master implied dashboard queries | **Derived views over authoritative records**, with one exception: `AlignmentObligation` is a stored entity, because INV-APL-008 requires a recorded governance action to clear it. A flag anyone can clear is a flag everyone clears |
+| 26 | What is the policy-gap event called? | Master wrote `policy_gap`; contradiction 13 adopted `family.action` naming | **`governance.policy_gap`**, alongside `governance.conflict_detected` and `governance.digest_mismatch`. INV-EFF-005 refers to the same event |
+
 ## Left open
 
 These require a decision before the physical data model is frozen. They are tracked in
