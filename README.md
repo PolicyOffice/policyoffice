@@ -16,9 +16,15 @@ The guiding test for every feature and architectural decision:
 
 ## Status
 
-**Phase 0 — specification consolidation.** No application code yet. The product and
-domain research is being consolidated into the canonical specification under `docs/`,
-after which architecture is selected and the repository is bootstrapped.
+**Phase 1 complete — architecture.** No application code yet.
+
+The specification is written and settled: 16 chapters under `docs/domain/` and
+`docs/product/`, and 145 invariants with stable identifiers. The architecture is derived
+from it: eleven ADRs, a physical data model, a threat model, and a one-page summary under
+`docs/architecture/`.
+
+Next is Phase 2, repository bootstrap — CI, migrations, the test harness and the licence.
+It is blocked on one open decision: the product's name.
 
 ## Repository map
 

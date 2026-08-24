@@ -5,6 +5,10 @@ threat model, and the ADRs that record why each is the way it is.
 
 **Phase 1 is complete when a Codex-ready ticket can be written against a real schema.**
 
+**Status: complete.** Eleven ADRs, the physical data model, the threat model and a one-page
+architecture summary. The vendor-verification criterion moved to Phase 2, where the accounts
+are created — see below.
+
 ## What Phase 0 handed over
 
 | Input | Consequence for this phase |
@@ -76,23 +80,45 @@ working as intended rather than a problem.
 - [x] `docs/architecture/threat-model.md` — assets, actors, trust boundaries, the three
       abuse categories that matter, and the residual risks written down as accepted rather
       than left unstated
+- [x] `docs/architecture/README.md` — one page for a security reviewer, with the decision
+      record, what we do not claim, and the unverified list stated openly
 
-## Remaining — models
-
-- [ ] `docs/architecture/README.md` — how the pieces fit, in one page, for a security
-      reviewer
 
 ## Exit criteria
 
-- [ ] Every level-1 and level-2 enforcement target in `invariants.md` maps to a named
-      mechanism in the physical model, or has dropped a level with a recorded reason
-- [ ] The physical model covers every entity in `domain-model.md`, or states why one is
-      deferred
-- [ ] The threat model's abuse cases each resolve to an invariant or to a recorded
-      acceptance
-- [ ] Every item on `ADR-0000`'s verification list is checked against the actual vendors
-- [ ] No ADR contradicts `docs/domain/` — and where one wanted to, a Decision Request was
-      opened instead
+- [x] Every level-1 and level-2 enforcement target in `invariants.md` maps to a named
+      mechanism in the physical model, or has dropped a level with a recorded reason —
+      the enforcement map in `data-model.md`, with eight deliberate drops
+- [x] The physical model covers every entity in `domain-model.md`, or states why one is
+      deferred — all 46
+- [x] The threat model's abuse cases each resolve to an invariant or to a recorded
+      acceptance — eight accepted residual risks, each with the trigger that would change it
+- [ ] ~~Every item on `ADR-0000`'s verification list is checked against the actual
+      vendors~~ — **moved to Phase 2.** See below
+- [x] No ADR contradicts `docs/domain/` — and where one wanted to, a Decision Request was
+      opened instead: `ADR-0008` raised open decision 9 rather than narrowing the evidence
+      pack layout
+
+### The verification criterion moves to Phase 2
+
+It was written as a Phase 1 criterion and belongs in Phase 2, for a practical reason that
+was not obvious when the plan was drafted: every item on it requires an account with a
+vendor, and creating those accounts is the first thing repository bootstrap does.
+
+Verifying earlier would mean creating the accounts in Phase 1 and doing it twice. The list
+is carried forward intact — it is the first task of Phase 2, before any migration is
+written, because `ADR-0001` and `ADR-0005` have no fallback that preserves the same
+enforcement level if the platform refuses.
+
+## Phase 1 is closed
+
+Eleven ADRs, a physical data model covering 46 entities, a threat model, and a one-page
+architecture summary. Four of five exit criteria met; the fifth carried forward with its
+reason recorded.
+
+Architecture no longer blocks implementation. What blocks Phase 2 is **open decision 8, the
+product and repository name** — the licence file needs a licensor and a product, and the CI
+gate list assumes a public repository.
 
 ## What comes after
 
