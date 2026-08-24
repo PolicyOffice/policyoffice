@@ -37,16 +37,17 @@ threat model, and the ADRs that record why each is the way it is.
       for the Pilot, and the three rules that keep enterprise identity additive
 - [x] `ADR-0003` — the authorization evaluator. One function returning a reason rather than
       a boolean, typed capabilities, and an architecture test that makes the boundary real
+- [x] `ADR-0004` — content storage and canonicalisation. Content-addressed objects
+      partitioned per tenant, server-computed digests, canonical JSON manifests, and a hard
+      line between governed and derived artefacts
+- [x] `ADR-0005` — effectivity and supersession. The interval is claimed at publication, an
+      exclusion constraint keyed on the variant enforces INV-EFF-002, and resolution reads
+      the range rather than a state column
 
 ## Remaining — ADRs
 
 Roughly in dependency order. Each is small; several are a page.
 
-- [ ] `ADR-0004` — **Content storage and canonicalisation.** Bucket layout, the canonical
-      manifest's serialisation, the digest algorithm, and text extraction for comparison.
-      Carries INV-VER-009, INV-VER-013
-- [ ] `ADR-0005` — **Effectivity and supersession.** The exclusion constraint's exact scope
-      key, and the supersession transaction. Carries INV-EFF-002, INV-EFF-003, INV-EFF-007
 - [ ] `ADR-0006` — **Audit outbox.** Table design, delivery, and the total ordering
       INV-AUD-009 requires. Carries INV-AUD-002, INV-AUD-004, INV-AUD-009
 - [ ] `ADR-0007` — **Job execution.** Queue choice, idempotency keys, retry and failure
