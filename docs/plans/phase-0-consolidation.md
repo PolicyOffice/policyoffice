@@ -6,6 +6,9 @@ needs the founder rather than inventing an answer.
 
 **Phase 0 is complete when architecture can begin without reopening product questions.**
 
+**Status: complete.** Sixteen chapters, 145 invariants, eight decisions written up, and the
+three that blocked the physical data model answered on 2026-08-24. Phase 1 can begin.
+
 ## Conventions for this phase
 
 Established in earlier passes; do not re-litigate them without a reason.
@@ -49,13 +52,13 @@ nine existing ones. Every registered invariant is now cited by at least one chap
 - [x] `evidence-model.md` — pack contents, manifest schema, integrity, privacy profiles, point-in-time reconstruction
 - [x] `business-rules.md` — edge cases and failure modes consolidated from both sources
 
-## Remaining — product
+## Done — product
 
-- [ ] `product-blueprint.md` — mission, boundaries, what the product is explicitly not
-- [ ] `personas-and-jobs.md` — personas and jobs to be done
-- [ ] `information-architecture.md` — reader experience and governance experience, kept distinct
-- [ ] `scope-and-roadmap.md` — Pilot / Commercial V1 / Later, with testable acceptance criteria
-- [ ] `success-metrics.md`
+- [x] `product-blueprint.md` — mission, boundaries, what the product is explicitly not
+- [x] `personas-and-jobs.md` — personas and jobs to be done
+- [x] `information-architecture.md` — reader experience and governance experience, kept distinct
+- [x] `scope-and-roadmap.md` — Pilot / Commercial V1 / Later, with testable acceptance criteria
+- [x] `success-metrics.md`
 
 ## Remaining — decisions
 
@@ -79,11 +82,34 @@ changes an invariant.
 
 ## Exit criteria
 
-- [ ] Every remaining file above exists and cites invariant IDs
-- [ ] No contradiction remains between `docs/domain/` files
+- [x] Every remaining file above exists and cites invariant IDs
+- [x] No contradiction remains between `docs/domain/` files
 - [x] Every open decision is written down with a recommendation, and the founder has answered
       those that block the physical data model — answered 2026-08-24
 - [x] `docs/research/` is referenced by nothing normative
+
+The second criterion was verified rather than asserted. What was checked:
+
+- every `INV-*` citation across `docs/` resolves to a registered invariant, and every
+  registered invariant is cited by at least one chapter — both directions, mechanically;
+- no duplicate invariant IDs;
+- enumerated values agree across chapters — lifecycle states, completion rules, decision
+  types, variant types, materiality classes, scope types, assignment states, pack states;
+- capability names used in any chapter exist in the enumeration in `authorization-model.md`;
+- event names used in any chapter exist in `audit-event-catalogue.md`;
+- no chapter uses pre-consolidation vocabulary — `Policy` as the aggregate, `PolicyVersion`,
+  `Department`, `PolicyException` — outside the historical tables in
+  `consolidation-notes.md` that deliberately record it.
+
+What that does **not** cover is semantic contradiction a reader would catch and a grep
+would not. Phase 1 will surface any of those the first time the physical model is derived
+from these chapters, which is the right time to find them.
+
+## Phase 0 is closed
+
+All four exit criteria are met. The specification is the authority from here: Phase 1
+derives architecture from it, and a disagreement between an ADR and `docs/domain/` is
+resolved in favour of `docs/domain/` or by a Decision Request — never silently.
 
 ## What comes after
 
