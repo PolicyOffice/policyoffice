@@ -73,12 +73,12 @@ working as intended rather than a problem.
 - [x] `docs/architecture/data-model.md` — the physical schema. All 46 entities from
       `domain-model.md`, an enforcement map from every level-1 and level-2 invariant to its
       mechanism, and the eight that deliberately sit lower with the reason recorded
+- [x] `docs/architecture/threat-model.md` — assets, actors, trust boundaries, the three
+      abuse categories that matter, and the residual risks written down as accepted rather
+      than left unstated
 
 ## Remaining — models
 
-- [ ] `docs/architecture/threat-model.md` — assets, actors, trust boundaries, and the
-      abuse cases the invariants already answer. Tenant isolation, evidence integrity and
-      privilege elevation are the three that matter
 - [ ] `docs/architecture/README.md` — how the pieces fit, in one page, for a security
       reviewer
 
