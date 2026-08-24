@@ -122,7 +122,7 @@ mechanism, or the drop is recorded.
 | INV-VER-011 sequence monotonic, never reused | 2 | `unique (tenant_id, document_variant_id, version_sequence)`; gaps permitted |
 | INV-VER-012 one pre-release version per variant | 2 | Partial unique index on pre-release lifecycle states |
 | INV-VER-013 every attachment is governed | **1** | `content_attachment` has no "reference only" column to set |
-| INV-EFF-002 one effective version per scope | 2 | `exclude using gist` over `(tenant_id, document_variant_id, effective_range)` |
+| INV-EFF-002 one effective version per scope | 2 | `exclude using gist` over `(tenant_id, document_variant_id, effective_range)`, verified including under a race |
 | INV-EFF-003 supersession is atomic | 4 | One transaction in the domain (`ADR-0005`) |
 | INV-EFF-006 no `is_current` flag | **1** | No such column exists; resolution is a range containment query |
 | INV-EFF-007 exactly one effectivity event | 2 | `unique (tenant_id, dedupe_key)` on `audit_event` |
@@ -406,8 +406,12 @@ create table document_version (
   withdrawal_reason        text,
   configuration_version_id uuid,             -- not null from APPROVED onward
 
-  effective_range tstzrange generated always as
-    (tstzrange(effective_from, effective_until, '[)')) stored,
+  -- tstzrange(null, null) is (,) — unbounded, not null. Without the case a
+  -- pre-release version would claim all of time. Verified 2026-08-25; see ADR-0005.
+  effective_range tstzrange generated always as (
+    case when effective_from is null then null
+         else tstzrange(effective_from, effective_until, '[)')
+    end) stored,
 
   unique (tenant_id, document_variant_id, version_sequence),   -- INV-VER-011
   foreign key (tenant_id, document_variant_id)

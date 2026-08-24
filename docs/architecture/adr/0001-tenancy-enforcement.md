@@ -1,8 +1,12 @@
 # ADR-0001: Tenancy enforcement
 
-- **Status:** Accepted
+- **Status:** Accepted — **amended 2026-08-25** after verification
 - **Date:** 2026-08-24
 - **Deciders:** Founder, Claude Code
+
+> **Amendment.** Verification found this ADR's claim about `FORCE ROW LEVEL SECURITY` to
+> be true but incomplete, in a way that would have hollowed out the protection. Corrected
+> below and marked **[corrected 2026-08-25]**. Evidence: `verification/02-tenancy.sh`.
 
 ## Context
 
@@ -63,11 +67,32 @@ Every tenant-owned table has RLS enabled and **forced**, with a policy comparing
 
 ```sql
 alter table document enable row level security;
-alter table document force  row level security;   -- owners are not exempt
+alter table document force  row level security;   -- the owner is not exempt
 
 create policy tenant_isolation on document
   using (tenant_id = current_setting('app.tenant_id')::uuid);
 ```
+
+**[corrected 2026-08-25] `FORCE` binds the owner. It does not bind a superuser.**
+
+The original wording — "owners are not exempt" — is true and insufficient. `FORCE`
+subjects the *table owner* to its own policies, but a **superuser bypasses row-level
+security entirely**, and no setting on the table changes that. The first run of the
+verification failed on exactly this: the owner was `postgres`, and it saw every tenant's
+rows.
+
+Two consequences, and both are load-bearing:
+
+**The migration role must not be a superuser.** It owns every table, so if it holds
+superuser rights then `FORCE` protects nothing against the one role that touches
+everything. `ADR-0009`'s three roles are all created `nosuperuser nobypassrls` for this
+reason.
+
+**Integration tests must never connect as a superuser.** This is the more dangerous one. A
+cross-tenant negative test run as `postgres` passes — it sees the other tenant's row and
+asserts nothing about isolation, because RLS was never consulted. Row 4 of the definition
+of done would be satisfied on paper by a test that proves nothing at all. The test harness
+connects as `app_role`, and that is not a preference.
 
 The application sets that value **inside each transaction**:
 
@@ -151,16 +176,32 @@ code path that can distinguish them is a code path that can leak.
 Low for RLS — the policies can be dropped and the repository layer still filters. Very
 high for composite keys, because every key and every reference in the schema would change.
 
-## To verify at repository bootstrap
+## Verified
+
+Against PostgreSQL 17.11, by `verification/02-tenancy.sh`:
+
+| Claim | Result |
+|---|---|
+| Composite keys refuse a cross-tenant reference | Foreign-key violation, structurally (level 1) |
+| The application role sees only its own tenant | One row, from a table holding two tenants' |
+| A cross-tenant identifier | Returns zero rows, not an error — not-found, per INV-TEN-002 |
+| A query with no `WHERE` clause | Still returns only the current tenant. The forgotten predicate is survivable |
+| No tenant context set at all | The query errors rather than returning rows — fails closed |
+| `SET LOCAL` | Scoped to its transaction; the next statement has no context, so a pooled connection cannot inherit one |
+| `FORCE` with a non-superuser owner | The policy applies to the owner |
+| `FORCE` with a superuser | **Bypassed.** See the correction above |
+
+### Still to verify on the hosting platform
 
 - Neon: whether a non-owner role can be created and used by the application, and whether
-  `FORCE ROW LEVEL SECURITY` behaves as expected on their platform.
-- Neon's pooler: confirm `SET LOCAL` semantics under transaction pooling, and that the
-  driver does not silently reuse a connection mid-transaction.
-- Drizzle: confirm that the query builder can be driven entirely through a caller-supplied
+  `FORCE ROW LEVEL SECURITY` applies there. There is no fallback at the same enforcement
+  level, so a "no" is a Decision Request.
+- Neon's pooler: `SET LOCAL` semantics under transaction pooling, and that the driver does
+  not reuse a connection mid-transaction.
+- Drizzle: that the query builder can be driven entirely through a caller-supplied
   transaction handle, so the one-transaction-helper rule is enforceable.
-- Measure the planner's behaviour with RLS on a table with a composite primary key, and
-  confirm index usage rather than assuming it.
+- Planner behaviour with RLS on a table with a composite primary key, measured rather than
+  assumed.
 
 Any of these failing is a Decision Request. The fallback — composite keys plus a
 repository layer, with RLS dropped — is a level weaker and must be recorded as such

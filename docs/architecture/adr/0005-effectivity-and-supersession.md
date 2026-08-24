@@ -1,8 +1,13 @@
 # ADR-0005: Effectivity and supersession
 
-- **Status:** Accepted
+- **Status:** Accepted — **amended 2026-08-25** after verification
 - **Date:** 2026-08-24
 - **Deciders:** Founder, Claude Code
+
+> **Amendment.** Executing this ADR against PostgreSQL 17 found two errors in it, both in
+> how a version stops claiming time. They are corrected below and marked **[corrected
+> 2026-08-25]**; the reasoning that was wrong is kept rather than deleted, so the same
+> mistake is not made again. Evidence: `verification/03-effectivity.sh`.
 
 ## Context
 
@@ -55,15 +60,23 @@ create table document_version (
   effective_until     timestamptz,
 
   -- half-open [from, until): no instant belongs to two consecutive intervals — INV-TIME-005
-  effective_range     tstzrange generated always as
-                        (tstzrange(effective_from, effective_until, '[)')) stored,
+  withdrawn_at        timestamptz,
+
+  -- [corrected 2026-08-25] tstzrange(null, null) is (,) — UNBOUNDED, not null,
+  -- and it overlaps everything. Without this CASE a pre-release version would
+  -- claim all of time and block every other version of its variant.
+  effective_range     tstzrange generated always as (
+                        case when effective_from is null then null
+                             else tstzrange(effective_from, effective_until, '[)')
+                        end) stored,
 
   primary key (tenant_id, id),
   foreign key (tenant_id, document_variant_id)
     references document_variant (tenant_id, id),
 
   -- INV-EFF-002: at most one version of a variant claims any instant.
-  -- Withdrawn and cancelled versions null their range and leave the constraint.
+  -- Pre-release versions have no effective_from, so their range is null and the
+  -- partial index skips them. Withdrawal closes the interval; it does not null it.
   constraint one_effective_version_per_variant
     exclude using gist (
       tenant_id           with =,
@@ -84,10 +97,27 @@ variants of one document, and both are legitimately effective at the same instan
 different populations. Keying the constraint on the document would forbid the product's
 central cross-border capability.
 
-**`where (effective_range is not null)`** keeps pre-release, withdrawn and cancelled
-versions out of the constraint. Withdrawal nulls the range rather than closing it, because
-a withdrawn version was never normative for the remainder of its claimed interval and
-should not appear to have been (INV-EFF-004).
+**`where (effective_range is not null)`** keeps versions that claim no time out of the
+constraint — those still in a pre-release state, and those cancelled before ever taking
+effect. Both have no `effective_from`, so the `case` above yields null and the partial
+index skips them.
+
+**[corrected 2026-08-25] Withdrawal closes the interval. It does not null it.**
+
+The first version of this ADR said withdrawal nulls the range, on the reasoning that a
+withdrawn version "was never normative for the remainder of its claimed interval and
+should not appear to have been". That reasoning is wrong in a way worth keeping visible,
+because it is superficially attractive.
+
+A withdrawn version *was* normative — from its effective instant until the moment it was
+withdrawn. People were governed by it, attestations were recorded against it, and evidence
+packs must be able to say so. Nulling its range would erase exactly that, and break the
+point-in-time reconstruction INV-EVD-007 and INV-APL-009 depend on.
+
+So withdrawal sets `effective_until = withdrawn_at`. The version keeps claiming the period
+it actually governed, stops claiming anything afterwards, and the vacated time is visible
+— which is what lets INV-EFF-005 detect that a withdrawal left no effective version and
+emit `governance.policy_gap`.
 
 **`effective_range` is generated, not maintained.** Application code sets `effective_from`
 and `effective_until`; the range cannot drift from them.
@@ -177,9 +207,10 @@ select * from document_version
    and lifecycle_state not in ('WITHDRAWN', 'CANCELLED');
 ```
 
-Withdrawal nulls the range, so the state predicate is belt-and-braces rather than the
-mechanism — but it is cheap, and it means a bug that failed to null a range still cannot
-resurrect a withdrawn version (INV-EFF-004).
+Withdrawal closes the range at the withdrawal instant, so the state predicate is
+belt-and-braces rather than the mechanism — but it is cheap, and it means a bug that
+failed to close an interval still cannot resurrect a withdrawn version for time it no
+longer governs (INV-EFF-004).
 
 A GiST index on `(tenant_id, document_variant_id, effective_range)` — the one the
 exclusion constraint creates — serves both the constraint and this query.
@@ -243,12 +274,23 @@ distinguishes this product from a document library. Reversing it means accepting
 "what applies now" is a rule the application is checked against rather than one it cannot
 break.
 
-## To verify at repository bootstrap
+## Verified
 
-- `btree_gist` availability on Neon, and whether creating the extension needs a privilege
-  the application role will not have — in which case it belongs in a migration run by the
-  migration role.
-- Planner behaviour for `@>` on the GiST index under ADR-0001's row-level security policy.
-- The exact `SQLSTATE` for an exclusion-constraint violation, so publication can translate
-  it into a governance error rather than a 500.
-- Generated-column support for `tstzrange` on the target Postgres version.
+Against PostgreSQL 17.11, by `verification/03-effectivity.sh`:
+
+| Claim | Result |
+|---|---|
+| `btree_gist` available | Yes, 1.7 |
+| Exclusion constraint over `uuid =` and `tstzrange &&` | Refuses an overlapping interval, by constraint name |
+| Under a concurrent race | The second transaction blocks on the first, then is refused on commit. Exactly one survives |
+| `SQLSTATE` | `23P01`, so publication returns a governance error rather than a 500 |
+| Keyed on the variant | A second variant may claim the same instants — baseline-plus-replacement is preserved |
+| Half-open `[)` | A successor may start at the instant its predecessor ends |
+| Generated `tstzrange` column | Supported, and not writable, so the range cannot drift from its timestamps |
+| Withdrawal closing the interval | Historical resolution still finds the version for the period it governed, and nothing after |
+
+### Still to verify on the hosting platform
+
+- `btree_gist` creatable on Neon, and by which role.
+- Planner behaviour for `@>` on the GiST index under ADR-0001's row-level security policy,
+  measured rather than assumed.
