@@ -68,11 +68,14 @@ reality rather than planned in advance.
 narrowed a deliverable specified in `evidence-model.md`. That is the fourth exit criterion
 working as intended rather than a problem.
 
+## Models — done
+
+- [x] `docs/architecture/data-model.md` — the physical schema. All 46 entities from
+      `domain-model.md`, an enforcement map from every level-1 and level-2 invariant to its
+      mechanism, and the eight that deliberately sit lower with the reason recorded
+
 ## Remaining — models
 
-- [ ] `docs/architecture/data-model.md` — the physical schema derived from
-      `domain-model.md`: tables, keys, constraints, indexes, and the invariant each
-      constraint enforces
 - [ ] `docs/architecture/threat-model.md` — assets, actors, trust boundaries, and the
       abuse cases the invariants already answer. Tenant isolation, evidence integrity and
       privilege elevation are the three that matter
