@@ -737,3 +737,7 @@ The exit criteria for this model, checkable rather than asserted:
 - [ ] CI's drift check passes: the schema built from migrations matches the Drizzle
       definition
 - [ ] A cross-tenant negative test exists for every table with a `tenant_id`
+- [ ] A schema test asserts that **every** table with a `tenant_id` column has row-level
+      security both enabled and forced, and carries a tenant policy. A migration that adds a
+      table and forgets this is the residual risk named in `threat-model.md`, and it is cheap
+      to close
