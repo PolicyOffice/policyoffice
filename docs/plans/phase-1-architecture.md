@@ -31,24 +31,21 @@ threat model, and the ADRs that record why each is the way it is.
 
 - [x] `ADR-0000` — stack selection. TypeScript modular monolith, PostgreSQL, Drizzle with
       hand-written SQL migrations, Postgres-backed job queue, Postgres full-text search
+- [x] `ADR-0001` — tenancy enforcement. Composite keys at level 1, forced row-level security
+      at level 2, one transaction helper that requires a tenant context
+- [x] `ADR-0002` — identity and sessions. Server-side sessions in Postgres, local passwords
+      for the Pilot, and the three rules that keep enterprise identity additive
+- [x] `ADR-0003` — the authorization evaluator. One function returning a reason rather than
+      a boolean, typed capabilities, and an architecture test that makes the boundary real
 
 ## Remaining — ADRs
 
 Roughly in dependency order. Each is small; several are a page.
 
-- [ ] `ADR-0001` — **Tenancy enforcement.** Composite keys alone, or also row-level
-      security? Which role the application connects as, and what that role may not do.
-      Carries INV-TEN-001…005
-- [ ] `ADR-0002` — **Identity and sessions.** Local accounts for the Pilot, and the shape
-      that keeps OIDC, SAML and SCIM additive in V1. Carries INV-AUTH-014
-- [ ] `ADR-0003` — **The authorization evaluator.** Its interface, how every surface is
-      made to call it, and what may be cached given that expiry is evaluated at check time.
-      Carries INV-AUTH-001…004, INV-AUTH-010
 - [ ] `ADR-0004` — **Content storage and canonicalisation.** Bucket layout, the canonical
       manifest's serialisation, the digest algorithm, and text extraction for comparison.
       Carries INV-VER-009, INV-VER-013
-- [ ] `ADR-0005` — **Effectivity and supersession.** The exclusion constraint's exact
-  scope
+- [ ] `ADR-0005` — **Effectivity and supersession.** The exclusion constraint's exact scope
       key, and the supersession transaction. Carries INV-EFF-002, INV-EFF-003, INV-EFF-007
 - [ ] `ADR-0006` — **Audit outbox.** Table design, delivery, and the total ordering
       INV-AUD-009 requires. Carries INV-AUD-002, INV-AUD-004, INV-AUD-009
