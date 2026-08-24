@@ -49,17 +49,24 @@ threat model, and the ADRs that record why each is the way it is.
 - [x] `ADR-0007` — job execution and scheduling. At-least-once with idempotency in the
       domain transaction, reference payloads, calendar-rule scheduling, and failure that
       raises a governance exception rather than a log line
+- [x] `ADR-0008` — evidence pack generation. Resolve, assemble, publish; availability is a
+      database fact rather than the presence of an object; per-record authorization at
+      assembly. Raised open decision 9
+- [x] `ADR-0009` — migrations and environments. Forward-only SQL, no down migrations, three
+      database roles established by migration, and CI validating fresh install, upgrade and
+      drift against a container
+- [x] `ADR-0010` — observability. Two permanently separate systems, an allowlist rather than
+      redaction, no session replay or behavioural analytics, and the governance signals that
+      actually need alerting
 
-## Remaining — ADRs
+## ADRs — complete
 
-Roughly in dependency order. Each is small; several are a page.
+All eleven planned ADRs are written. Further ADRs are raised as the architecture meets
+reality rather than planned in advance.
 
-- [ ] `ADR-0008` — **Evidence pack generation.** Assembly, determinism, streaming, storage
-      and expiry. Carries INV-EVD-003, INV-EVD-006, INV-EVD-010
-- [ ] `ADR-0009` — **Migrations and environments.** Neon branching, seeding, and the
-      fresh-versus-upgrade validation the CI gate list requires
-- [ ] `ADR-0010` — **Observability.** What is recorded, what stays in-region, and how it
-      stays out of the evidence ledger. Carries INV-AUD-007, INV-AUD-003
+`ADR-0008` raised **open decision 9**, because deciding it in an ADR would have quietly
+narrowed a deliverable specified in `evidence-model.md`. That is the fourth exit criterion
+working as intended rather than a problem.
 
 ## Remaining — models
 

@@ -25,6 +25,7 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 6 | Licence | Publishing the repository | PolyForm Shield 1.0.0 | **Decided 2026-08-24** |
 | 7 | Data residency and region | ADR-000 and every infrastructure ADR | One EU region, stated completely | **Decided 2026-08-24** |
 | 8 | Product and repository name | Publishing the repository, and CI on the free tier | A name only the founder can choose | **Open — now blocks Phase 2** |
+| 9 | Human-readable rendering in evidence packs | One line of the pack layout | Ship originals in the Pilot; amend the layout | Open — does not block |
 
 Decisions 1, 2, 6 and 7 are answered. Phase 1 has begun. **Decision 8 — the product and
 repository name — now blocks Phase 2**, because CI on the free tier assumes a public
@@ -250,6 +251,40 @@ before committing, because the package name follows the repository name.
 
 **Blocks.** Phase 2 — repository bootstrap. CI on the free tier assumes a public
 repository, and a public repository needs a licence file naming a licensor and a product.
+
+---
+
+## 9 — Human-readable rendering in evidence packs
+
+> **Raised by `ADR-0008`, 2026-08-24.** An architecture decision would have quietly
+> narrowed a specified deliverable, so it is escalated instead — the rule in `AGENTS.md`
+> working as intended.
+
+**Context.** `evidence-model.md` specifies that a pack contains `document/document.pdf`, a
+human-readable rendering, alongside `document/original/`. With file-centric content
+(decision 2) that is free when the controlled file is already a PDF, and expensive
+otherwise: converting `.docx` faithfully needs LibreOffice or an equivalent in the
+deployment, which is real operational weight and, on any managed platform, real money.
+
+| Option | What it means | Consequence |
+|---|---|---|
+| **A. Originals only in the Pilot** | `document.pdf` is present when the controlled file is already a PDF; otherwise the manifest records it as absent with a reason. `evidence-model.md`'s layout is amended to say so | Costs nothing, ships now, and the pack is honest about what it contains. A recipient expecting a rendering gets the original instead, which is the authoritative artefact anyway |
+| **B. A converter in the deployment** | LibreOffice or equivalent in a container | Faithful renderings for everything. Significant memory and cold-start weight, a large attack surface parsing untrusted documents, and it almost certainly needs a paid host |
+| **C. A conversion API** | A third-party service | Least operational work, and it adds a subprocessor, a cost, and a residency question against decision 7 — customer document content would leave our region |
+| **D. Require PDFs as the controlled file** | The governed artefact is always a PDF; `.docx` stays the source | Technically simplest and matches how many regulated organisations already work, where the approved artefact is the signed PDF. It does constrain authoring, and some customers will resist |
+
+**Recommendation: A**, and let a design partner tell us whether it matters. Many customers
+will naturally arrive at D on their own, because their approved artefact already is a PDF.
+If it turns out to matter, C is the one to price — but it moves customer document content
+out of the EU region, which makes it a residency decision as much as a cost one.
+
+**Consequence of A.** One line of `evidence-model.md` changes, and the manifest gains a
+recorded absence rather than a silent one.
+
+**Reversibility.** High. Renderings are derived artefacts (`ADR-0004`); adding conversion
+later regenerates them for existing packs on request.
+
+**Blocks.** Nothing. It affects Pilot evidence output only.
 
 ---
 
