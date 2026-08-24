@@ -143,10 +143,13 @@ deterministic description of everything the approver relied on as content:
 
 `content_digest` is the digest of the canonical serialisation of that manifest.
 
-This shape is deliberately independent of how content is authored and stored. Whether the
-Pilot ships a native editor or a file-centric model — an open decision, and the one that
-blocks most of the remaining detail here — the manifest contract does not change. Only the
-production of `contentParts` does.
+This shape is deliberately independent of how content is authored and stored: the manifest
+contract is the same under a native editor and under a file-centric model, and only the
+production of `contentParts` differs.
+
+**The Pilot is file-centric** (open decision 2, settled 2026-08-24). The customer uploads
+the controlled file; those bytes are the governed artefact, and `contentParts` holds them.
+A native editor later adds a part type rather than replacing the contract.
 
 ### What canonicalisation must guarantee
 
@@ -246,12 +249,31 @@ The last row is worth dwelling on. Recomputing a digest so that verification pas
 one-line fix that destroys the only evidence that something went wrong. It must not exist
 as a capability, an administrative action or a maintenance script.
 
-## Open decision
+## What file-centric authoring means here
 
-**Native editor versus file-centric authoring** determines the canonical content
-representation, and therefore what `contentParts` contains, how diffs are produced, and
-what a rendering is derived from. It is recorded in `docs/plans/open-decisions.md` and
-blocks the physical content model.
+Open decision 2 was settled on 2026-08-24 in favour of file-centric content. Three
+consequences follow, and the third is the one that is easy to get wrong.
 
-Everything else in this chapter is decided and stable, and none of it changes with the
-answer.
+**Editing means a new revision.** There is no in-place editing of a candidate's text. The
+author uploads a replacement file, which creates content revision *n+1* (INV-VER-010).
+This matches how the work is actually done — in Word, with tracked changes and Legal's
+comments — and it means the drafting trail is a sequence of real artefacts rather than a
+reconstructed diff of an editor's internal state.
+
+**Renderings are derived and separately hashed.** The PDF a reader sees and the PDF in an
+evidence pack are conversions of the governed file, not the governed file itself. Each is
+hashed as its own artefact in a pack, and neither is ever presented as the approved
+content.
+
+**Extracted text is derived, and never enters the digest.** Comparison and the
+deterministic materiality warnings both need the document's text, which is extracted from
+the uploaded file. That extraction is a convenience over the governed bytes — it is not
+normative, it is not part of `contentParts`, and it never participates in
+`content_digest`. If it did, a change to the extraction library would invalidate every
+historical digest in the system.
+
+The known cost, recorded when the decision was made: warning quality depends on extraction
+fidelity. It is good for `.docx` and weak for a PDF with no source document. An estate
+that arrives as scanned PDFs will get comparison and warnings that are close to useless,
+and the honest response is to say so during onboarding rather than to imply the checks are
+running.

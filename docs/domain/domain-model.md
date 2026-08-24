@@ -444,7 +444,7 @@ An editable pre-release snapshot of content. Many revisions precede one released
 |---|---|
 | `id`, `document_version_id` | Identity and parent |
 | `revision_sequence` | Monotonic integer within the version |
-| `content_ref` | Reference to the stored content. Its representation is an open decision. |
+| `content_ref` | Reference to the stored controlled file. File-centric — open decision 2, settled 2026-08-24. |
 | `canonical_manifest` | The canonicalised description of content and attachments that is hashed |
 | `canonicalisation_schema_version` | Which canonicalisation produced the manifest |
 | `content_digest` | Digest over the canonical manifest |
@@ -838,14 +838,18 @@ Rules that apply to every entity above, stated once.
 
 ## Open decisions that touch this model
 
-These are recorded in `docs/plans/open-decisions.md` and are **not** resolved here. Each
-one changes the physical model, so Phase 1 cannot begin on the affected area until the
-founder has answered.
+Two of the questions that touched this model were settled on 2026-08-24 and are recorded
+in `docs/plans/open-decisions.md`:
 
-| Area | What is undecided | What it blocks |
+| Area | Decided |
+|---|---|
+| `ContentRevision.content_ref` | **File-centric.** The uploaded controlled file is the governed artefact and the thing hashed. See `versioning.md` |
+| `LegalEntity` | **Schema-complete, behaviour-minimal.** The entity, org unit and membership tables exist from the first migration; one entity is seeded per tenant; hierarchy resolution arrives in V1 |
+
+Three remain open. None of them blocks the physical model, and none changes an invariant.
+
+| Area | What is undecided | What it affects |
 |---|---|---|
-| `ContentRevision.content_ref` | Native editor versus file-centric authoring | Canonical content representation, and therefore what participates in hashing |
-| `LegalEntity` | How much entity capability the Pilot ships | Whether entity hierarchy and dated memberships are exercised in MVP migrations |
-| `Space` | One Space per tenant, or many | Register navigation and default ownership. Not authorization, and not applicability — those are settled. |
-| `WorkflowTemplate` | Fixed workflow or configurable templates in the Pilot | Whether template versioning is exercised in MVP |
+| `Space` | One Space per tenant, or many | Register navigation and default ownership. Not authorization, and not applicability — those are settled |
+| `WorkflowTemplate` | Fixed workflow or configurable templates in the Pilot | Whether a template editor ships, not whether templates exist |
 | `ApplicabilityRule` | Explicit audience lists, or rules | The complexity of the Pilot's resolution path |

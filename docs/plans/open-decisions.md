@@ -15,23 +15,25 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 
 ## Summary
 
-| # | Decision | Blocks | Recommendation | Reversibility |
+| # | Decision | Blocks | Answer, or recommendation | Status |
 |---:|---|---|---|---|
-| 1 | Pilot `LegalEntity` capability | First migration, physical model | Schema-complete, behaviour-minimal | High |
-| 2 | Authoring model and canonical content | Content storage, hashing, diff, editor | File-centric for the Pilot | Moderate |
-| 3 | `Space` semantics | Register navigation | One Space per tenant in the Pilot | High |
-| 4 | Pilot workflow configurability | Approval implementation, admin scope | Template-backed, not customer-editable | High if template-backed; very low if hard-coded |
-| 5 | Pilot applicability complexity | Campaign audience, register filters | Explicit audience lists | High |
-| 6 | Licence | Publishing the repository | PolyForm Shield 1.0.0 | Low once granted |
-| 7 | Data residency and region | ADR-000 and every infrastructure ADR | One EU region, stated completely | Low — it becomes contractual |
-| 8 | Product and repository name | Publishing the repository | Decide alongside the licence | High until published |
+| 1 | Pilot `LegalEntity` capability | First migration, physical model | Schema-complete, behaviour-minimal | **Decided 2026-08-24** |
+| 2 | Authoring model and canonical content | Content storage, hashing, diff, editor | File-centric for the Pilot | **Decided 2026-08-24** |
+| 3 | `Space` semantics | Register navigation | One Space per tenant in the Pilot | Open — does not block |
+| 4 | Pilot workflow configurability | Approval implementation, admin scope | Template-backed, not customer-editable | Open — does not block |
+| 5 | Pilot applicability complexity | Campaign audience, register filters | Explicit audience lists | Open — does not block |
+| 6 | Licence | Publishing the repository | PolyForm Shield 1.0.0 | Open — gates publishing |
+| 7 | Data residency and region | ADR-000 and every infrastructure ADR | One EU region, stated completely | **Decided 2026-08-24** |
+| 8 | Product and repository name | Publishing the repository | Decide alongside the licence | Open — gates publishing |
 
-Decisions 1, 2 and 7 block Phase 1. The rest shape scope but do not stop architecture
-beginning.
+Decisions 1, 2 and 7 blocked Phase 1 and are now answered. Phase 1 can begin. The
+remaining four shape scope or gate publication, and none of them stops architecture.
 
 ---
 
 ## 1 — How much `LegalEntity` capability belongs in the Pilot
+
+> **Decided 2026-08-24 — option A, schema-complete and behaviour-minimal.** Founder.
 
 **Context.** The two blueprints disagreed: one placed legal entities in Commercial V1, the
 other in the MVP. `consolidation-notes.md` contradiction 12 split the difference and
@@ -58,6 +60,8 @@ schema without this.
 ---
 
 ## 2 — Native editor versus file-centric authoring
+
+> **Decided 2026-08-24 — option A, file-centric.** Founder.
 
 **Context.** This determines the canonical content representation, and therefore what
 participates in hashing, how diffs are produced, what a rendering is derived from, and
@@ -186,6 +190,8 @@ source access.
 
 ## 7 — Data residency and hosting region
 
+> **Decided 2026-08-24 — option A, one EU region, stated completely.** Founder.
+
 **Context.** EU hosting is a commercial posture rather than a GDPR requirement — the
 transfer regime governs transfers, it does not mandate that all data stay in the EEA. But
 the *commitment* is contractual, appears in every security review, and DORA-facing
@@ -235,7 +241,17 @@ referenced the product is the expensive ordering.
 
 ## Decided
 
-Nothing yet. Entries move here with the answer, the date and who decided.
+The reasoning stays in the numbered section above each decision, because *why we chose
+file-centric* is a question that will be asked again.
+
+| # | Decided | Date | Answer | Where the consequence landed |
+|---:|---|---|---|---|
+| 1 | Pilot `LegalEntity` capability | 2026-08-24 | Schema-complete, behaviour-minimal. `LegalEntity`, `OrgUnit` and `OrgMembership` exist from the first migration; one entity seeded per tenant; the resolver does no hierarchy traversal until V1 | `domain-model.md`, `multi-entity-model.md` Pilot scope |
+| 2 | Authoring model | 2026-08-24 | File-centric. The uploaded controlled file is the governed artefact and the thing hashed. Text extraction feeds comparison and materiality warnings and is never normative | `versioning.md`, `domain-model.md` |
+| 7 | Data residency | 2026-08-24 | One EU region, complete — application data, object storage, backups, search, audit, evidence packs, queues, DR replicas and observability all in-region | Phase 1: ADR-000 and the infrastructure ADRs |
+
+Decision 7 has no effect on `docs/domain/`. It constrains provider and managed-service
+choices in Phase 1, and it is the commitment the security documentation will state.
 
 ## Settled elsewhere — do not reopen
 

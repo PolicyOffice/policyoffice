@@ -61,26 +61,28 @@ nine existing ones. Every registered invariant is now cited by at least one chap
 
 - [x] `docs/plans/open-decisions.md` — every question needing the founder, each with options,
       a recommendation, consequence and reversibility
-- [ ] **The founder answers 1, 2 and 7.** Those three block Phase 1
+- [x] **Decisions 1, 2 and 7 answered** on 2026-08-24. Architecture is unblocked
 
-Eight decisions are written up. Decisions 1, 2 and 7 block the physical data model and
-therefore Phase 1; the rest shape scope without stopping architecture.
+| # | Decision | Status |
+|---:|---|---|
+| 1 | How much `LegalEntity` capability belongs in the Pilot | **Decided** — schema-complete, behaviour-minimal |
+| 2 | Native editor vs file-centric authoring | **Decided** — file-centric |
+| 3 | Final `Space` semantics | Open. Affects register navigation only |
+| 4 | Fixed workflow vs configurable templates in the Pilot | Open. Affects whether a template editor ships |
+| 5 | Pilot applicability — explicit audience lists, or rules | Open. Affects Pilot resolution complexity |
+| 6 | Licence | Open. Gates publishing the repository |
+| 7 | Data residency and hosting region | **Decided** — one EU region, stated completely |
+| 8 | Product and repository name | Open. Gates publishing the repository |
 
-1. How much `LegalEntity` capability belongs in the Pilot — **blocks Phase 1**
-2. Native editor vs file/Office-centric authoring — canonical content and hashing — **blocks Phase 1**
-3. Final `Space` semantics
-4. Whether the Pilot ships a fixed workflow or configurable templates
-5. Pilot applicability complexity — explicit audience lists, or rules
-6. Licence: BSL 1.1 vs PolyForm Shield (repository is currently unlicensed)
-7. Data residency and hosting region — **blocks Phase 1**, added while writing the domain chapters
-8. Product and repository name — flagged open in `README.md`, gates publishing the repository
+The four still open shape scope or gate publication. None blocks architecture, and none
+changes an invariant.
 
 ## Exit criteria
 
 - [ ] Every remaining file above exists and cites invariant IDs
 - [ ] No contradiction remains between `docs/domain/` files
-- [ ] Every open decision is written down with a recommendation, and the founder has answered
-      those that block the physical data model
+- [x] Every open decision is written down with a recommendation, and the founder has answered
+      those that block the physical data model — answered 2026-08-24
 - [x] `docs/research/` is referenced by nothing normative
 
 ## What comes after

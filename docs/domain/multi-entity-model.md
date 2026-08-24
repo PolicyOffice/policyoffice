@@ -243,6 +243,7 @@ deliberate: deferring the *concepts* would force a painful migration through eve
 governance table, while building the *resolution engine* now would delay the golden slice
 for capability the Pilot cannot demonstrate.
 
-Two questions remain open and are recorded in `docs/plans/open-decisions.md`: how much
-`LegalEntity` capability the Pilot actually ships, and whether Pilot applicability is
-expressed as explicit audience lists or as rules. Neither changes any invariant above.
+The table above is now the decision, not a proposal: open decision 1 was settled on
+2026-08-24 in favour of schema-complete and behaviour-minimal. One question remains open —
+whether Pilot applicability is expressed as explicit audience lists or as rules — and it
+changes no invariant above.

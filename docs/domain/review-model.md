@@ -31,8 +31,8 @@ The distinction matters more than it looks. Anchoring to the effective date keep
 annual rhythm regardless of when reviews actually happen. Anchoring to the last completed
 review means a review finished three months late pushes the next one three months out.
 Regulated customers usually want the first; operational teams usually want the second. The
-shipped default is `EFFECTIVE_DATE`, because a cadence that holds regardless of how late the
-last review ran is the one an auditor can check against a calendar.
+shipped default is `EFFECTIVE_DATE`, because a cadence that holds regardless of how late
+the last review ran is the one an auditor can check against a calendar.
 
 Hard-coding "annual review" would be wrong even as a simplification. DORA, for one,
 requires the ICT risk-management framework to be reviewed at least yearly **and** after
@@ -131,10 +131,10 @@ system should make the reviewer commit to a sentence.
 The fourth outcome is a recommendation and never an action.
 
 Retirement means withdrawing effective versions (a deliberate act with a reason, possibly
-producing a `governance.policy_gap` under INV-EFF-005) and then retiring the Document (INV-DOC-008).
-A review case cannot do either. Automation that retires documents because a reviewer
-selected a dropdown value is exactly the kind of authority-invention that AGENTS.md rule 5
-forbids.
+producing a `governance.policy_gap` under INV-EFF-005) and then retiring the Document
+(INV-DOC-008). A review case cannot do either. Automation that retires documents because a
+reviewer selected a dropdown value is exactly the kind of authority-invention that
+AGENTS.md rule 5 forbids.
 
 ### Re-anchoring after a change
 

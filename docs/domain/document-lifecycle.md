@@ -37,8 +37,8 @@ stateDiagram-v2
 
 The second rule exists because retirement must not be a quiet way to end a policy. Ending
 what governs people is `version.withdrawn` — an act with a reason, an actor and, where no
-successor exists, a `governance.policy_gap` event (INV-EFF-005). Retiring the Document afterwards is
-bookkeeping.
+successor exists, a `governance.policy_gap` event (INV-EFF-005). Retiring the Document
+afterwards is bookkeeping.
 
 > **INV-DOC-003 — Restoring a retired Document never reactivates a historical version; it
 > requires a new controlled version.**
