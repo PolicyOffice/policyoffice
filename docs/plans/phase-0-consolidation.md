@@ -24,29 +24,30 @@ Established in earlier passes; do not re-litigate them without a reason.
 - [x] `docs/domain/glossary.md` — ubiquitous language, `Policy` → `Document` rename
 - [x] `docs/domain/document-taxonomy.md` — ranked types, governance bodies, governing framework
 - [x] `docs/domain/configuration-model.md` — invariant/configurable boundary, governance profiles
-- [x] `docs/domain/invariants.md` — 113 invariants, stable IDs, enforcement ladder
-- [x] `docs/domain/consolidation-notes.md` — 14 contradictions and their resolutions
+- [x] `docs/domain/invariants.md` — 145 invariants, stable IDs, enforcement ladder
+- [x] `docs/domain/consolidation-notes.md` — 14 contradictions, 12 later refinements
 - [x] `docs/engineering/agent-workflow.md` — process, review tiers, decision protocol
 - [x] `docs/engineering/definition-of-done.md`
 - [x] `docs/engineering/running-the-agents.md` — operating mechanics
 - [x] `docs/research/` — source material archived
 
-## Remaining — domain
+## Done — domain
 
-Roughly in dependency order. Each must cite the `INV-*` IDs it governs, and add new ones
-where a rule has no ID yet.
+Written in dependency order. Each cites the `INV-*` IDs it governs, and the registry grew
+from 113 to 145 invariants in the same pass — a new `INV-ORG` family plus additions to
+nine existing ones. Every registered invariant is now cited by at least one chapter.
 
-- [ ] `domain-model.md` — consolidated entity model and ER diagram, one table per entity
-- [ ] `document-lifecycle.md` — `Document` and `DocumentVersion` state machines, transition tables
-- [ ] `versioning.md` — content revisions, submission freeze, immutability, canonicalisation and hashing, materiality classes
-- [ ] `authorization-model.md` — capabilities, scopes, inheritance, explicit deny, time-bounded grants, break-glass
-- [ ] `approval-workflows.md` — templates and versioning, stages, completion rules including `BODY_RESOLUTION`, delegation, escalation, separation of duties
-- [ ] `review-model.md` — review rules, cases, outcomes, overdue semantics
-- [ ] `attestation-model.md` — campaigns, assignments, responses, audience modes, re-attestation
-- [ ] `multi-entity-model.md` — legal entities, org units, jurisdictions, variant types, the deterministic resolution algorithm, alignment obligations
-- [ ] `audit-event-catalogue.md` — canonical envelope and the full event list
-- [ ] `evidence-model.md` — pack contents, manifest schema, integrity, privacy profiles, point-in-time reconstruction
-- [ ] `business-rules.md` — edge cases and failure modes consolidated from both sources
+- [x] `domain-model.md` — consolidated entity model and ER diagram, one table per entity
+- [x] `document-lifecycle.md` — `Document` and `DocumentVersion` state machines, transition tables
+- [x] `versioning.md` — content revisions, submission freeze, immutability, canonicalisation and hashing, materiality classes
+- [x] `authorization-model.md` — capabilities, scopes, inheritance, explicit deny, time-bounded grants, break-glass
+- [x] `approval-workflows.md` — templates and versioning, stages, completion rules including `BODY_RESOLUTION`, delegation, escalation, separation of duties
+- [x] `review-model.md` — review rules, cases, outcomes, overdue semantics
+- [x] `attestation-model.md` — campaigns, assignments, responses, audience modes, re-attestation
+- [x] `multi-entity-model.md` — legal entities, org units, jurisdictions, variant types, the deterministic resolution algorithm, alignment obligations
+- [x] `audit-event-catalogue.md` — canonical envelope and the full event list
+- [x] `evidence-model.md` — pack contents, manifest schema, integrity, privacy profiles, point-in-time reconstruction
+- [x] `business-rules.md` — edge cases and failure modes consolidated from both sources
 
 ## Remaining — product
 
@@ -58,25 +59,31 @@ where a rule has no ID yet.
 
 ## Remaining — decisions
 
-- [ ] `docs/plans/open-decisions.md` — every question needing the founder, each with options,
+- [x] `docs/plans/open-decisions.md` — every question needing the founder, each with options,
       a recommendation, consequence and reversibility
+- [x] **Decisions 1, 2 and 7 answered** on 2026-08-24. Architecture is unblocked
 
-Known open already, from `consolidation-notes.md`:
+| # | Decision | Status |
+|---:|---|---|
+| 1 | How much `LegalEntity` capability belongs in the Pilot | **Decided** — schema-complete, behaviour-minimal |
+| 2 | Native editor vs file-centric authoring | **Decided** — file-centric |
+| 3 | Final `Space` semantics | Open. Affects register navigation only |
+| 4 | Fixed workflow vs configurable templates in the Pilot | Open. Affects whether a template editor ships |
+| 5 | Pilot applicability — explicit audience lists, or rules | Open. Affects Pilot resolution complexity |
+| 6 | Licence | Open. Gates publishing the repository |
+| 7 | Data residency and hosting region | **Decided** — one EU region, stated completely |
+| 8 | Product and repository name | Open. Gates publishing the repository |
 
-1. How much `LegalEntity` capability belongs in the Pilot
-2. Native editor vs file/Office-centric authoring — blocks canonical content representation and hashing
-3. Final `Space` semantics
-4. Whether the Pilot ships a fixed workflow or configurable templates
-5. Pilot applicability complexity — explicit audience lists, or rules
-6. Licence: BSL 1.1 vs PolyForm Shield (repository is currently unlicensed)
+The four still open shape scope or gate publication. None blocks architecture, and none
+changes an invariant.
 
 ## Exit criteria
 
 - [ ] Every remaining file above exists and cites invariant IDs
 - [ ] No contradiction remains between `docs/domain/` files
-- [ ] Every open decision is written down with a recommendation, and the founder has answered
-      those that block the physical data model
-- [ ] `docs/research/` is referenced by nothing normative
+- [x] Every open decision is written down with a recommendation, and the founder has answered
+      those that block the physical data model — answered 2026-08-24
+- [x] `docs/research/` is referenced by nothing normative
 
 ## What comes after
 

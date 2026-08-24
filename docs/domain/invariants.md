@@ -66,6 +66,16 @@ immutable, and a system in which forgetting is not sufficient to cause harm.
 | INV-TEN-004 | Tenant scoping is enforced below the presentation layer, so background jobs and APIs inherit it | UI-only tenancy is the classic way this fails | I | MVP |
 | INV-TEN-005 | Error messages, timing, result counts and search facets reveal nothing about other tenants' resources | Side-channel disclosure is still disclosure | I, E | MVP |
 
+## INV-ORG — Organisational structure
+
+| ID | Invariant | Why it matters | Test | Phase |
+|---|---|---|---|---|
+| INV-ORG-001 | Legal entity and org unit hierarchies are acyclic and contained wholly within one tenant | A cycle makes ancestor resolution non-terminating; a cross-tenant parent is a leak | I, P | MVP |
+| INV-ORG-002 | Org memberships are dated, and a membership that has ended is never deleted or rewritten | Every point-in-time question in the product resolves through them | I | MVP |
+| INV-ORG-003 | Closing a legal entity, org unit or governance body marks it inactive and never deletes it while any governed record references it | An entity that has been wound up still appears in the history of everything it governed | I | MVP |
+| INV-ORG-004 | Jurisdiction is never derived from a legal entity's country of registration | An entity registered in Lithuania may employ someone operating under Finnish rules | U, I | V1 |
+| INV-ORG-005 | A Governance Body belongs to exactly one legal entity, and dissolving it never alters the decisions it made | "The Management Board approved this" must stay true after that board is reconstituted | I | MVP |
+
 ## INV-DOC — Document identity and lifecycle
 
 | ID | Invariant | Why it matters | Test | Phase |
@@ -76,6 +86,9 @@ immutable, and a system in which forgetting is not sufficient to cause harm.
 | INV-DOC-004 | A Document is never physically deleted while governed records or evidence reference it | Destroying evidence is the opposite of what the product is for | I | MVP |
 | INV-DOC-005 | `document_type_id` is authoritative for type; the title is never parsed to derive type or version | Titles lie — "SCA Guidelines v2" is often a Manual | U | MVP |
 | INV-DOC-006 | Every Document has exactly one owner, or is visibly flagged as an ownership exception | Unowned documents are how estates rot | I, E | MVP |
+| INV-DOC-007 | A Document becomes Active only by derivation, when a version of it first becomes Effective; the transition is never set directly | Two sources of truth for "is this document live" always diverge | U, I | MVP |
+| INV-DOC-008 | A Document cannot be Retired while any of its versions is Effective | Retirement must not become a quiet way to end what governs people | I, E | MVP |
+| INV-DOC-009 | A Version records the Document Type it was submitted under, and that record never changes | Which mandated authority applied is only answerable if the type at the time survives | I | MVP |
 | INV-DOC-030 | Publishing a new Governing Framework version marks every `DocumentType` deriving authority from the prior version as requiring alignment review, and never rewrites any mandated authority | The constitution changing must prompt a human, not silently re-govern the estate | I | V1 |
 
 ## INV-VER — Versioning and immutability
@@ -91,6 +104,12 @@ immutable, and a system in which forgetting is not sufficient to cause harm.
 | INV-VER-007 | Fields an approver relied upon — body, incorporated attachments, applicability, variant relationship, materiality, effective date — are immutable after approval | These change what was actually approved | U, I | MVP |
 | INV-VER-008 | Administrative fields that do not alter obligations may change post-approval, and every such change emits an audit event | Avoids version churn for a tag edit, without losing the trail | I | MVP |
 | INV-VER-009 | The content digest covers canonicalised content **and** all governed attachments, under a recorded canonicalisation schema version | A digest that omits attachments proves less than it appears to | U, P | MVP |
+| INV-VER-010 | A Content Revision is immutable once submitted; further editing creates a new revision | The sequence of what was submitted, criticised and resubmitted is the drafting evidence | I | MVP |
+| INV-VER-011 | `version_sequence` is monotonic per variant and never reused; gaps left by cancelled or rejected candidates are never renumbered | Renumbering silently changes what "version 4" refers to in every record that already names it | U, I | MVP |
+| INV-VER-012 | At most one pre-release version exists per variant at any instant | Two open candidates create an ordering question the model cannot answer | I, P | MVP |
+| INV-VER-013 | Every attachment on a Content Revision is governed content and participates in the digest | An unhashed attachment is a hole in exactly the thing the digest claims to prove | U, I | MVP |
+| INV-VER-014 | Materiality is recorded by a human and confirmed at approval; it is never derived from diff size or by an automated classifier | Three characters can create an obligation for everyone; a reformatted annexe creates none | U, I, E | MVP |
+| INV-VER-015 | Materiality may be raised only by resubmitting under the workflow the higher class requires; lowering it requires elevated capability and a recorded reason | Reclassifying downward is the cheapest available way to avoid re-attesting a workforce | I, E | MVP |
 
 ## INV-EFF — Effectivity and supersession
 
@@ -100,7 +119,7 @@ immutable, and a system in which forgetting is not sufficient to cause harm.
 | INV-EFF-002 | For a given Document, variant scope and instant, at most one Version is Effective | The system must always have exactly one answer to "what applies" | I, P, E | MVP |
 | INV-EFF-003 | Supersession is atomic: the successor becomes effective and the predecessor's effective interval closes in one transaction | A gap or an overlap are both governance failures | I, P | MVP |
 | INV-EFF-004 | Withdrawal never causes a superseded Version to become effective again | Silent resurrection of withdrawn guidance is dangerous | I, E | MVP |
-| INV-EFF-005 | Withdrawal leaving no effective Version emits a high-severity `policy_gap` event rather than falling back | The gap must be loud, not papered over | I, E | MVP |
+| INV-EFF-005 | Withdrawal leaving no effective Version emits a high-severity `governance.policy_gap` event rather than falling back | The gap must be loud, not papered over | I, E | MVP |
 | INV-EFF-006 | Effectivity is derived from applicability and dated intervals, never from a mutable `is_current` flag | Mutable current-flags drift and cannot answer historical questions | I | MVP |
 | INV-EFF-007 | A scheduler firing twice produces exactly one `version.effective` event | At-least-once delivery must not duplicate governance transitions | I | MVP |
 | INV-EFF-008 | A Version withdrawn before its effective instant never becomes effective, including under a race with the scheduler | Checked transactionally against authoritative state | I | MVP |
@@ -121,6 +140,9 @@ immutable, and a system in which forgetting is not sufficient to cause harm.
 | INV-APR-009 | Concurrent decisions are idempotent; a completion threshold is satisfied exactly once | Two approvers clicking simultaneously must not double-complete | I, E | MVP |
 | INV-APR-010 | A Workflow Template Version is immutable; editing creates a new version and never alters active or historical runs | Otherwise an admin edit rewrites the meaning of past approvals | I | V1 |
 | INV-APR-011 | Where configured, separation of duties prevents the author being the sole final approver | Standard control expectation in regulated organisations | I, E | V1 |
+| INV-APR-012 | An Approval Run records its workflow template version and resolved participants at start; later changes to templates, roles or group membership never alter a running or completed run | Otherwise editing a group in 2028 changes what "Legal approved this" meant in 2026 | I, E | MVP |
+| INV-APR-013 | A stage whose completion rule can no longer be satisfied blocks and raises a governance exception; it never completes, and participants are never re-resolved silently | Fail closed rather than quietly reduce a threshold to what is achievable | I, E | MVP |
+| INV-APR-014 | Delegation transfers a task, never a capability; a delegate who does not independently hold the required capability cannot decide | Otherwise delegation is the shortest path around every approval requirement in the product | I, E | V1 |
 | INV-APR-020 | A workflow may add approval requirements beyond its Document Type's mandated authority, never fewer | Makes the governing framework binding rather than advisory | U, I, E | MVP |
 | INV-APR-021 | A `BODY_RESOLUTION` decision always distinguishes the deciding body from the user who recorded it; the recorder is never presented as the approver | "The Management Board approved" is a different fact from "a person clicked approve". Structural, not configurable. | U, I, E | MVP |
 | INV-APR-022 | Where a resolution date is recorded, it may precede `recorded_at` but never precedes submission of the revision it approves | A board cannot have resolved on text that did not yet exist | U, I | MVP |
@@ -158,6 +180,9 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-AUTH-012 | Restricted titles, snippets, breadcrumbs, counts and facets never appear to unauthorised principals | Metadata disclosure is disclosure | I, E | MVP |
 | INV-AUTH-013 | Privilege elevation and break-glass are time-bounded, justified and separately audited | Standing broad access is unacceptable to security reviewers | I, E | V1 |
 | INV-AUTH-014 | Deactivating a user revokes active sessions and prevents new governed actions, while historical attribution is preserved | Offboarding must be immediate and non-destructive | I, E | MVP |
+| INV-AUTH-015 | A Space never grants, denies or scopes any capability | Once a folder tree exists, products built on one start answering permission questions with it | U, I | MVP |
+| INV-AUTH-016 | Capabilities are a closed enumeration; a grant naming an unknown capability is invalid and is never evaluated as an allow | A mistyped capability must fail closed rather than authorise something adjacent | U, I | MVP |
+| INV-AUTH-017 | Grant inheritance follows administrative containment — owning org unit, legal entity, tenant — and never applicability scope | Keeps access and obligation separate in the implementation, not merely in the prose | U, I | MVP |
 
 ## INV-APL — Applicability and variants
 
@@ -172,6 +197,9 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-APL-007 | Publishing a master version never auto-merges, auto-translates or overwrites derived variants; it marks them alignment-required | Controlled content is never rewritten by machine | I, E | V1 |
 | INV-APL-008 | Alignment-required status cannot be cleared without a recorded governance action | Otherwise staleness is dismissed rather than resolved | I, E | V1 |
 | INV-APL-009 | Historical resolution uses memberships, entity structure and rules as they were at the requested instant, not as they are today | The whole point of point-in-time reconstruction | I, P, E | V1 |
+| INV-APL-010 | A Space never determines applicability | Where a document is filed has no bearing on whom it governs | U, I | MVP |
+| INV-APL-011 | Every Document has exactly one `BASELINE` variant, created with it and never deleted | A replacement with nothing to replace cannot resolve | I | MVP |
+| INV-APL-012 | Where an applicability rule is `MANDATORY` for descendants, no `REPLACEMENT` variant may be published for a descendant scope; only `SUPPLEMENT` | Lets a group state that an instrument is not negotiable locally, and have that enforced rather than trusted | I, E | V1 |
 
 ## INV-REV — Review
 
@@ -182,6 +210,8 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-REV-003 | A `NO_CHANGE` outcome records a completed review without creating a new Version | Reviewing and revising are different acts | I, E | MVP |
 | INV-REV-004 | Completing a review schedules the next occurrence deterministically from the configured anchor | Silent cadence drift defeats the control | U, I | MVP |
 | INV-REV-005 | Review Cases are immutable once completed | They are evidence | I | MVP |
+| INV-REV-006 | At most one open Review Case exists per Review Rule at any instant; rescheduling never produces a second open case | Otherwise a scheduler retry shows an overdue review that its twin has already completed | I | MVP |
+| INV-REV-007 | A completed Review Case records the exact Document Version reviewed and the configuration version in force | "It was reviewed in March" does not answer which text was examined | I | MVP |
 
 ## INV-ATT — Attestation
 
@@ -197,6 +227,8 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-ATT-008 | A new campaign never alters an earlier campaign, nor implies earlier readers acknowledged the new text | Re-attestation is a new fact | I, E | MVP |
 | INV-ATT-009 | Material changes generate re-attestation for the affected audience only | Compliance fatigue is a real product failure | I, E | V1 |
 | INV-ATT-010 | Duplicate notification delivery never produces duplicate assignments or duplicate governance transitions | At-least-once email, exactly-once obligation | I | MVP |
+| INV-ATT-011 | Extending a campaign's due date never rewrites an outcome already recorded | Otherwise an extension retroactively converts late responders into punctual ones | I, E | MVP |
+| INV-ATT-012 | A principal holds at most one assignment per campaign | Someone caught by three clauses of one audience rule has one obligation, not three | I | MVP |
 
 ## INV-AUD — Audit
 
@@ -209,6 +241,8 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-AUD-005 | Every event carries tenant, actor, subject, UTC instant, event type, outcome and correlation identifier | The minimum for reconstruction | U, I | MVP |
 | INV-AUD-006 | Where an action is delegated, impersonated or elevated, both effective and originating actor are recorded | Otherwise privileged action is invisible | I | V1 |
 | INV-AUD-007 | Business governance events and low-level security or observability logs remain separately modelled | The evidence ledger is not a request log | I | MVP |
+| INV-AUD-008 | Event types are a versioned contract: an event type's meaning and required fields never change in place; a changed shape gets a new schema version, and older events remain interpretable under theirs | Renaming or repurposing an event silently reinterprets years of history | U, I | MVP |
+| INV-AUD-009 | Events carry a deterministic total order within a tenant | Regenerating an evidence pack must yield the same chronology, and timestamps alone collide | I, P | MVP |
 
 ## INV-EVD — Evidence
 
@@ -222,6 +256,8 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-EVD-006 | Regenerating a pack for the same specification yields the same substantive records; only packaging metadata may differ | Determinism is what makes it evidence | I, P | V1 |
 | INV-EVD-007 | An as-of query resolves the Version, memberships and audience that were in force at that instant | Historical reconstruction, not a filter over today | I, P, E | V1 |
 | INV-EVD-008 | Pack download links expire, and expiry is enforced at retrieval | Packs contain concentrated personal data | I | V1 |
+| INV-EVD-009 | Every governed action included in a pack carries the configuration version and, where applicable, the workflow template version in force when it happened | A control satisfied is a different claim from a field that happened to be filled in | I, E | MVP |
+| INV-EVD-010 | A pack never contains records the requester was not authorised to read at request time | Evidence generation must not become a privilege-escalation path | I, E | MVP |
 
 ## INV-RET — Retention and legal hold
 
@@ -240,3 +276,4 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-TIME-002 | Scheduled transitions behave correctly across DST boundaries and timezone configuration changes | A classic source of off-by-one-hour governance errors | U, P | MVP |
 | INV-TIME-003 | Every mutating operation is protected by optimistic concurrency or an idempotency key; a stale write conflicts rather than overwrites | Silently overwriting someone's governance decision is unacceptable | I, E | MVP |
 | INV-TIME-004 | A retried request returns the original logical result rather than performing the action twice | Browsers and networks retry | I, E | MVP |
+| INV-TIME-005 | Dated intervals are half-open `[from, until)`, so no instant belongs to two consecutive intervals | The classic overlap bug, which in this product means two versions effective at one instant | U, P | MVP |
