@@ -22,12 +22,14 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 3 | `Space` semantics | Register navigation | One Space per tenant in the Pilot | Open — does not block |
 | 4 | Pilot workflow configurability | Approval implementation, admin scope | Template-backed, not customer-editable | Open — does not block |
 | 5 | Pilot applicability complexity | Campaign audience, register filters | Explicit audience lists | Open — does not block |
-| 6 | Licence | Publishing the repository | PolyForm Shield 1.0.0 | Open — gates publishing |
+| 6 | Licence | Publishing the repository | PolyForm Shield 1.0.0 | **Decided 2026-08-24** |
 | 7 | Data residency and region | ADR-000 and every infrastructure ADR | One EU region, stated completely | **Decided 2026-08-24** |
-| 8 | Product and repository name | Publishing the repository | Decide alongside the licence | Open — gates publishing |
+| 8 | Product and repository name | Publishing the repository, and CI on the free tier | A name only the founder can choose | **Open — now blocks Phase 2** |
 
-Decisions 1, 2 and 7 blocked Phase 1 and are now answered. Phase 1 can begin. The
-remaining four shape scope or gate publication, and none of them stops architecture.
+Decisions 1, 2, 6 and 7 are answered. Phase 1 has begun. **Decision 8 — the product and
+repository name — now blocks Phase 2**, because CI on the free tier assumes a public
+repository and a public repository needs a licence file naming a licensor and a product.
+Decisions 3, 4 and 5 shape Pilot scope and stop nothing.
 
 ---
 
@@ -161,6 +163,9 @@ of the specificity ladder arrives with the capability it protects.
 
 ## 6 — Licence
 
+> **Decided 2026-08-24 — option A, PolyForm Shield 1.0.0**, together with the decision to
+> make the repository public. Founder.
+
 **Context.** The repository is currently unlicensed, which means all rights reserved by
 default. `README.md` already states the intended posture — *source-available: readable by
 anyone, not re-sellable as a competing service* — so the open question is which instrument
@@ -219,6 +224,10 @@ agreements, and narrowing one afterwards is a renegotiation.
 
 ## 8 — Product and repository name
 
+> **Now blocking.** The repository is going public (decided 2026-08-24), which the CI gate
+> list depends on for unlimited Actions minutes. The licence file needs a licensor and the
+> repository needs a name before that can happen.
+
 **Context.** `README.md` carries *Policy Operations Platform* as a working name and flags
 naming as open. Nothing technical depends on it, but it appears in the licence file, the
 repository URL, every customer-facing artefact and — once chosen — in package names that
@@ -233,9 +242,14 @@ are tedious to change.
 repository needs both — and renaming after a design partner has bookmarked, linked and
 referenced the product is the expensive ordering.
 
+There is no recommendation on *which* name. That is a founder decision, and the only input
+worth recording is a practical one: check the `.eu` and `.com` domains and the npm scope
+before committing, because the package name follows the repository name.
+
 **Reversibility.** High before publication. Moderate afterwards, and it degrades steadily.
 
-**Blocks.** Nothing in Phase 0 or Phase 1. It gates publishing the repository.
+**Blocks.** Phase 2 — repository bootstrap. CI on the free tier assumes a public
+repository, and a public repository needs a licence file naming a licensor and a product.
 
 ---
 
@@ -248,7 +262,10 @@ file-centric* is a question that will be asked again.
 |---:|---|---|---|---|
 | 1 | Pilot `LegalEntity` capability | 2026-08-24 | Schema-complete, behaviour-minimal. `LegalEntity`, `OrgUnit` and `OrgMembership` exist from the first migration; one entity seeded per tenant; the resolver does no hierarchy traversal until V1 | `domain-model.md`, `multi-entity-model.md` Pilot scope |
 | 2 | Authoring model | 2026-08-24 | File-centric. The uploaded controlled file is the governed artefact and the thing hashed. Text extraction feeds comparison and materiality warnings and is never normative | `versioning.md`, `domain-model.md` |
-| 7 | Data residency | 2026-08-24 | One EU region, complete — application data, object storage, backups, search, audit, evidence packs, queues, DR replicas and observability all in-region | Phase 1: ADR-000 and the infrastructure ADRs |
+| 7 | Data residency | 2026-08-24 | One EU region, complete — application data, object storage, backups, search, audit, evidence packs, queues, DR replicas and observability all in-region | Phase 1: ADR-0000 and the infrastructure ADRs |
+| 6 | Licence | 2026-08-24 | PolyForm Shield 1.0.0, and the repository goes public | Phase 2: the licence file. Blocked on decision 8 for a licensor and a name |
+| — | Application language | 2026-08-24 | TypeScript end to end. The founder reviews every agent-written pull request, and their fluency dominates any technical argument | `ADR-0000` |
+| — | Repository visibility | 2026-08-24 | Public. The CI gate list assumes unlimited Actions minutes | `ADR-0000`, and decisions 6 and 8 |
 
 Decision 7 has no effect on `docs/domain/`. It constrains provider and managed-service
 choices in Phase 1, and it is the commitment the security documentation will state.
