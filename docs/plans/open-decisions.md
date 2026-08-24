@@ -24,13 +24,13 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 5 | Pilot applicability complexity | Campaign audience, register filters | Explicit audience lists | Open — does not block |
 | 6 | Licence | Publishing the repository | PolyForm Shield 1.0.0 | **Decided 2026-08-24** |
 | 7 | Data residency and region | ADR-000 and every infrastructure ADR | One EU region, stated completely | **Decided 2026-08-24** |
-| 8 | Product and repository name | Publishing the repository, and CI on the free tier | A name only the founder can choose | **Open — now blocks Phase 2** |
+| 8 | Product and repository name | Publishing the repository, and CI on the free tier | **PolicyOffice** | **Decided 2026-08-25** |
 | 9 | Human-readable rendering in evidence packs | One line of the pack layout | Ship originals in the Pilot; amend the layout | Open — does not block |
 
-Decisions 1, 2, 6 and 7 are answered. Phase 1 has begun. **Decision 8 — the product and
-repository name — now blocks Phase 2**, because CI on the free tier assumes a public
-repository and a public repository needs a licence file naming a licensor and a product.
-Decisions 3, 4 and 5 shape Pilot scope and stop nothing.
+Decisions 1, 2, 6, 7 and 8 are answered. Phase 1 is complete and **Phase 2 is unblocked**.
+One detail remains before the licence file can be written: PolyForm Shield names a
+*licensor*, and whether that is a person or a company is not yet recorded. Decisions 3, 4
+and 5 shape Pilot scope and stop nothing.
 
 ---
 
@@ -225,6 +225,8 @@ agreements, and narrowing one afterwards is a renegotiation.
 
 ## 8 — Product and repository name
 
+> **Decided 2026-08-25 — PolicyOffice.** Founder.
+
 > **Now blocking.** The repository is going public (decided 2026-08-24), which the CI gate
 > list depends on for unlimited Actions minutes. The licence file needs a licensor and the
 > repository needs a name before that can happen.
@@ -251,6 +253,62 @@ before committing, because the package name follows the repository name.
 
 **Blocks.** Phase 2 — repository bootstrap. CI on the free tier assumes a public
 repository, and a public repository needs a licence file naming a licensor and a product.
+
+### Why PolicyOffice
+
+Roughly 550 candidates were checked across five rounds, in five families: Baltic and
+Nordic domain vocabulary, Latin roots, `-im` coinages, archaic legal record-keeping terms,
+and the naming registers the category itself uses.
+
+The category has two naming generations. Descriptive compounds — PolicyStat, PolicyTech,
+AuditBoard, Hyperproof — say what the product does and need no marketing spend to mean
+something. Abstract coinages — Vanta, Drata, Sprinto — are defensible and expandable but
+mean nothing until money is spent making them mean something.
+
+PolicyOffice is descriptive, and three things make that the right trade here:
+
+1. **It names the buyer, not the mechanism.** PolicyStat and PolicyTech are named after
+   what the software does. *The policy office* is a real organisational unit — it is what
+   the compliance function is inside a regulated company. The product is named after the
+   thing it replaces.
+2. **Its ceiling matches a boundary we already committed to.** A descriptive name usually
+   becomes a liability when the company outgrows it. `product-blueprint.md` already
+   refuses to become a GRC suite, a general document-management system, a CLM or an LMS. A
+   name capped at policy operations only constrains us if we break a refusal we have
+   written down.
+3. **It survives being said aloud.** Two earlier front-runners did not: *invigore*
+   contains *gore*, and *PolicyRoll* is a homophone of *PolicyRole* — a meaningful phrase
+   in access control, which is a concept inside this product.
+
+### What was checked
+
+| Surface | Status, 2026-08-25 |
+|---|---|
+| `policyoffice.eu` | Free |
+| `policyoffice.ee` | Free |
+| `policyoffice.io` | Free |
+| `github.com/policyoffice` | Free |
+| `policyoffice.com` | **Taken** — held by BrandBucket, a curated brand marketplace, listed at roughly €7k |
+
+Availability was determined by querying each registry's authoritative nameservers with
+recursion disabled and treating `NXDOMAIN` as not-in-zone. `.eu` results were confirmed
+against two independent registry servers. This is strong evidence of non-registration, not
+proof: EURid holds expired domains in a roughly 40-day quarantine during which they are
+out of the zone and not purchasable. Confirm at a registrar before assuming.
+
+### Known risks, accepted
+
+| Risk | Note |
+|---|---|
+| **The mark is weak** | "Policy" plus a generic noun is descriptive, and descriptive marks are refused or narrowly protected. We cannot stop a PolicyDesk or a PolicyBureau. Mitigation: a distinctive wordmark and logo are protectable even where the words are not, and descriptive marks acquire distinctiveness through use. File at EUIPO in classes 9 and 42 early regardless — a narrow mark beats none and establishes a priority date |
+| **The `.com` is an option we do not control** | BrandBucket is a broker, not a business — no MX records, nobody operating it. The listed price will not inflate, but they sell to whoever pays first, and a competitor operating under the name would be a genuine problem. `.eu` is the primary regardless, and for a product positioned on regulated European companies that is a statement rather than a consolation |
+| **A crowded family** | PolicyStat, PolicyTech, PolicyHub, PolicyBridge and ClearPolicy already exist. `clearpolicy.app` is live and adjacent to what we do |
+
+### Still needed before the licence file
+
+PolyForm Shield 1.0.0 (decision 6) names a **licensor**. Whether that is the founder
+personally or an Estonian company is not yet recorded, and the licence file cannot be
+written without it.
 
 ---
 
@@ -301,6 +359,7 @@ file-centric* is a question that will be asked again.
 | 6 | Licence | 2026-08-24 | PolyForm Shield 1.0.0, and the repository goes public | Phase 2: the licence file. Blocked on decision 8 for a licensor and a name |
 | — | Application language | 2026-08-24 | TypeScript end to end. The founder reviews every agent-written pull request, and their fluency dominates any technical argument | `ADR-0000` |
 | — | Repository visibility | 2026-08-24 | Public. The CI gate list assumes unlimited Actions minutes | `ADR-0000`, and decisions 6 and 8 |
+| 8 | Product and repository name | 2026-08-25 | **PolicyOffice.** `.eu`, `.ee`, `.io` and the GitHub org are free; `.com` is held by a brand marketplace at roughly €7k and treated as a later option | Phase 2: the licence file, the repository name, package names |
 
 Decision 7 has no effect on `docs/domain/`. It constrains provider and managed-service
 choices in Phase 1, and it is the commitment the security documentation will state.

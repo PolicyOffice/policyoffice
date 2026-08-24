@@ -1,6 +1,6 @@
-# Policy Operations Platform
+# PolicyOffice
 
-> Working name. Product and repository naming is an open decision.
+> A policy operations system of record for regulated European companies.
 
 A system of record for controlled policy operations: policy lifecycle, immutable
 approved versions, review and approval workflows, applicability, access, distribution,
@@ -47,5 +47,5 @@ documented in [`docs/engineering/agent-workflow.md`](docs/engineering/agent-work
 
 ## Licence
 
-Not yet selected. Intended posture is source-available: readable by anyone, not
-re-sellable as a competing service.
+**PolyForm Shield 1.0.0** — source-available: readable by anyone, not re-sellable as a
+competing service. The licence file lands in Phase 2, once the licensor is recorded.

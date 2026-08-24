@@ -116,13 +116,16 @@ Eleven ADRs, a physical data model covering 46 entities, a threat model, and a o
 architecture summary. Four of five exit criteria met; the fifth carried forward with its
 reason recorded.
 
-Architecture no longer blocks implementation. What blocks Phase 2 is **open decision 8, the
-product and repository name** — the licence file needs a licensor and a product, and the CI
-gate list assumes a public repository.
+Architecture no longer blocks implementation, and **decision 8 was answered on 2026-08-25:
+the product is PolicyOffice.** Phase 2 can begin.
+
+One detail is still outstanding rather than blocking: PolyForm Shield names a *licensor*,
+and whether that is the founder personally or a company is not yet recorded. Everything in
+Phase 2 except the licence file proceeds without it.
 
 ## What comes after
 
 | Phase | Output |
 |---|---|
-| **2 — Repository bootstrap** | CI workflows, Docker local environment, migrations, test harness, Playwright, rulesets, CODEOWNERS, licence. **Blocked on decision 8 — the product name** |
+| **2 — Repository bootstrap** | CI workflows, Docker local environment, migrations, test harness, Playwright, rulesets, CODEOWNERS, licence. Unblocked — decision 8 answered |
 | **3 — Golden slice** | The vertical slice decomposed into Codex-ready tickets: create → draft → submit → request changes → approve → publish → effective → attest → review → evidence pack |
