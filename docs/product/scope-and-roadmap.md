@@ -105,15 +105,16 @@ inventing the state of the organisation.
 
 ## Dependencies on open decisions
 
-| Decision | Affects |
-|---|---|
-| 1 — Pilot `LegalEntity` capability | The first migration. **Blocks Phase 1** |
-| 2 — Authoring model | Drafting, comparison, materiality warnings, rendering. **Blocks Phase 1** |
-| 3 — `Space` semantics | Register navigation only |
-| 4 — Workflow configurability | Whether the Pilot ships a template editor |
-| 5 — Applicability complexity | Campaign audience and register filtering in the Pilot |
-| 7 — Data residency | Every infrastructure choice. **Blocks Phase 1** |
+| Decision | Affects | Status |
+|---|---|---|
+| 1 — Pilot `LegalEntity` capability | The first migration | **Decided** — schema-complete, behaviour-minimal. The Pilot seeds one entity per tenant |
+| 2 — Authoring model | Drafting, comparison, materiality warnings, rendering | **Decided** — file-centric. Drafting means uploading a controlled file; comparison and warnings run over extracted text |
+| 7 — Data residency | Every infrastructure choice | **Decided** — one EU region, complete |
+| 3 — `Space` semantics | Register navigation only | Open |
+| 4 — Workflow configurability | Whether the Pilot ships a template editor | Open |
+| 5 — Applicability complexity | Campaign audience and register filtering in the Pilot | Open |
 
-The Pilot scope above assumes each decision's stated recommendation in
-`docs/plans/open-decisions.md`. Where the founder decides otherwise, this chapter changes
-with it — the invariants do not.
+The three that blocked architecture were answered on 2026-08-24 and the Pilot scope above
+reflects them. The Pilot scope for the remaining three assumes their stated recommendation
+in `docs/plans/open-decisions.md`; where the founder decides otherwise, this chapter
+changes with it — the invariants do not.

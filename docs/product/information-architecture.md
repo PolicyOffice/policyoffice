@@ -91,7 +91,7 @@ opening.
 | **Register** | Find any document and see its governance state | Filters must never reveal documents the user cannot access — including through result counts |
 | **Document record** | The stable page for the logical document, not a version | Tabs: Current · Variants · History · Approvals · Reviews · Attestations · Access · Evidence |
 | **Reader view** | Show the effective version and what is required | Scope, owner, effective date and required actions above the text |
-| **Draft workspace** | Edit a candidate and classify the change | Comparison against the current effective version, and the deterministic materiality warnings at the point of classification |
+| **Draft workspace** | Upload the candidate file and classify the change | Content is file-centric, so a new revision is an upload rather than an edit. Comparison against the current effective version, and the deterministic materiality warnings, at the point of classification |
 | **Approval inbox** | Decide on exactly what was submitted | The exact revision, its digest, the change summary, the scope, and prior decisions — all before the decision buttons |
 | **Attestation** | Acknowledge one exact version | The statement wording is shown, not summarised. Acknowledge, never *sign* |
 | **Campaign builder** | Target an audience and launch | Preflight results are shown before launch, naming who cannot access the version (INV-AUTH-007) |
