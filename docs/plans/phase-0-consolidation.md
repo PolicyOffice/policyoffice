@@ -6,9 +6,8 @@ needs the founder rather than inventing an answer.
 
 **Phase 0 is complete when architecture can begin without reopening product questions.**
 
-**Status: the writing is done.** Sixteen chapters, 145 invariants, eight decisions written
-up. What remains is the founder answering decisions 1, 2 and 7 — the three that block the
-physical data model.
+**Status: complete.** Sixteen chapters, 145 invariants, eight decisions written up, and the
+three that blocked the physical data model answered on 2026-08-24. Phase 1 can begin.
 
 ## Conventions for this phase
 
@@ -105,6 +104,12 @@ The second criterion was verified rather than asserted. What was checked:
 What that does **not** cover is semantic contradiction a reader would catch and a grep
 would not. Phase 1 will surface any of those the first time the physical model is derived
 from these chapters, which is the right time to find them.
+
+## Phase 0 is closed
+
+All four exit criteria are met. The specification is the authority from here: Phase 1
+derives architecture from it, and a disagreement between an ADR and `docs/domain/` is
+resolved in favour of `docs/domain/` or by a Decision Request — never silently.
 
 ## What comes after
 
