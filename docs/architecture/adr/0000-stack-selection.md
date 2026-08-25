@@ -4,6 +4,48 @@
 - **Date:** 2026-08-24
 - **Deciders:** Founder, Claude Code
 
+> **Amendment, 2026-08-25 — the repository layout, chosen in POL-002 (#22).** This ADR
+> named the packages by role — domain, web, worker — and stopped there, deliberately.
+> Building them settled the shape:
+>
+> ```text
+> apps/web/            Next.js App Router. The reader and governance surfaces
+> apps/worker/         The worker process. Depends on the domain, never on apps/web
+> packages/domain/     Framework-free. Imports nothing outside a stated allowlist
+> tooling/             The architecture test that enforces that boundary
+> ```
+>
+> pnpm workspaces, because the domain has to be a real package boundary rather than a
+> directory convention — `workspace:*` makes a forbidden import a resolution failure as
+> well as a test failure.
+>
+> The boundary is enforced by `tooling/architecture.test.ts`, which reads the domain's
+> imports and fails on anything outside an **allowlist**. A denylist of forbidden
+> frameworks silently permits the next one anybody adds. The allowlist starts **empty**:
+> every widening of the most important boundary in the repository should cost a diff and
+> a reason. Type-only imports count — `import type { NextRequest }` creates no runtime
+> dependency but does mean a domain rule is expressed in terms of a request, which is the
+> coupling the boundary exists to prevent arriving by a quieter route.
+
+> **Amendment, 2026-08-25 — runtime and toolchain versions.** Two things were not true of
+> the versions this ADR assumed when it said "Node.js LTS":
+>
+> **Node 20 is end-of-life.** Its maintenance window closed 2026-04-30, and it was what
+> the development machine was running. The repository pins **Node 24** (Active LTS) in
+> `.nvmrc` and `engines`. Shipping a product positioned on trustworthiness from an
+> unsupported runtime is not a defensible starting point, and a security reviewer will
+> ask.
+>
+> **TypeScript is pinned to 6.0.3, not the latest 7.x.** `typescript-eslint` supports
+> `>=4.8.4 <6.1.0`; installing TypeScript 7 leaves the linter with an unmet peer
+> dependency. Lint is a required CI gate, so the newest version that the gate actually
+> supports wins over the newest version that exists. Revisit when `typescript-eslint`
+> ships TypeScript 7 support.
+>
+> Also recorded, because it looks like a mistake otherwise: `next.config.ts` has no
+> `eslint` key. Next 16 removed its built-in ESLint integration. Lint is a separate gate
+> in the CI list and runs as its own command.
+
 ## Context
 
 Phase 0 produced a complete specification with 145 registered invariants and an

@@ -16,15 +16,15 @@ The guiding test for every feature and architectural decision:
 
 ## Status
 
-**Phase 1 complete — architecture.** No application code yet.
+**Phase 2 in progress — repository bootstrap.**
 
 The specification is written and settled: 16 chapters under `docs/domain/` and
 `docs/product/`, and 149 invariants with stable identifiers. The architecture is derived
-from it: eleven ADRs, a physical data model, a threat model, and a one-page summary under
-`docs/architecture/`.
+from it: eleven ADRs, a physical data model and a threat model under `docs/architecture/`.
 
-Next is Phase 2, repository bootstrap — CI, migrations, the test harness and the licence.
-It is blocked on one open decision: the product's name.
+The platform those ADRs depend on is **executed, not assumed** — 34 assertions against
+local PostgreSQL and 24 against Neon, in `verification/`. Six ADR claims turned out to be
+wrong and were amended. There is no schema yet.
 
 ## Repository map
 
@@ -38,6 +38,46 @@ It is blocked on one open decision: the product's name.
 | `docs/architecture/` | Architecture, data model, threat model, ADRs |
 | `docs/engineering/` | Agent workflow, testing strategy, definition of done, release process |
 | `docs/plans/` | Pilot plan, active and completed work plans, technical debt |
+| `packages/domain/` | The framework-free domain package. Imports nothing outside an allowlist |
+| `apps/web/` | Next.js App Router — the reader and governance surfaces |
+| `apps/worker/` | The worker process. Depends on the domain, never on `apps/web` |
+| `tooling/` | The architecture test enforcing the domain boundary |
+| `verification/` | Executable checks for the platform claims the ADRs depend on |
+
+## Development
+
+Requires [Node 24](https://nodejs.org) (`.nvmrc`), [pnpm](https://pnpm.io) and Docker.
+
+```bash
+nvm use && corepack enable && pnpm install
+```
+
+```bash
+docker compose up -d && ./verification/run.sh
+```
+
+That second command is the platform verification, not a test suite — there is no
+application to test yet. It proves PostgreSQL behaves the way the ADRs claim.
+
+Everything the CI gate list runs, in one command:
+
+```bash
+pnpm check
+```
+
+which is `format`, `lint`, `typecheck`, `test` and `build` — each also runnable on its
+own, because CI runs them as separate jobs and one job should have one reason to go red.
+
+`pnpm test` includes the **architecture test**, which fails if `packages/domain` imports
+anything outside its allowlist. That boundary is what makes INV-TEN-004 and INV-AUTH-001
+enforceable rather than remembered, so it is part of the ordinary check commands and not
+an opt-in script.
+
+The platform check against Neon needs credentials and is therefore separate:
+
+```bash
+set -a; . ./.env; set +a && ./verification/neon.sh
+```
 
 ## How this is built
 
