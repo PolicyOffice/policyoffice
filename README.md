@@ -65,8 +65,31 @@ Everything the CI gate list runs, in one command:
 pnpm check
 ```
 
-which is `format`, `lint`, `typecheck`, `test` and `build` — each also runnable on its
-own, because CI runs them as separate jobs and one job should have one reason to go red.
+which is `format`, `lint`, `typecheck`, `invariants`, `test` and `build` — each also
+runnable on its own, because CI runs them as separate jobs and one job should have one
+reason to go red.
+
+Tests come in three kinds, selected by filename so the boundary is visible in the file
+tree rather than in configuration:
+
+| Command | Runs | Needs |
+|---|---|---|
+| `pnpm test:unit` | `*.test.ts` | nothing |
+| `pnpm test:integration` | `*.int.test.ts` | `docker compose up -d` |
+| `pnpm test:property` | `*.prop.test.ts` | nothing |
+
+Integration tests connect as `app_role` — never the owner, never a superuser. A superuser
+bypasses row-level security entirely, so a cross-tenant negative test run as one passes
+while proving nothing. The harness enforces the role rather than trusting each test to
+remember it, and a test that cites a tenancy or authorization invariant while holding a
+privileged connection fails outright.
+
+They **fail** rather than skip when no database is reachable. A skipped integration suite
+is a green build that tested nothing.
+
+`pnpm invariants` checks that every invariant in the registry either has a test naming it
+or appears in `tooling/invariants-pending.md` with a reason. That register only shrinks,
+and the check fails if an invariant is both tested and still listed.
 
 `pnpm test` includes the **architecture test**, which fails if `packages/domain` imports
 anything outside its allowlist. That boundary is what makes INV-TEN-004 and INV-AUTH-001
