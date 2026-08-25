@@ -108,14 +108,15 @@ Both ADRs are amended and `data-model.md` is corrected.
 ## Remaining
 
 
-- [ ] **Repository skeleton** — the monorepo layout from `ADR-0000`, with the
-  domain-package
-      boundary an architecture test can enforce
-- [ ] **Migration harness** — forward-only SQL, three roles, `btree_gist`, the drift check
-      (`ADR-0009`)
+- [x] **Repository skeleton** — pnpm workspaces, `packages/domain` framework-free with the
+      boundary enforced by an allowlist architecture test, Node 24, TypeScript strict
+- [x] **Migration harness** — forward-only SQL with per-file checksums, the three roles,
+      `btree_gist`, non-transactional migrations, session timeouts, and the fresh/upgrade/
+      drift checks. No down-migration path exists
 - [ ] **First migrations** — tenancy, identity, the document spine, the audit ledger
-- [ ] **Test harness** — Vitest, integration tests against a Postgres service container,
-      `fast-check` for applicability properties. Connecting as `app_role`, never a superuser
+- [x] **Test harness** — Vitest with unit/integration/property projects, `fast-check`, and
+      the invariant coverage gate. Connects as `app_role`; a test citing a tenancy or
+      authorization invariant while holding a privileged connection fails
 - [ ] **CI workflows** — the gate list in `agent-workflow.md`, blocking on every pull
   request
 - [ ] **Playwright** — booted in the runner, no deployed environment

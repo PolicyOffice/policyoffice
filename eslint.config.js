@@ -27,7 +27,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ["tooling/**/*.ts", "*.config.ts", "*.config.js"],
+    // Command-line entrypoints, where stdout IS the interface.
+    //
+    // `no-console` exists for application code: INV-AUD-007 keeps business governance
+    // events and operational logs separately modelled, and an ad-hoc console.log in a
+    // request path is how the two start blurring. A migration CLI printing what it
+    // applied is not that.
+    files: ["tooling/**/*.ts", "**/cli.ts", "**/*-cli.ts", "*.config.ts", "*.config.js"],
     rules: { "no-console": "off" },
   },
 );

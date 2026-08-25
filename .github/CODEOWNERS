@@ -81,9 +81,19 @@
 /tooling/invariant-coverage.ts        @aca333
 /tooling/invariants-pending.md        @aca333
 
+# Every SQL migration. The enforcement ladder lives in the DDL: composite keys carrying
+# tenant_id, EXCLUDE USING gist over effective intervals, revoked UPDATE/DELETE on the
+# ledger. A migration is where an invariant stops being a rule the code is checked against
+# and becomes one it cannot break -- or fails to.
+/packages/db/migrations/              @aca333
+
+# The runner and the three checks. There is deliberately no down-migration path; adding
+# one must be a visible change to this design, not a convenience.
+/packages/db/src/runner.ts            @aca333
+/packages/db/src/verify.ts            @aca333
+
 # ── Tier 2 — not yet written ──────────────────────────────────────────────────
 # Added in the pull request that creates them, not guessed at here.
 #
-#   every SQL migration                  the enforcement ladder lives in the DDL (POL-003)
 #   the CI gate definitions              weakening a gate weakens every guarantee
 #                                        downstream of it (POL-005)
