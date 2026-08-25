@@ -415,7 +415,7 @@ create table document_version (
   effective_range tstzrange generated always as (
     case when effective_from is null then null
          else tstzrange(effective_from, effective_until, '[)')
-    end) stored,
+    end) stored,          -- STORED required on PG18: VIRTUAL cannot be indexed (ADR-0005)
 
   unique (tenant_id, document_variant_id, version_sequence),   -- INV-VER-011
   foreign key (tenant_id, document_variant_id)

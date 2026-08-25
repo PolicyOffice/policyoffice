@@ -27,7 +27,7 @@ platform changes.
 
 ---
 
-## What the first run found
+## What the first run found (PostgreSQL 17.11)
 
 Two things the ADRs asserted were wrong, and both were found by executing them rather than
 by review.
@@ -87,11 +87,67 @@ Two consequences, both now enforced by the checks:
 
 ---
 
+## What the move to PostgreSQL 18 found
+
+The database was moved from 17 to 18 on 2026-08-25, a founder decision taken for the
+longer support runway while the cost of moving was still zero. All assertions were
+re-executed. Everything above still holds, `btree_gist` is 1.8 rather than 1.7, and two
+new things came out of it.
+
+### 3. On 18, omitting `STORED` silently weakens INV-EFF-002
+
+PostgreSQL 18 added **virtual** generated columns and made `VIRTUAL` the **default** when
+neither keyword is given. Virtual columns cannot be indexed, and `EXCLUDE USING gist`
+needs an index.
+
+```text
+CREATE TABLE … effective_range tstzrange GENERATED ALWAYS AS (…)   -- no STORED
+  → succeeds.  pg_attribute.attgenerated = 'v'  (VIRTUAL)
+ALTER TABLE … ADD CONSTRAINT … EXCLUDE USING gist (…)
+  → ERROR: unique constraints on virtual generated columns are not supported
+```
+
+On 17 that DDL was a **syntax error**, so the mistake could not be made. On 18 the table
+is created successfully and only the constraint fails — later, in a different migration,
+in front of whoever is debugging it at the time. The failure mode being designed against
+is that person concluding the exclusion constraint is unworkable and reaching for a
+trigger or an application-level check, which moves INV-EFF-002 from level 2 to level 5
+without anyone deciding to.
+
+No existing code was affected: all four declarations already said `STORED` explicitly.
+`01-extensions-and-types.sql` now asserts it, so the requirement is executable rather than
+remembered.
+
+### 4. The roles teardown never worked on a clean clone
+
+`00-roles.sh` called `REASSIGN OWNED BY migration_role` before creating the roles.
+`REASSIGN OWNED` and `DROP OWNED` both error on a role that does not exist, so the script
+only ever succeeded because a previous run had left the roles behind in the volume.
+
+`phase-2-bootstrap.md`'s exit criterion is that `docker compose up -d &&
+./verification/run.sh` passes **from a clean clone**. It did not, and nothing detected
+that, because the volume outlived every run. Found by wiping the volume for the major
+version change. The teardown is now guarded and genuinely idempotent.
+
+This is not a PostgreSQL 18 issue. It is a latent defect that a fresh volume exposed, and
+it is the second time in this directory that executing something has found what reviewing
+it did not.
+
+### The Docker image also moved its data directory
+
+Unrelated to the database, but it stops the container from starting: the `postgres:18+`
+images store data in a major-version-specific subdirectory so `pg_upgrade --link` works
+without crossing a mount boundary. The volume is mounted at `/var/lib/postgresql`, **not**
+`/var/lib/postgresql/data`. `docker-compose.yml` carries a comment saying so, because the
+old path looks more correct than it is.
+
+---
+
 ## Confirmed as specified
 
 | Claim | Result |
 |---|---|
-| `btree_gist` available | 1.7, on PostgreSQL 17.11 |
+| `btree_gist` available | 1.8, on PostgreSQL 18.6 |
 | Exclusion constraint over `uuid =` and `tstzrange &&` | Works, and holds under a concurrent race |
 | Exclusion violation `SQLSTATE` | `23P01` — publication can return a governance error rather than a 500 |
 | Constraint keyed on the variant | A second variant may claim the same instants, preserving baseline-plus-replacement |

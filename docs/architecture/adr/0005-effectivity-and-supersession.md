@@ -9,6 +9,16 @@
 > 2026-08-25]**; the reasoning that was wrong is kept rather than deleted, so the same
 > mistake is not made again. Evidence: `verification/03-effectivity.sh`.
 
+> **Amendment, 2026-08-25 — `STORED` is load-bearing on PostgreSQL 18.** The database
+> moved from 17 to 18. PostgreSQL 18 added *virtual* generated columns and made `VIRTUAL`
+> the **default** when neither keyword is written. A virtual column cannot be indexed, and
+> `EXCLUDE USING gist` requires an index — so a declaration that omits `STORED` produces a
+> table that is created successfully and an exclusion constraint that cannot be added.
+>
+> On 17 the same DDL was a syntax error, so this could not happen. The `stored` in the
+> declaration below is therefore no longer a stylistic choice; it is what keeps INV-EFF-002
+> at enforcement level 2. Asserted by `verification/01-extensions-and-types.sql`.
+
 ## Context
 
 This is the invariant that selected the database.
@@ -68,7 +78,7 @@ create table document_version (
   effective_range     tstzrange generated always as (
                         case when effective_from is null then null
                              else tstzrange(effective_from, effective_until, '[)')
-                        end) stored,
+                        end) stored,   -- STORED is required: see the 2026-08-25 amendment
 
   primary key (tenant_id, id),
   foreign key (tenant_id, document_variant_id)
@@ -276,7 +286,7 @@ break.
 
 ## Verified
 
-Against PostgreSQL 17.11, by `verification/03-effectivity.sh`:
+Against PostgreSQL 18.6, by `verification/03-effectivity.sh`:
 
 | Claim | Result |
 |---|---|
