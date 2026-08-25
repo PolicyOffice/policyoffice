@@ -49,22 +49,31 @@
 /.github/CODEOWNERS                   @aca333
 
 # ── Tier 2 — source ───────────────────────────────────────────────────────────
-# Deliberately not yet written. `ADR-0000` selects a modular monolith with a
-# framework-free domain package, but no concrete directory layout is specified
-# anywhere in `docs/`, and inventing one here would prescribe an implementation
-# this file has no authority to choose.
+# The layout was chosen in POL-002 (#22) and recorded in ADR-0000. These are the paths
+# that exist today.
+
+# The domain package. Every level-3 and level-4 enforcement in the product ends up here:
+# the single authorization evaluator (INV-AUTH-001), tenant scoping below the
+# presentation layer (INV-TEN-004), version identity and immutability, effectivity,
+# approval runs, the audit ledger's shape, and content canonicalisation.
+/packages/domain/                     @aca333
+
+# The boundary test itself. ADR-0000 calls the domain boundary "the single most important
+# architectural boundary in the repository"; this is the only thing enforcing it, so a
+# change that weakens it is a change to the architecture, not to a test.
+/tooling/architecture.test.ts         @aca333
+
+# Build and lint configuration that carries an architectural rule: TypeScript strict mode
+# and the `any` ban in the domain are enforcement level 3 for INV-AUTH-016.
+/tsconfig.base.json                   @aca333
+/eslint.config.js                     @aca333
+
+# ── Tier 2 — not yet written ──────────────────────────────────────────────────
+# Added in the pull request that creates them, not guessed at here.
 #
-# The repository-skeleton ticket adds these entries in the same pull request that
-# creates the directories, once the layout is real. Its acceptance criteria say so.
-#
-# The paths that must be covered when they exist:
-#
-#   the authorization evaluator          INV-AUTH-001, INV-AUTH-016, INV-AUTH-018
-#   tenant scoping and session context   INV-TEN-001 … INV-TEN-005
-#   version identity and immutability    INV-VER-003, INV-VER-009, INV-VER-011
-#   effectivity and supersession         INV-EFF-002, INV-EFF-003, INV-EFF-007
-#   approval runs and decisions          INV-APR-001, INV-APR-010, INV-APR-012
-#   the audit ledger and outbox          INV-AUD-001 … INV-AUD-009
-#   evidence pack assembly               INV-EVD-006, INV-EVD-007
-#   content canonicalisation and digest  INV-VER-009, INV-VER-013
-#   every SQL migration                  the enforcement ladder lives in the DDL
+#   every SQL migration                  the enforcement ladder lives in the DDL (POL-003)
+#   the test harness's role handling     integration tests must never connect as a
+#                                        superuser, or a cross-tenant negative test passes
+#                                        while proving nothing (POL-004)
+#   the CI gate definitions              weakening a gate weakens every guarantee
+#                                        downstream of it (POL-005)

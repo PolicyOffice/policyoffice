@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    // Referenced by apps/worker via a TypeScript project reference, which requires this.
+    "composite": true,
+    // The incremental cache lives INSIDE the output directory, deliberately.
+    //
+    // TypeScript trusts .tsbuildinfo over the filesystem: with the cache outside dist/,
+    // deleting dist/ leaves tsc believing the project is up to date, and it emits
+    // nothing. `tsc -b` behaves the same way. The failure is silent -- the build reports
+    // success and produces no output -- and it surfaces later as a downstream package
+    // being unable to resolve this one's types.
+    //
+    // Putting the cache in dist/ makes the two impossible to disagree: whatever removes
+    // the outputs removes the reason to think they exist.
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"]
+}

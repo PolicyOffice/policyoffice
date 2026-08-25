@@ -1,0 +1,27 @@
+# Build output and dependencies
+dist/
+.next/
+coverage/
+node_modules/
+pnpm-lock.yaml
+
+# ── The specification is not Prettier's to format ────────────────────────────
+#
+# Running Prettier over docs/ rewrites every hand-aligned Markdown table in the
+# repository -- ADRs, the invariant registry, the domain model -- producing a diff of
+# hundreds of lines that changes no meaning whatsoever.
+#
+# That is bad anywhere. It is worse here: `.github/CODEOWNERS` marks `docs/domain/` and
+# the ADRs as Tier 2, the paths a conformance review must read at full depth. A formatter
+# that rewrites them wholesale makes every real change to those files unreviewable,
+# because the signal is buried in reflowed pipes.
+#
+# Prose is reviewed by reading it. Prettier formats the code.
+*.md
+docs/
+
+# Pre-existing infrastructure, formatted by hand and commented heavily
+docker-compose.yml
+verification/
+.env.example
+.github/
