@@ -55,6 +55,7 @@ change is to the domain vocabulary only.
 | **Effective** | Currently normative for a resolved scope. The answer to *what applies now*. |
 | **Superseded** | Was effective; a replacement has atomically taken over. |
 | **Withdrawn** | Removed from effect by deliberate governance action. Never causes an older version to silently become effective again. |
+| **Information Classification** | Tenant-configurable sensitivity label — `PUBLIC`, `INTERNAL`, `CONFIDENTIAL`, `RESTRICTED`. Recorded on each version, shown on every rendering, and never an input to authorization (INV-AUTH-019). See `document-taxonomy.md`. |
 | **Materiality** | Human classification of a change: `EDITORIAL`, `NON_MATERIAL`, `MATERIAL`, `EMERGENCY`. Drives approval depth and re-attestation. The system assists; it never decides legal materiality. |
 | **Applicability** | Structured rule determining *whom a document governs*. Distinct from access. |
 | **Access** | Whether a principal may see or act on a resource. Distinct from applicability. |

@@ -74,6 +74,7 @@ named employees.
   },
   "includedObjects": [
     { "type": "DOCUMENT_VERSION", "id": "…", "versionSequence": 4,
+      "title": "…", "classification": "CONFIDENTIAL",
       "contentDigest": "sha-256:…", "canonicalisationSchemaVersion": 1 }
   ],
   "configurationVersions": ["…"],

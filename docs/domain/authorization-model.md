@@ -320,3 +320,4 @@ Authorization that only holds in the interface is not authorization.
 | Webhooks and API clients | Same evaluator, same scopes, same audit | INV-AUTH-010 |
 | Delegated machine calls | Intersection of machine and human authority, evaluated per request | INV-AUTH-018 |
 | Legal hold | Grants visibility to nobody. Retention and access are independent axes | INV-AUTH-009 |
+| Information classification | A label on the version. The evaluator never reads it, and no capability is derived from it | INV-AUTH-019 |

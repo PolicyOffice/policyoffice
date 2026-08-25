@@ -69,6 +69,7 @@ erDiagram
 ```mermaid
 erDiagram
     TENANT ||--o{ DOCUMENT_TYPE : defines
+    TENANT ||--o{ INFORMATION_CLASSIFICATION : defines
     TENANT ||--o{ SPACE : contains
     DOCUMENT_TYPE ||--o{ DOCUMENT : classifies
     SPACE ||--o{ DOCUMENT : administers
@@ -78,6 +79,7 @@ erDiagram
     DOCUMENT_VARIANT ||--o{ DOCUMENT_VARIANT : derived_from
     DOCUMENT_VARIANT ||--o{ APPLICABILITY_RULE : scoped_by
     DOCUMENT_VARIANT ||--o{ DOCUMENT_VERSION : releases
+    INFORMATION_CLASSIFICATION ||--o{ DOCUMENT_VERSION : labels
     DOCUMENT_VERSION ||--|{ CONTENT_REVISION : drafted_as
     CONTENT_REVISION ||--o{ CONTENT_ATTACHMENT : incorporates
     DOCUMENT_VERSION ||--o{ ALIGNMENT_OBLIGATION : raises
@@ -358,6 +360,25 @@ in `document-taxonomy.md`.
 
 **Rules:** INV-DOC-005, INV-DOC-030, INV-APR-020.
 
+### `InformationClassification` — MVP schema, V1 behaviour
+
+The tenant's sensitivity scheme — `PUBLIC`, `INTERNAL`, `CONFIDENTIAL`, `RESTRICTED`, or
+whatever their information security framework already calls these. A second axis entirely
+from `DocumentType`: type answers *what authority approves this*, classification answers
+*who may this be shown to and how must it be handled*.
+
+| Attribute | Purpose |
+|---|---|
+| `code`, `name` | The tenant's own vocabulary |
+| `rank` | Integer sensitivity ordering. Lower rank means less restricted. |
+| `handling_instructions` | What the label obliges — presented to readers, never enforced by the system |
+| `externally_disclosable` | Whether this level may leave the organisation without a further decision |
+| `status` | Active or retired |
+
+**Rules:** INV-AUTH-019. The Pilot seeds a default scheme per tenant and does the one thing
+that matters — records the classification on every version and marks it on every rendering.
+Configurable schemes and handling enforcement are V1.
+
 ### `Document` — MVP
 
 The permanent logical identity of one governed instrument. Carries no content, ever.
@@ -423,6 +444,8 @@ will become one.
 | `display_label` | The tenant's own convention — `3.1`, `2027.02`. Never identity, never ordering. |
 | `lifecycle_state` | See `document-lifecycle.md` |
 | `document_type_id` | The type as at submission, recorded so evidence stays interpretable |
+| `title` | The title as at submission. The Document's `canonical_title` may move on; this does not |
+| `classification_id` | The information classification as at submission |
 | `approved_revision_id` | The frozen `ContentRevision` that was approved |
 | `content_digest` | Digest of that revision's canonical manifest |
 | `materiality` | `EDITORIAL`, `NON_MATERIAL`, `MATERIAL`, `EMERGENCY` |
@@ -482,6 +505,7 @@ whose Governing Framework has moved on.
 | `subject_type`, `subject_id` | `DOCUMENT_VARIANT` or `DOCUMENT_TYPE` |
 | `source_version_id` | The upstream version whose publication raised it |
 | `raised_at`, `reason` | When and why |
+| `due_at` | When alignment is required by, where a deadline was set. Null where none was |
 | `status` | `OPEN`, `RESOLVED` |
 | `resolved_by`, `resolved_at`, `resolution_note`, `resolving_review_case_id` | The governance action that closed it |
 
