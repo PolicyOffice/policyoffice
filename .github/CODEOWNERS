@@ -68,12 +68,22 @@
 /tsconfig.base.json                   @aca333
 /eslint.config.js                     @aca333
 
+# The test harness's connecting role, and the guard that enforces it. A cross-tenant
+# negative test run as a superuser passes while proving nothing (verification/README.md,
+# findings 2 and 5). Weakening either of these makes the whole integration suite report
+# green over an unenforced tenancy model, which is worse than having no suite.
+/packages/testing/src/db.ts           @aca333
+/packages/testing/src/guard.ts        @aca333
+
+# The invariant coverage gate and its register. This is the mechanism behind the
+# traceability chain in agent-workflow.md; a broadened regex or a swallowed error here
+# makes every "INV-" citation in the repository decorative.
+/tooling/invariant-coverage.ts        @aca333
+/tooling/invariants-pending.md        @aca333
+
 # ── Tier 2 — not yet written ──────────────────────────────────────────────────
 # Added in the pull request that creates them, not guessed at here.
 #
 #   every SQL migration                  the enforcement ladder lives in the DDL (POL-003)
-#   the test harness's role handling     integration tests must never connect as a
-#                                        superuser, or a cross-tenant negative test passes
-#                                        while proving nothing (POL-004)
 #   the CI gate definitions              weakening a gate weakens every guarantee
 #                                        downstream of it (POL-005)

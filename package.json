@@ -13,12 +13,17 @@
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "test": "vitest run",
-    "check": "pnpm format && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm format && pnpm lint && pnpm typecheck && pnpm invariants && pnpm test && pnpm build",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:property": "vitest run --project property",
+    "invariants": "node --experimental-strip-types tooling/invariant-coverage.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.3.0",
     "eslint": "^10.9.1",
+    "fast-check": "^4.9.0",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.68.0",
