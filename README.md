@@ -87,6 +87,26 @@ privileged connection fails outright.
 They **fail** rather than skip when no database is reachable. A skipped integration suite
 is a green build that tested nothing.
 
+Migrations are forward-only, hand-written SQL, applied by our own runner:
+
+```bash
+pnpm --filter @policyoffice/db migrate:status
+```
+
+`migrate` applies what is pending, `migrate:new <slug>` creates the next file. **There is
+no revert command, and no down migration to revert to** — a down migration is a data-loss
+tool pointed at an evidence ledger, so recovery is a forward migration or a restore. A
+merged migration is immutable: the runner records a checksum and refuses to proceed if a
+file changes.
+
+```bash
+pnpm db:verify
+```
+
+runs the three checks `ADR-0009` requires — fresh install, upgrade with data present, and
+schema drift between the migration chain and the Drizzle definition — each against a
+throwaway database.
+
 `pnpm invariants` checks that every invariant in the registry either has a test naming it
 or appears in `tooling/invariants-pending.md` with a reason. That register only shrinks,
 and the check fails if an invariant is both tested and still listed.

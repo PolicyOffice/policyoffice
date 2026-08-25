@@ -241,8 +241,17 @@ than from a running system, and some of it depends on current vendor behaviour:
 - The residency commitment against every provider in the budget posture — object storage,
   error tracking and transactional email each need an EU-jurisdiction option, or a
   Decision Request.
-- Drizzle's current migration workflow, specifically that hand-edited SQL survives
-  regeneration.
+- ~~Drizzle's current migration workflow, specifically that hand-edited SQL survives
+  regeneration.~~ **Answered 2026-08-25 by POL-003, and the question turned out to be the
+  wrong one.** `drizzle-kit`'s migrator is not used at all. The requirements this ADR and
+  `ADR-0009` place on migrations — a checksum per file so an edited migration is detected,
+  immutability once merged, per-migration opt-out from a transaction for `CREATE INDEX
+  CONCURRENTLY`, and session-level `lock_timeout`/`statement_timeout` — are not things a
+  general-purpose migrator exposes, and fighting one for them is more code than a plain
+  runner. So migrations are applied by `packages/db/src/runner.ts`, roughly 240 lines, and
+  `drizzle-kit` is used only for `export`, which renders the schema for the drift check.
+  Hand-edited SQL therefore cannot fail to survive regeneration, because nothing
+  regenerates it.
 - Whether the chosen Postgres job queue supports transactional enqueue and idempotent
   dequeue as required by INV-EFF-007 and INV-AUD-004.
 

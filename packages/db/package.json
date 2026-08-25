@@ -1,0 +1,26 @@
+{
+  "name": "@policyoffice/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "tsx src/cli.ts apply",
+    "migrate:status": "tsx src/cli.ts status",
+    "migrate:new": "tsx src/cli.ts new",
+    "verify:fresh": "tsx src/verify-cli.ts fresh",
+    "verify:upgrade": "tsx src/verify-cli.ts upgrade",
+    "verify:drift": "tsx src/verify-cli.ts drift"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.10"
+  }
+}

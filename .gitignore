@@ -6,6 +6,9 @@ node_modules/
 # Build output
 *.tsbuildinfo
 dist/
+# drizzle-kit scratch output. Migrations are hand-written SQL in packages/db/migrations
+# and committed; nothing here is a source artefact.
+.drizzle/
 build/
 .next/
 out/

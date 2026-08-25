@@ -17,7 +17,8 @@
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:property": "vitest run --project property",
-    "invariants": "node --experimental-strip-types tooling/invariant-coverage.ts"
+    "invariants": "tsx tooling/invariant-coverage.ts",
+    "db:verify": "pnpm --filter @policyoffice/db verify:fresh && pnpm --filter @policyoffice/db verify:upgrade && pnpm --filter @policyoffice/db verify:drift"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -25,6 +26,7 @@
     "eslint": "^10.9.1",
     "fast-check": "^4.9.0",
     "prettier": "^3.9.6",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.68.0",
     "vitest": "^4.1.11"

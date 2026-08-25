@@ -171,6 +171,26 @@ Low for tooling. High for the no-down-migrations rule, because reintroducing it 
 writing the reverse of every migration retroactively — and the reason not to is a product
 argument rather than a technical one.
 
+> **Amendment, 2026-08-25 — the runner is ours, not `drizzle-kit`'s.** Built in POL-003.
+> Everything this ADR requires of a migration — a checksum so an edited file is detected,
+> immutability once merged, a per-migration opt-out from the transaction wrapper, and
+> session timeouts — has to be enforced by whatever applies them. `drizzle-kit`'s migrator
+> exposes none of it, so migrations are applied by `packages/db/src/runner.ts` and
+> `drizzle-kit` is used only to render the schema for the drift check.
+>
+> The drift check compares two throwaway databases: one built by the migration chain, one
+> by applying the SQL `drizzle-kit export` renders from `schema.ts`. It compares tables,
+> columns, constraints, indexes, row-level security state and policies — not just columns,
+> because the enforcement ladder lives in constraints and privileges and a column-only
+> comparison would pass while an exclusion constraint had gone missing. `drizzle-kit push`
+> was rejected for this: it has no dry-run, and `--strict` is interactive, which is wrong
+> for something that runs unattended on every pull request.
+>
+> Role passwords are deliberately absent from the chain. A password in a migration is a
+> secret in a public repository, and Neon's control plane rejects weak ones outright, so a
+> fixture password that passes against the CI container fails against production.
+> Credentials are an environment concern.
+
 ## Verified at repository bootstrap — Neon, 2026-08-25
 
 By `verification/neon.sh`. Two of the four predictions below were wrong, and both
