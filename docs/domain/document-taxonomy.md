@@ -91,6 +91,65 @@ Weakening a mandated authority requires changing the `DocumentType` configuratio
 which is a separately audited administrative action that records which Governing
 Framework version justified it.
 
+**Mandated authority may be stated per materiality class.** Real governing frameworks
+routinely say that a Policy needs board approval for a substantive change but permits a
+named function to authorise a typographical correction, provided the correction is logged
+and reported at the next review. A single scalar authority per type cannot express that,
+and forcing a board resolution to fix a misspelling is how a governance product teaches
+its users to work around it.
+
+So `mandated_authority` is a structure keyed by materiality, not a single value, and the
+floor rules are unchanged: INV-APR-020 holds for whichever entry applies, an omitted class
+inherits the strictest one stated, and no class may be configured to require nobody. The
+storage was already `jsonb`, so this costs a specification sentence now and a migration
+never.
+
+## Information classification
+
+A second axis, and the distinction is worth being pedantic about because collapsing it is
+easy and expensive.
+
+| Axis | Answers | Carried by |
+|---|---|---|
+| `DocumentType` | Under what authority is this approved, how often reviewed, does it require attestation | `Document`, snapshotted on each version |
+| `InformationClassification` | How sensitive is this, who may it be shown to, how must it be handled | Snapshotted on each version |
+
+A Policy may be public; a Manual may be need-to-know. Neither fact tells you anything
+about the other, and a scheme that ranks them together produces the confident nonsense of
+a highly-classified low-authority document.
+
+### Classification is a label, never a permission
+
+> **INV-AUTH-019 — An information classification labels a version; it never grants, denies
+> or scopes any capability, and the evaluator never reads it.**
+
+This is the same refusal INV-AUTH-015 makes for Spaces, for the same reason. The moment
+`RESTRICTED` starts *causing* denial, the tenant has two access models: the grants an
+administrator can see and explain, and a label nobody thinks of as permission. Access
+questions get answered by the label, grants stop being the whole story, and no one can say
+why a given person can see a given document.
+
+What classification legitimately does:
+
+| Does | Does not |
+|---|---|
+| Appear on the reader view, on every rendered page, and in evidence pack manifests | Filter search results |
+| State handling obligations to the person reading it | Enforce them |
+| Record whether this level is externally disclosable, so a disclosure is a decision someone made | Authorise or refuse a disclosure |
+| Inform the administrator deciding what grants to make | Substitute for making them |
+
+An organisation that wants `RESTRICTED` documents reachable by fewer people expresses that
+as grants, which are visible, dated, attributable and revocable. The label says what the
+document is. The grant says who may read it. Keeping those apart is what makes either one
+answerable.
+
+### Reclassification
+
+Classification is recorded on the version and never changes there (INV-DOC-010).
+Reclassifying is a new version, exactly as retitling is — because *what was this document
+classified as when the board approved it* is a question an auditor asks, and a mutable
+field cannot answer it.
+
 ## `GovernanceBody`
 
 Both blueprints modelled approvers as users, roles or groups with `ALL` / `ANY_ONE` /

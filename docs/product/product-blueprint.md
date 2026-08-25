@@ -37,7 +37,7 @@ them is, at best, someone else's product.
 
 ## Positioning
 
-There are three kinds of tool in this space, and the product sits deliberately between
+There are four kinds of tool in this space, and the product sits deliberately between
 them.
 
 | Category | Examples | What they prove | The opening |
@@ -45,6 +45,7 @@ them.
 | **Document and knowledge platforms** | SharePoint, Confluence, Notion | Permissions, version history and approvals are table stakes, and buyers already have them | Their control layers are fragmented and generic. A page approval is not an approval record bound to a digest, and a folder tree is not applicability |
 | **Policy-native specialists** | PowerDMS, MetaCompliance, NAVEX | The category is real: buyers pay for control, traceability and proof, not storage | Frequently verticalised — public safety, healthcare — or part of a broader human-risk suite, with enterprise sales motions that do not fit European mid-market |
 | **Broad governance suites** | OneTrust and comparable GRC platforms | Large organisations will buy an entire governance programme | Overbuilt for a company that wants document governance, attestation, access control and evidence without a governance transformation |
+| **Financial-services compliance suites** | COMPLY (ComplySci) and comparable RegTech | Policy management sustains enterprise contract values — as one component of a regulatory programme, sold alongside consulting and regulatory content | Built around US SEC and FINRA obligations: personal trading, broker feeds, restricted lists, filings. That is most of their product and none of ours. Policy operations is a tile for them and the whole product for us |
 
 Which gives the position:
 
@@ -57,10 +58,34 @@ both have approvals now. The differentiation is the coherence of the whole: poli
 state, deterministic applicability resolution, multi-entity and jurisdictional governance,
 and evidence generated from authoritative records.
 
+### The machine interface will not be the differentiator
+
+Competitors are moving here already, and the honest reading matters more than the
+reassuring one. COMPLY has an MCP server on a public waitlist — beta announced for May
+2026, general availability for July, neither publicly confirmed as at 2026-08-25 — and the
+capability it advertises is submitting trade pre-clearance from Teams or Slack. That is
+workflow-into-chat. It is a sensible thing to build and it is not this product.
+
+The difference is testable rather than rhetorical. When a competitor's machine interface
+ships, read its tool list:
+
+- tools that search and return documents deliver the answer SharePoint already gives, and
+  deliver it faster. That is the commodity half, and it will be commoditised further;
+- tools that resolve *which version was effective, for this scope, on this date* — and
+  return the version identity and digest behind the answer — mean the differentiator is
+  gone and the competition is on execution.
+
+Published material so far addresses the first and is silent on version authority,
+effectivity and point-in-time resolution. That silence is the opening. Exposing a protocol
+will be table stakes; what the interface can truthfully *say* will not be.
+`docs/architecture/machine-access.md` records what that requires of the architecture, and
+open decision 10 records how far to say so publicly.
+
 > Competitive observations here come from the archived research in `docs/research/`, which
-> is point-in-time and non-normative. Vendor capabilities change. The *structural*
-> observation — that generic tools govern pages and specialists govern verticals — has
-> held long enough to build on.
+> is point-in-time and non-normative, except the financial-services row and this section,
+> added 2026-08-25 from direct review of vendor material. Vendor capabilities change. The
+> *structural* observation — that generic tools govern pages and specialists govern
+> verticals — has held long enough to build on.
 
 ## Who it is for
 

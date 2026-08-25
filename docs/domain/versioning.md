@@ -272,6 +272,21 @@ normative, it is not part of `contentParts`, and it never participates in
 `content_digest`. If it did, a change to the extraction library would invalidate every
 historical digest in the system.
 
+**A section reference is therefore a locator, never a citation of record.** Any future
+capability that answers *"§6.3 of version 4.2 says…"* — machine-readable retrieval most
+obviously — is pointing into extracted text, so the reference is only as stable as the
+extractor that produced it. Three consequences hold whatever gets built on top:
+
+- a section reference is qualified by the extractor version that produced it, in the same
+  way a materiality warning is;
+- a section reference is never evidence. The evidence is the version identity and its
+  `content_digest`, both of which are normative and both of which survive re-extraction;
+- re-extracting a historical version with a newer extractor may move its section anchors,
+  and that must not be capable of altering anything governed.
+
+Retrofitting this later means either treating a derived artefact as normative, or
+reopening decision 2. Neither is a migration anybody should want.
+
 The known cost, recorded when the decision was made: warning quality depends on extraction
 fidelity. It is good for `.docx` and weak for a PDF with no source document. An estate
 that arrives as scanned PDFs will get comparison and warnings that are close to useless,

@@ -89,6 +89,7 @@ immutable, and a system in which forgetting is not sufficient to cause harm.
 | INV-DOC-007 | A Document becomes Active only by derivation, when a version of it first becomes Effective; the transition is never set directly | Two sources of truth for "is this document live" always diverge | U, I | MVP |
 | INV-DOC-008 | A Document cannot be Retired while any of its versions is Effective | Retirement must not become a quiet way to end what governs people | I, E | MVP |
 | INV-DOC-009 | A Version records the Document Type it was submitted under, and that record never changes | Which mandated authority applied is only answerable if the type at the time survives | I | MVP |
+| INV-DOC-010 | A Version records the title and information classification it was submitted under, and neither record ever changes | Renaming or reclassifying a Document must not rewrite what past evidence says was approved | I | MVP |
 | INV-DOC-030 | Publishing a new Governing Framework version marks every `DocumentType` deriving authority from the prior version as requiring alignment review, and never rewrites any mandated authority | The constitution changing must prompt a human, not silently re-govern the estate | I | V1 |
 
 ## INV-VER — Versioning and immutability
@@ -183,6 +184,8 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-AUTH-015 | A Space never grants, denies or scopes any capability | Once a folder tree exists, products built on one start answering permission questions with it | U, I | MVP |
 | INV-AUTH-016 | Capabilities are a closed enumeration; a grant naming an unknown capability is invalid and is never evaluated as an allow | A mistyped capability must fail closed rather than authorise something adjacent | U, I | MVP |
 | INV-AUTH-017 | Grant inheritance follows administrative containment — owning org unit, legal entity, tenant — and never applicability scope | Keeps access and obligation separate in the implementation, not merely in the prose | U, I | MVP |
+| INV-AUTH-018 | Where a machine principal acts on behalf of a human, effective authority is the **intersection** of the two principals' grants, never the union, and never either one alone | An integration is a delegation, not a promotion. The union is how a connected assistant becomes a privilege-escalation path around every grant in the tenant | U, I, E | V1 |
+| INV-AUTH-019 | An information classification labels a version; it never grants, denies or scopes any capability, and the evaluator never reads it | A label that quietly becomes a permission is a second access model that nobody administers and no grant explains — the same failure INV-AUTH-015 refuses for Spaces | U, I | MVP |
 
 ## INV-APL — Applicability and variants
 
@@ -200,6 +203,7 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-APL-010 | A Space never determines applicability | Where a document is filed has no bearing on whom it governs | U, I | MVP |
 | INV-APL-011 | Every Document has exactly one `BASELINE` variant, created with it and never deleted | A replacement with nothing to replace cannot resolve | I | MVP |
 | INV-APL-012 | Where an applicability rule is `MANDATORY` for descendants, no `REPLACEMENT` variant may be published for a descendant scope; only `SUPPLEMENT` | Lets a group state that an instrument is not negotiable locally, and have that enforced rather than trusted | I, E | V1 |
+| INV-APL-013 | An alignment obligation's deadline never resolves it, never blocks the upstream version, and never invalidates the downstream one; passing it raises a visible exception and nothing else | A transition period is a commitment to act, not an automatic act. Nothing auto-resolves because a date passed | I, E | V1 |
 
 ## INV-REV — Review
 

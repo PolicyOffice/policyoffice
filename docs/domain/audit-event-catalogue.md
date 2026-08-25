@@ -50,8 +50,8 @@ set of fields — never a free-form payload.
 | `occurred_at` | yes | The authoritative instant, UTC |
 | `recorded_at` | yes | When the ledger received it. Differs from `occurred_at` for backdated governance facts such as a resolution date |
 | `sequence` | yes | Monotonic within the tenant. Gives a stable total order |
-| `actor_type`, `actor_id` | yes | `USER`, `BODY`, `API_CLIENT`, `SYSTEM` |
-| `originating_actor_id` | where applicable | The delegating or impersonating principal |
+| `actor_type`, `actor_id` | yes | `USER`, `BODY`, `API_CLIENT`, `SYSTEM`. An integration or AI agent acting for a person is an `API_CLIENT`, not a new actor kind — what distinguishes it is the pair below, not a label |
+| `originating_actor_id` | where applicable | The delegating or impersonating principal. For a delegated machine call, the human on whose authority it acted (INV-AUD-006, INV-AUTH-018) |
 | `elevation_session_id` | where applicable | The break-glass session this action was taken inside |
 | `subject_type`, `subject_id` | yes | What the event is about |
 | `document_id`, `document_variant_id`, `document_version_id` | where applicable | Governance coordinates, so evidence queries need no joins through five tables |

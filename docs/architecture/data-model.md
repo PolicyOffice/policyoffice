@@ -114,6 +114,7 @@ mechanism, or the drop is recorded.
 | INV-DOC-006 one owner, or a visible exception | 3 | `owner_user_id` nullable by design; the register query surfaces nulls |
 | INV-DOC-008 no retirement while effective | 2 | Trigger on `document.lifecycle_status` |
 | INV-DOC-009 type recorded on the version | **1** | `document_version.document_type_id` `not null`, immutable by trigger |
+| INV-DOC-010 title and classification recorded on the version | **1** | `document_version.title` and `classification_id` `not null`, immutable by the same trigger |
 | INV-VER-002 submission freezes one revision | 2 | Partial unique index on submitted revisions per version |
 | INV-VER-003 released content immutable | 2 | Trigger refusing `update` of governed columns past `approved` |
 | INV-VER-006 labels are not identity | **1** | `version_sequence integer`; `display_label` has no unique or ordering role |
@@ -287,7 +288,7 @@ create trigger legal_entity_acyclic
 create table access_grant (
   … standard tenant-owned columns …
   effect          grant_effect not null,
-  principal_type  text not null,            -- USER | GROUP
+  principal_type  text not null,            -- USER | GROUP | API_CLIENT
   principal_id    uuid not null,
   security_role_id uuid,
   capability      capability,
@@ -326,6 +327,7 @@ database.
 |---|---|
 | `configuration_version` | `sequence`, `effective_from`, `changed_by`, `change_reason`, `weakening boolean`, `payload_digest`. `unique (tenant_id, sequence)` |
 | `document_type` | `code`, `name`, `rank`, `mandated_authority jsonb`, `default_workflow_template_id`, `default_review_rule jsonb`, `requires_attestation_by_default`, `mandated_by_document_version_id`, `status`. `unique (tenant_id, code)`, `unique (tenant_id, rank)` |
+| `information_classification` | `code`, `name`, `rank`, `handling_instructions`, `externally_disclosable boolean`, `status`. `unique (tenant_id, code)`, `unique (tenant_id, rank)`. Referenced by `document_version.classification_id`; referenced by no authorization structure at all (INV-AUTH-019) |
 | `attestation_statement` | `statement_key`, `version_sequence`, `locale`, `body`, `created_by`. `unique (tenant_id, statement_key, version_sequence, locale)`, `revoke update` |
 | `retention_rule` | `record_class`, `duration interval`, `anchor`, `disposition`. `unique (tenant_id, record_class)` |
 | `legal_hold` | `reason`, `authorised_by`, `legal_owner`, `scope_selector jsonb`, `started_at`, `review_at`, `released_at` |
@@ -393,6 +395,8 @@ create table document_version (
   display_label            text,             -- never identity, never ordering (INV-VER-006)
   lifecycle_state          version_lifecycle not null default 'DRAFT',
   document_type_id         uuid not null,    -- as at submission (INV-DOC-009)
+  title                    text not null,    -- as at submission (INV-DOC-010)
+  classification_id        uuid not null,    -- as at submission (INV-AUTH-019)
   approved_revision_id     uuid,
   content_digest           text,
   materiality              materiality,
@@ -479,7 +483,7 @@ create trigger content_revision_immutable_after_submission
 |---|---|
 | `content_attachment` | `content_revision_id`, `filename`, `media_type`, `byte_size`, `storage_ref`, `digest`. No "reference only" column exists, because every attachment is governed content (INV-VER-013) |
 | `applicability_rule` | `document_variant_id`, `effect`, `legal_entity_ids uuid[]`, `org_unit_ids uuid[]`, `jurisdiction_ids uuid[]`, `group_ids uuid[]`, `user_ids uuid[]`, `inheritance_mode`, `validity tstzrange` |
-| `alignment_obligation` | `subject_type`, `subject_id`, `source_version_id`, `raised_at`, `reason`, `status`, `resolved_by`, `resolved_at`, `resolution_note`, `resolving_review_case_id`. Stored rather than derived, because INV-APL-008 requires a recorded action to clear it |
+| `alignment_obligation` | `subject_type`, `subject_id`, `source_version_id`, `raised_at`, `due_at`, `reason`, `status`, `resolved_by`, `resolved_at`, `resolution_note`, `resolving_review_case_id`. Stored rather than derived, because INV-APL-008 requires a recorded action to clear it. `due_at` is nullable and never auto-resolves anything (INV-APL-013) |
 
 ## Approval
 
@@ -646,7 +650,7 @@ validation (INV-AUD-003, INV-AUD-008).
 
 | Table | Phase | Note |
 |---|---|---|
-| `api_client` | V1 | `name`, `status`, `capabilities capability[]`, `scope_type`, `scope_id`, `credential_metadata jsonb`. Authorised by the same evaluator as a human (INV-AUTH-010) |
+| `api_client` | V1 | `name`, `status`, `credential_metadata jsonb`. Identity and credentials only — **no capability or scope columns**. A machine principal holds `access_grant` rows like every other principal, and is authorised by the same evaluator (INV-AUTH-010, INV-AUTH-018) |
 | `webhook_subscription` | V1 | `endpoint_url`, `event_types text[]`, `signing_key_ref`, `status`, `cursor_sequence` — the cursor over `audit_event` from `ADR-0006` |
 | `document_relationship` | Later | `source_document_id`, `target_document_id`, `relation`, `rationale` |
 | `external_reference` | Later | `document_id`, `source_type`, `identifier`, `citation jsonb` |
@@ -707,6 +711,7 @@ index (INV-AUTH-011). The index narrows; the evaluator decides.
 | A `due_soon` or `overdue` assignment state | Derived from `due_at` |
 | A materialised effective-permissions table | A cache that would outlive grants (INV-AUTH-003, `ADR-0003`) |
 | `SPACE` in `scope_type` | INV-AUTH-015 |
+| Any classification column reachable from the evaluator's query path | INV-AUTH-019. `information_classification` is referenced by `document_version` and by nothing in `access_grant` |
 | A "reference only" flag on attachments | INV-VER-013 |
 | Down-migration artefacts | `ADR-0009` |
 | Any `timestamp without time zone` | INV-TIME-001 |

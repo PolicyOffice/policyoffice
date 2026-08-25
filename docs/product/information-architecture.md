@@ -90,7 +90,7 @@ opening.
 |---|---|---|
 | **Register** | Find any document and see its governance state | Filters must never reveal documents the user cannot access — including through result counts |
 | **Document record** | The stable page for the logical document, not a version | Tabs: Current · Variants · History · Approvals · Reviews · Attestations · Access · Evidence |
-| **Reader view** | Show the effective version and what is required | Scope, owner, effective date and required actions above the text |
+| **Reader view** | Show the effective version and what is required | Scope, owner, effective date and required actions above the text. The classification is shown with the document and repeats on every rendered page, because a page that leaves the screen carries its handling rules with it or it carries none |
 | **Draft workspace** | Upload the candidate file and classify the change | Content is file-centric, so a new revision is an upload rather than an edit. Comparison against the current effective version, and the deterministic materiality warnings, at the point of classification |
 | **Approval inbox** | Decide on exactly what was submitted | The exact revision, its digest, the change summary, the scope, and prior decisions — all before the decision buttons |
 | **Attestation** | Acknowledge one exact version | The statement wording is shown, not summarised. Acknowledge, never *sign* |
@@ -109,6 +109,32 @@ before the buttons rather than behind a tab.
 
 Making approval fast is a reasonable interface goal in most products. Here it is
 subordinate to making approval *accurate*.
+
+## Addresses
+
+URLs are a public contract. A wiki links to a policy, an intranet page embeds one, an
+auditor pastes one into a finding, and later an external system cites one. Changing the
+shape afterwards breaks all of them at once, so the shape is decided before the first
+route is written rather than falling out of a router's defaults.
+
+| Address | Resolves to |
+|---|---|
+| `/documents/{documentId}` | The document record. Stable for the life of the document, across re-titling, re-coding and re-typing |
+| `/documents/{documentId}/effective` | Whatever governs the requester's scope **now**. The link to paste into a wiki |
+| `/documents/{documentId}/versions/{versionId}` | One exact version. What a citation, an approval record or an evidence pack points at |
+| `/documents/{documentId}/as-of/{instant}` | What governed the requester's scope at that instant (INV-EVD-007) |
+
+Three rules hold regardless of the eventual routing scheme:
+
+- **Identity in the path is the opaque identifier, never `document_code`.** A customer who
+  re-codes their register must not break every link they have published. The code is a
+  display attribute and belongs in the page, not the address.
+- **An address is not an authorization.** Every one of the above resolves through the
+  evaluator, and an unauthorised or cross-tenant identifier is not-found, never
+  forbidden-with-metadata (INV-TEN-005, INV-AUTH-012).
+- **`/effective` and `/as-of` are resolutions, not redirects to a winner.** They answer for
+  the requester's scope, so two people opening the same link may legitimately reach
+  different versions, and the page says which scope produced the answer.
 
 ## Vocabulary in the interface
 
