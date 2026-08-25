@@ -1,0 +1,70 @@
+# Local development environment.
+#
+# Everything the application needs, running locally, with no accounts and no cost.
+# Object storage is local too (MinIO speaks the S3 API), so nothing developed against
+# it is accidentally coupled to one provider — see ADR-0004.
+#
+#   docker compose up -d
+#   docker compose down -v      # -v also drops the data
+#
+# This is not the CI database. CI runs a Postgres service container per job
+# (ADR-0009), and production is Neon. Platform-specific behaviour is verified
+# separately, in verification/.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: policyoffice-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-policyoffice}
+      # Deterministic collation, so ordering does not vary with the host locale.
+      # Evidence packs sort records; sorting must not depend on the machine.
+      LANG: C
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DB:-policyoffice}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # S3-compatible object storage for controlled files and evidence packs.
+  minio:
+    image: minio/minio:latest
+    container_name: policyoffice-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "${S3_PORT:-9000}:9000"
+      - "${S3_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Captures outbound mail so reminders and campaign notifications can be
+  # inspected without sending anything. Web UI on :8025.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: policyoffice-mailpit
+    ports:
+      - "${SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+volumes:
+  postgres-data:
+  minio-data:

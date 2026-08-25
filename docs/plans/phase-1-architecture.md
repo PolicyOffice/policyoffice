@@ -94,7 +94,8 @@ working as intended rather than a problem.
 - [x] The threat model's abuse cases each resolve to an invariant or to a recorded
       acceptance — eight accepted residual risks, each with the trigger that would change it
 - [ ] ~~Every item on `ADR-0000`'s verification list is checked against the actual
-      vendors~~ — **moved to Phase 2.** See below
+      vendors~~ — **moved to Phase 2.** The local two-thirds is done and found two errors;
+      see `verification/README.md`. The platform half awaits a Neon account
 - [x] No ADR contradicts `docs/domain/` — and where one wanted to, a Decision Request was
       opened instead: `ADR-0008` raised open decision 9 rather than narrowing the evidence
       pack layout
