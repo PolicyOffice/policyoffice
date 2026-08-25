@@ -27,6 +27,17 @@ setting anything up by hand.**
 
 ## Done
 
+- [x] **Project infrastructure**, recorded here because it is not discoverable from the
+  code:
+      `policyoffice.eu` is registered at Namecheap with a catch-all email forward to the
+      founder's inbox — anything`@policyoffice.eu` is deliverable. DNS stays at Namecheap
+      until a deployment needs real records, at which point it moves to Cloudflare. The
+      GitHub organisation is `PolicyOffice`; `.ee` and `.io` are unregistered but were free
+      as at 2026-08-25, and `.com` is held by a brand marketplace at roughly €7k
+- [x] **No hosting account exists yet.** Neon, Cloudflare R2, Resend and Sentry are all
+      named in the budget posture and none is provisioned. The Neon project is the next
+      thing needed from the founder
+
 - [x] `docker-compose.yml` — Postgres 17, MinIO for S3-compatible object storage, Mailpit
       for outbound mail. One command, no accounts, no cost
 - [x] `.env.example` — the application connects as a restricted non-owner role, never as
