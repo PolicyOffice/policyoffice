@@ -34,21 +34,31 @@ setting anything up by hand.**
       until a deployment needs real records, at which point it moves to Cloudflare. The
       GitHub organisation is `PolicyOffice`; `.ee` and `.io` are unregistered but were free
       as at 2026-08-25, and `.com` is held by a brand marketplace at roughly €7k
-- [x] **No hosting account exists yet.** Neon, Cloudflare R2, Resend and Sentry are all
-      named in the budget posture and none is provisioned. The Neon project is the next
-      thing needed from the founder
+- [x] **Neon is provisioned** (2026-08-25): organisation `PolicyOffice`, project
+      `PolicyOffice`, **AWS Europe Central 1 (Frankfurt)**, Postgres 18, free plan. Neon Auth
+      deliberately left off — `ADR-0002` chose server-side sessions in Postgres, and a vendor
+      auth product owning users and sessions would take INV-AUTH-014's revocation mechanism
+      out of our hands. Both connection strings, pooled and direct, are in the founder's
+      local `.env` and are not committed. Cloudflare R2, Resend and Sentry remain
+      unprovisioned
+- [x] **Service accounts use per-service `@policyoffice.eu` addresses**, never a personal
+      address and never GitHub OAuth — a GitHub organisation is not a login identity, so the
+      OAuth button would tie production infrastructure to a personal account that will not
+      transfer to `PolicyOffice OÜ`. Note that the DNS move to Cloudflare is also an
+      email-routing move: if the catch-all is not re-created, every service account's
+      recovery address fails at once
 
-- [x] `docker-compose.yml` — Postgres 17, MinIO for S3-compatible object storage, Mailpit
+- [x] `docker-compose.yml` — Postgres 18, MinIO for S3-compatible object storage, Mailpit
       for outbound mail. One command, no accounts, no cost
 - [x] `.env.example` — the application connects as a restricted non-owner role, never as
       the superuser
 - [x] `verification/` — executable checks for the platform claims the ADRs depend on.
-      31 assertions across 5 checks, all passing against PostgreSQL 17.11
+      34 assertions across 5 checks, all passing against PostgreSQL 18.6, from a clean volume
 
 ### What verification found
 
-Two ADR claims were wrong, both found by executing them rather than by review. Full detail
-in `verification/README.md`.
+Four findings, every one of them from executing something rather than reviewing it. Full
+detail in `verification/README.md`.
 
 - **`ADR-0005`** — `tstzrange(null, null)` is `(,)`, unbounded, not null. A withdrawn
   version would have claimed all of time and blocked its whole variant. And the underlying
@@ -59,12 +69,26 @@ in `verification/README.md`.
   connect as one** — a cross-tenant negative test run as a superuser passes while proving
   nothing.
 
+Then the move from Postgres 17 to 18 (founder decision, 2026-08-25, taken for the longer
+support runway while moving was still free) produced two more:
+
+- **`ADR-0005` again** — PostgreSQL 18 makes `VIRTUAL` the default for generated columns,
+  and a virtual column cannot be indexed, so `EXCLUDE USING gist` refuses it. Omitting
+  `STORED` now yields a table that builds fine and a constraint that cannot be added. On 17
+  it was a syntax error. `STORED` is what holds INV-EFF-002 at enforcement level 2, and
+  that is now asserted rather than assumed.
+- **`verification/00-roles.sh`** — the teardown called `REASSIGN OWNED` on roles that did
+  not exist, so it had never once succeeded on a clean clone. It only worked because the
+  Docker volume outlived every run. This is an exit criterion below that was silently
+  unmet; wiping the volume for the version change is what exposed it.
+
 Both ADRs are amended and `data-model.md` is corrected.
 
 ## Remaining
 
-- [ ] **Neon verification** — the platform half of the ADR lists. Needs an account. No
-      fallback preserves the same enforcement level if it fails, so this precedes migrations
+- [ ] **Neon verification** — the platform half of the ADR lists. The project now exists,
+      so this is unblocked and ticketed as POL-001. No fallback preserves the same
+      enforcement level if it fails, so this precedes migrations
 - [ ] **Repository skeleton** — the monorepo layout from `ADR-0000`, with the
   domain-package
       boundary an architecture test can enforce

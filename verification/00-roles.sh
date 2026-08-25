@@ -11,13 +11,21 @@ DROP SCHEMA IF EXISTS v03 CASCADE;
 DROP SCHEMA IF EXISTS v04 CASCADE;
 DROP SCHEMA IF EXISTS v05 CASCADE;
 
-REASSIGN OWNED BY migration_role TO postgres;
-DROP OWNED BY migration_role;
-DROP OWNED BY app_role;
-DROP OWNED BY retention_role;
-DROP ROLE IF EXISTS app_role;
-DROP ROLE IF EXISTS retention_role;
-DROP ROLE IF EXISTS migration_role;
+-- Guarded, because REASSIGN OWNED and DROP OWNED both error on a role that does
+-- not exist -- and on a clean clone none of these do. The exit criterion in
+-- phase-2-bootstrap.md is that this passes from a fresh volume, so the teardown
+-- has to tolerate there being nothing to tear down.
+DO $$
+DECLARE r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['migration_role', 'app_role', 'retention_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format('REASSIGN OWNED BY %I TO postgres', r);
+      EXECUTE format('DROP OWNED BY %I', r);
+      EXECUTE format('DROP ROLE %I', r);
+    END IF;
+  END LOOP;
+END $$;
 
 -- The owner is deliberately NOT a superuser. FORCE ROW LEVEL SECURITY subjects
 -- the table owner to its own policies, but a superuser bypasses RLS entirely,

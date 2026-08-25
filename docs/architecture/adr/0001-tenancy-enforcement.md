@@ -178,7 +178,7 @@ high for composite keys, because every key and every reference in the schema wou
 
 ## Verified
 
-Against PostgreSQL 17.11, by `verification/02-tenancy.sh`:
+Against PostgreSQL 18.6, by `verification/02-tenancy.sh`:
 
 | Claim | Result |
 |---|---|

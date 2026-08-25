@@ -57,4 +57,49 @@ BEGIN
   END;
 END $$;
 
+\echo '--- STORED is not optional: a VIRTUAL generated column cannot carry INV-EFF-002 ---'
+-- PostgreSQL 18 added VIRTUAL generated columns and made VIRTUAL the DEFAULT when
+-- neither keyword is given. On PostgreSQL 17 the same DDL was a syntax error, so
+-- omitting STORED was impossible. On 18 it succeeds and silently produces a column
+-- that cannot be indexed -- and EXCLUDE USING gist needs an index.
+--
+-- INV-EFF-002 is the invariant ADR-0000 calls "the one that ends the discussion" for
+-- choosing PostgreSQL at all. This asserts that the requirement for STORED is a
+-- property of the database rather than a convention someone has to remember, and that
+-- forgetting it fails loudly rather than degrading the enforcement level.
+CREATE SCHEMA v01b;
+CREATE TABLE v01b.no_stored (
+  tenant_id       uuid NOT NULL,
+  effective_from  timestamptz,
+  effective_until timestamptz,
+  effective_range tstzrange GENERATED ALWAYS AS
+    (tstzrange(effective_from, effective_until, '[)'))     -- deliberately no STORED
+);
+
+DO $$
+DECLARE kind "char";
+BEGIN
+  SELECT attgenerated INTO kind
+    FROM pg_attribute
+   WHERE attrelid = 'v01b.no_stored'::regclass AND attname = 'effective_range';
+
+  IF kind = 's' THEN
+    RAISE NOTICE 'PASS (by a different route): this server defaults generated columns to STORED, so the footgun does not exist here';
+  ELSIF kind <> 'v' THEN
+    RAISE EXCEPTION 'FAIL: effective_range is not a generated column at all (attgenerated=%)', kind;
+  ELSE
+    -- It is VIRTUAL. Prove that this is not merely cosmetic: the exclusion
+    -- constraint INV-EFF-002 depends on must be refused.
+    BEGIN
+      EXECUTE $q$ ALTER TABLE v01b.no_stored
+                    ADD CONSTRAINT one_effective EXCLUDE USING gist
+                      (tenant_id WITH =, effective_range WITH &&) $q$;
+      RAISE EXCEPTION 'FAIL: a VIRTUAL generated column accepted the exclusion constraint. Re-check whether STORED is still required before relying on this assertion';
+    EXCEPTION WHEN feature_not_supported THEN
+      RAISE NOTICE 'PASS: omitting STORED yields a VIRTUAL column, and it is refused by EXCLUDE USING gist — INV-EFF-002 cannot be silently weakened';
+    END;
+  END IF;
+END $$;
+
+DROP SCHEMA v01b CASCADE;
 DROP SCHEMA v01 CASCADE;
