@@ -1,0 +1,70 @@
+# CODEOWNERS — Tier 2 path register
+#
+# `docs/engineering/agent-workflow.md` and `CLAUDE.md` both say Tier 2 paths are
+# enforced "through CODEOWNERS, not memory". This file is that register.
+#
+# WHAT THIS FILE IS FOR HERE
+#
+# It marks which paths a conformance review must read at full depth — invariant
+# checklist, audit-event shape, authorization on every entry point, tenant scoping
+# below the UI, point-in-time behaviour. It is a review-depth signal.
+#
+# WHAT IT MUST NOT BECOME
+#
+# Do NOT enable "Require review from Code Owners" in the branch ruleset. The only
+# code owner is a human, and the merge policy in `agent-workflow.md` is explicitly
+# that nobody clicks anything: a PR merges on green CI plus the independent-review
+# check. Requiring code-owner approval would deadlock every Tier 2 pull request on
+# the one person the workflow is designed to keep out of the loop.
+#
+# The founder's attention goes to Decision Requests and milestone demos, not diffs.
+#
+# TIERS
+#
+#   0  docs, config, dependency bumps                    CI only
+#   1  ordinary feature code                             CI + one review pass
+#   2  authorization, tenancy, versioning, effectivity,   CI + review pass +
+#      approval, audit, evidence, content hashing         invariant tests cited
+#
+# Everything not matched below is Tier 1 by default.
+
+* @aca333
+
+# ── Tier 2 — specification ────────────────────────────────────────────────────
+# Changing a domain rule or an invariant is the highest-consequence edit in the
+# repository. An invariant ID is a contract that test names and tickets cite.
+
+/docs/domain/invariants.md            @aca333
+/docs/domain/                         @aca333
+/docs/architecture/adr/               @aca333
+/docs/architecture/threat-model.md    @aca333
+
+# ── Tier 2 — platform enforcement ─────────────────────────────────────────────
+# The verification harness is what stops an ADR claim from being a guess. The CI
+# workflows are the merge gate; weakening one silently weakens every guarantee
+# downstream of it.
+
+/verification/                        @aca333
+/.github/workflows/                   @aca333
+/.github/CODEOWNERS                   @aca333
+
+# ── Tier 2 — source ───────────────────────────────────────────────────────────
+# Deliberately not yet written. `ADR-0000` selects a modular monolith with a
+# framework-free domain package, but no concrete directory layout is specified
+# anywhere in `docs/`, and inventing one here would prescribe an implementation
+# this file has no authority to choose.
+#
+# The repository-skeleton ticket adds these entries in the same pull request that
+# creates the directories, once the layout is real. Its acceptance criteria say so.
+#
+# The paths that must be covered when they exist:
+#
+#   the authorization evaluator          INV-AUTH-001, INV-AUTH-016, INV-AUTH-018
+#   tenant scoping and session context   INV-TEN-001 … INV-TEN-005
+#   version identity and immutability    INV-VER-003, INV-VER-009, INV-VER-011
+#   effectivity and supersession         INV-EFF-002, INV-EFF-003, INV-EFF-007
+#   approval runs and decisions          INV-APR-001, INV-APR-010, INV-APR-012
+#   the audit ledger and outbox          INV-AUD-001 … INV-AUD-009
+#   evidence pack assembly               INV-EVD-006, INV-EVD-007
+#   content canonicalisation and digest  INV-VER-009, INV-VER-013
+#   every SQL migration                  the enforcement ladder lives in the DDL
