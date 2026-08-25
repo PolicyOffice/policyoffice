@@ -171,13 +171,52 @@ Low for tooling. High for the no-down-migrations rule, because reintroducing it 
 writing the reverse of every migration retroactively — and the reason not to is a product
 argument rather than a technical one.
 
-## To verify at repository bootstrap
+## Verified at repository bootstrap — Neon, 2026-08-25
 
-- Which roles Neon permits creating, and whether `app_role` can be a non-owner with `FORCE
-  ROW LEVEL SECURITY` in effect. `ADR-0001` depends on this and there is no fallback that
-  preserves the same level.
-- Whether `btree_gist` can be created on Neon and by which role.
-- `CREATE INDEX CONCURRENTLY` through Neon's pooler, which typically requires a direct
-  connection.
+By `verification/06-neon.sh`. Two of the four predictions below were wrong, and both
+corrections change how migrations must be written.
+
+| Question | Answer |
+|---|---|
+| Which roles Neon permits creating, and whether `app_role` can be a non-owner with `FORCE ROW LEVEL SECURITY` | All three roles create cleanly as `NOSUPERUSER NOBYPASSRLS`; forced RLS binds the non-superuser owner. `ADR-0001` holds |
+| Whether `btree_gist` can be created, and by which role | Yes, 1.8 — by the provisioned role and by a plain non-superuser role |
+| `CREATE INDEX CONCURRENTLY` through the pooler | **Prediction wrong.** It succeeds through the pooled endpoint as well as the direct one |
+| Restore timing from a backup | **Still not measured.** Needs a Neon API key; see below |
+
+> **Amendment, 2026-08-25 — `CREATE INDEX CONCURRENTLY` does not need a direct connection.**
+> This ADR said it *"typically requires a direct connection."* On Neon it works through the
+> pooled endpoint; both indexes were built and confirmed. The original reasoning is kept
+> because it is true of PgBouncer generally — it is simply not true here, and the migration
+> harness should not special-case an endpoint it does not need to.
+>
+> It remains refused inside an explicit transaction block. That is why the harness must be
+> able to mark a migration non-transactional, which is unchanged.
+
+> **Amendment, 2026-08-25 — roles are created once and `ALTER`ed, never recreated.** This
+> ADR establishes the three roles *by migration*. Neon's pooled endpoint caches server
+> connections bound to a role's **OID**, so dropping a role and recreating it under the same
+> name leaves pooled sessions failing with `invalid role OID` or a spurious `permission
+> denied`, while the direct endpoint works normally. A never-before-used name is unaffected.
+>
+> A migration that drops and recreates a role therefore produces an intermittent
+> authorization failure in production that heals itself when connections cycle — close to
+> the worst possible shape for a defect in this product. Role migrations must be additive:
+> `CREATE ROLE` once, `ALTER ROLE` thereafter, and never a drop-and-recreate.
+
+> **Amendment, 2026-08-25 — role passwords must be generated.** Neon's control plane
+> intercepts `CREATE ROLE` and rejects weak passwords with an HTTP 400. A fixture password
+> that works against the CI container fails against Neon, which is a way the two
+> environments diverge silently. `verification/00-roles.sh` keeps its fixed local passwords
+> deliberately — it never runs against Neon — but any migration that creates a role must not.
+
+Also observed, and relevant to any tooling that reassigns ownership: **PostgreSQL 16+
+separates `ADMIN` from `SET`.** `CREATEROLE` confers `ADMIN` on roles it creates but not the
+right to `SET ROLE` to them, so `REASSIGN OWNED` and dropping a schema owned by another role
+require an explicit `GRANT … WITH SET TRUE` first.
+
+### Still to verify
+
 - Restore timing from a Neon backup, measured once, so the disaster-recovery claim in
-  security documentation is a number rather than an assumption.
+  security documentation is a number rather than an assumption. Neon restores by branching
+  to a past instant — a control-plane operation reachable through the console or the Neon
+  API, not through a connection string. This needs a Neon API key.
