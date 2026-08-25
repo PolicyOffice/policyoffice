@@ -204,6 +204,14 @@ investigation, or a migration — could be influenced by text inside it. The mit
 that agents work from the repository rather than from production data, and that CI, not an
 agent's judgement, decides what merges.
 
+There is a third case, and it belongs to the customer rather than to us. Where an
+organisation connects its own assistant to this product through the API, our documents
+reach their model. That surface is theirs, and the honest boundary is: we control which
+records a principal may retrieve (INV-AUTH-010, INV-AUTH-018) and we return the version
+identity and digest behind every answer, so what their model was given is reconstructable.
+We do not control what their model then does with it, and no claim to the contrary should
+ever be made. See `machine-access.md`.
+
 ### Agent-introduced defects
 
 Not an attacker, but the same effect: plausible-looking code with a subtle authorization

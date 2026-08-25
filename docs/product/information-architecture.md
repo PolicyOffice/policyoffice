@@ -110,6 +110,32 @@ before the buttons rather than behind a tab.
 Making approval fast is a reasonable interface goal in most products. Here it is
 subordinate to making approval *accurate*.
 
+## Addresses
+
+URLs are a public contract. A wiki links to a policy, an intranet page embeds one, an
+auditor pastes one into a finding, and later an external system cites one. Changing the
+shape afterwards breaks all of them at once, so the shape is decided before the first
+route is written rather than falling out of a router's defaults.
+
+| Address | Resolves to |
+|---|---|
+| `/documents/{documentId}` | The document record. Stable for the life of the document, across re-titling, re-coding and re-typing |
+| `/documents/{documentId}/effective` | Whatever governs the requester's scope **now**. The link to paste into a wiki |
+| `/documents/{documentId}/versions/{versionId}` | One exact version. What a citation, an approval record or an evidence pack points at |
+| `/documents/{documentId}/as-of/{instant}` | What governed the requester's scope at that instant (INV-EVD-007) |
+
+Three rules hold regardless of the eventual routing scheme:
+
+- **Identity in the path is the opaque identifier, never `document_code`.** A customer who
+  re-codes their register must not break every link they have published. The code is a
+  display attribute and belongs in the page, not the address.
+- **An address is not an authorization.** Every one of the above resolves through the
+  evaluator, and an unauthorised or cross-tenant identifier is not-found, never
+  forbidden-with-metadata (INV-TEN-005, INV-AUTH-012).
+- **`/effective` and `/as-of` are resolutions, not redirects to a winner.** They answer for
+  the requester's scope, so two people opening the same link may legitimately reach
+  different versions, and the page says which scope produced the answer.
+
 ## Vocabulary in the interface
 
 The interface uses the tenant's configured labels over our internal ones wherever they

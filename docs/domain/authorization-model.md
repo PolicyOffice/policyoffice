@@ -166,7 +166,7 @@ case, not a special case.
 | Field | Meaning |
 |---|---|
 | `effect` | `ALLOW` or `DENY` |
-| `principal` | A user or a group. Never a role — a role is what is being granted |
+| `principal` | A user, a group or an API client. Never a role — a role is what is being granted |
 | `role_id` or `capability` | A bundle, or one explicit capability |
 | `scope_type`, `scope_id` | Where it applies |
 | `valid_from`, `valid_until` | Half-open interval in UTC. Open-ended is permitted for standing organisational grants; every temporary grant carries an end |
@@ -279,6 +279,33 @@ customer can see".
 | Documents they owned | Immediately visible as an ownership exception (INV-DOC-006) |
 | Completed decisions and responses | Untouched. They remain attributed, because history is not editable |
 
+## Machine principals and delegated authority
+
+An API client, an integration and — later — an AI agent connected to a customer's
+assistant are all the same thing to this model: a principal that is not a person.
+
+> **INV-AUTH-018 — Where a machine principal acts on behalf of a human, effective
+> authority is the intersection of the two principals' grants, never the union, and never
+> either one alone.**
+
+Three rules follow, and none of them is optional.
+
+| Rule | Consequence |
+|---|---|
+| A machine principal holds `AccessGrant` rows like any other principal | There is no second table of machine capabilities, and no second evaluator to keep in step. `ApiClient` stores identity and credential state; it stores nothing about what its holder may do |
+| A delegated call carries both identities | `actor_id` is the machine principal that made the call; `originating_actor_id` is the human on whose authority it acted (INV-AUD-006). An event naming only one of them cannot answer *who was actually responsible* |
+| Intersection, evaluated per request | A broadly-granted integration reaching a narrowly-permitted user's session gets the narrow answer, and a narrow integration reaching a broadly-permitted user gets the narrow answer too |
+
+The failure this prevents is specific and is the one that matters commercially. An
+organisation connects an assistant to the product. The assistant is provisioned once, by
+an administrator, with the access an administrator has. Every employee who then asks it a
+question is answered with the administrator's reach. The product has become a
+privilege-escalation path around every grant in the tenant, and it will not look like a
+bug — it will look like the integration working.
+
+Nothing here is new machinery. It is the existing evaluator, given a principal type it
+already has to handle, and refused the shortcut of a private capability list.
+
 ## Every other surface
 
 Authorization that only holds in the interface is not authorization.
@@ -291,4 +318,5 @@ Authorization that only holds in the interface is not authorization.
 | Background jobs | Run as an explicit principal with explicit capabilities. There is no "system user with everything" | INV-TEN-004 |
 | Exports and evidence packs | Bounded by the requester's capabilities at request time | INV-EVD-010 |
 | Webhooks and API clients | Same evaluator, same scopes, same audit | INV-AUTH-010 |
+| Delegated machine calls | Intersection of machine and human authority, evaluated per request | INV-AUTH-018 |
 | Legal hold | Grants visibility to nobody. Retention and access are independent axes | INV-AUTH-009 |

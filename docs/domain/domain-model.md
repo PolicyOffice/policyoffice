@@ -61,6 +61,7 @@ erDiagram
     ROLE ||--o{ ACCESS_GRANT : confers
     USER ||--o{ ACCESS_GRANT : receives
     GROUP ||--o{ ACCESS_GRANT : receives
+    API_CLIENT ||--o{ ACCESS_GRANT : receives
 ```
 
 **What is governed — taxonomy, identity, content.**
@@ -298,7 +299,7 @@ scope, over an interval. Both roles and one-off exceptions are expressed through
 |---|---|
 | `id` | Identity |
 | `effect` | `ALLOW` or `DENY` |
-| `principal_type`, `principal_id` | `USER` or `GROUP` |
+| `principal_type`, `principal_id` | `USER`, `GROUP` or `API_CLIENT` |
 | `role_id` **or** `capability` | A role's bundle, or one explicit capability |
 | `scope_type`, `scope_id` | `TENANT`, `LEGAL_ENTITY`, `ORG_UNIT`, `DOCUMENT`, `DOCUMENT_VARIANT`, `DOCUMENT_VERSION`, `GOVERNANCE_BODY` |
 | `valid_from`, `valid_until` | Half-open interval, UTC. `valid_until` null means open-ended. |
@@ -791,12 +792,13 @@ Machine principals and outbound event delivery.
 | Attribute | Purpose |
 |---|---|
 | `id`, `name`, `status` | Identity |
-| `capabilities`, `scope_type`, `scope_id` | What it may do, and where |
 | `credential_metadata` | Rotation and expiry state. Never the secret itself. |
 | `endpoint_url`, `event_types`, `signing_key_ref` | Webhook delivery configuration |
 
-**Rules:** INV-AUTH-010, INV-TEN-004. A machine principal is authorised by the same
-evaluator as a human one.
+**Rules:** INV-AUTH-010, INV-AUTH-018, INV-TEN-004. A machine principal is authorised by
+the same evaluator as a human one, through the same `AccessGrant` rows. It carries no
+capability or scope attributes of its own — a second place to store what a principal may
+do is a second authorization path, which is what INV-AUTH-001 exists to prevent.
 
 ### `DocumentRelationship` and `ExternalReference` — Later
 

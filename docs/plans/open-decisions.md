@@ -26,10 +26,13 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 7 | Data residency and region | ADR-000 and every infrastructure ADR | One EU region, stated completely | **Decided 2026-08-24** |
 | 8 | Product and repository name | Publishing the repository, and CI on the free tier | **PolicyOffice** | **Decided 2026-08-25** |
 | 9 | Human-readable rendering in evidence packs | One line of the pack layout | Ship originals in the Pilot; amend the layout | Open — does not block |
+| 10 | Machine-readable governance positioning | Public positioning and roadmap pressure, not architecture | Build the substrate, hold the claim until the Pilot | Open — does not block |
 
 Decisions 1, 2, 6, 7 and 8 are answered. Phase 1 is complete and **Phase 2 is unblocked**.
 The licensor is recorded and `LICENSE` is committed. Decisions 3, 4 and 5 shape Pilot scope
-and stop nothing.
+and stop nothing. Decision 10 is a positioning question with no architectural consequence —
+the constraints it would rest on are already recorded in
+`docs/architecture/machine-access.md`.
 
 ---
 
@@ -347,6 +350,47 @@ recorded absence rather than a silent one.
 later regenerates them for existing packs on request.
 
 **Blocks.** Nothing. It affects Pilot evidence output only.
+
+---
+
+## 10 — How far to position PolicyOffice as the governance layer for AI
+
+> **Raised 2026-08-25, from a founder question about connecting company AI systems to
+> up-to-date policies.** The architectural half was answered in
+> `docs/architecture/machine-access.md` and needed no decision. This is the half that does.
+
+**Context.** The product already stores what an AI system would need and cannot get from a
+document repository: which version is authoritative, when it was in force, who it applies
+to, who approved it, and who may see it. Two things make that commercially live rather than
+theoretical. Regulated-sector vendors began shipping agent interfaces during 2026, none of
+them addressing version authority. And deployers of high-risk AI face automatic-logging
+obligations whose published guidance includes the version of the reference data relied on —
+which, for an agent acting on an internal policy, is a fact only this product can supply.
+
+Against that: `product-blueprint.md` lists *it ships AI first* as failure mode 3, and the
+roadmap puts AI last deliberately. Positioning creates pull. A design partner who buys the
+AI story will ask for the AI feature, and the Pilot has a golden slice to finish.
+
+| Option | What it means | Consequence |
+|---|---|---|
+| **A. Build the substrate, hold the claim** | The constraints in `machine-access.md` are honoured. Nothing is said publicly beyond *governed records, ready to integrate*. The story is used in design-partner conversations, where it is a differentiator and not a promise | No roadmap pressure. The claim stays available for the moment there is something to demonstrate. Costs nothing, because the substrate is being built anyway |
+| **B. Position now** | *The policy source of truth for your people and your AI* goes on the site and into sales material | Strongest differentiation while the category is open, and it is genuinely true of the architecture. It also invites the first question — *can I connect it today* — to be answered with no. A governance product whose first customer impression is an unshipped promise has spent the wrong credibility |
+| **C. Bring a machine interface into V1** | A read-only API and an MCP adapter become scheduled work | Real, and premature. The public API is already V1 and unscheduled; adding an adapter over a contract that does not exist yet is how the Pilot slips |
+
+**Recommendation: A.** The substrate is the asset and it is being built regardless. The
+claim is worth more once the Pilot can demonstrate an as-of query, because at that point the
+demonstration *is* the pitch — ask what governed this person on this date, and get an
+answer with a version identity and a digest attached. Saying it before then converts a
+durable advantage into an ordinary marketing sentence.
+
+The specific thing worth watching: if a competitor ships version-aware, permission-aware
+policy retrieval first, A becomes a response rather than a position. That is the trigger to
+revisit, and it is recorded in `machine-access.md`.
+
+**Reversibility.** Total. Nothing about A forecloses B, and A is what makes B credible when
+it is made.
+
+**Blocks.** Nothing. No schema, no invariant, no Pilot scope.
 
 ---
 

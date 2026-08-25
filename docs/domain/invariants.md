@@ -183,6 +183,7 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-AUTH-015 | A Space never grants, denies or scopes any capability | Once a folder tree exists, products built on one start answering permission questions with it | U, I | MVP |
 | INV-AUTH-016 | Capabilities are a closed enumeration; a grant naming an unknown capability is invalid and is never evaluated as an allow | A mistyped capability must fail closed rather than authorise something adjacent | U, I | MVP |
 | INV-AUTH-017 | Grant inheritance follows administrative containment — owning org unit, legal entity, tenant — and never applicability scope | Keeps access and obligation separate in the implementation, not merely in the prose | U, I | MVP |
+| INV-AUTH-018 | Where a machine principal acts on behalf of a human, effective authority is the **intersection** of the two principals' grants, never the union, and never either one alone | An integration is a delegation, not a promotion. The union is how a connected assistant becomes a privilege-escalation path around every grant in the tenant | U, I, E | V1 |
 
 ## INV-APL — Applicability and variants
 

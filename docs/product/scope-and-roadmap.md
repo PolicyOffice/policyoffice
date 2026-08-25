@@ -85,7 +85,7 @@ Each of these has a bar to clear before it is production-ready. The bar is the p
 | **Regulatory change intake** | Every signal carries provenance; suggested impacts remain proposals until a human disposes of them; nothing normative changes automatically |
 | **Document-to-control and regulation mapping** | Relationships are versioned and audited; evidence can show which version supported a control on a given date |
 | **Estate conformance checking** | The deterministic half first — does every workflow and historical approval actually satisfy the mandated authority. The language-understanding half stays advisory and human-confirmed |
-| **Permission-aware question answering** | Retrieval cannot surface content the asker cannot read, demonstrated by an automated red-team suite covering cross-tenant and restricted-document isolation |
+| **Permission-aware question answering** | Retrieval cannot surface content the asker cannot read, demonstrated by an automated red-team suite covering cross-tenant and restricted-document isolation. Where the asker is a machine acting for a person, authority is the intersection of both (INV-AUTH-018) |
 | **Cryptographic provenance** | An independent verifier detects modified files and validates provenance without the application |
 | **Customer-managed keys, sovereign deployment** | Threat model, backup, rotation, DR and support procedures demonstrated end to end before any sale |
 | **Offline reading** | The client marks stale cached content, honours expiry, and synchronises acknowledgements without duplicate evidence |
@@ -93,6 +93,10 @@ Each of these has a bar to clear before it is production-ready. The bar is the p
 AI comes late on purpose. The first competitive obligation is not to have a chatbot; it is
 to make the underlying records trustworthy enough that AI can operate on them without
 inventing the state of the organisation.
+
+Nothing above schedules a machine-facing interface. `docs/architecture/machine-access.md`
+records the constraints that keep one buildable as an adapter rather than a rewrite, and is
+explicitly not a commitment to build it.
 
 ## Release gates
 

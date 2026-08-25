@@ -19,7 +19,7 @@ The guiding test for every feature and architectural decision:
 **Phase 1 complete — architecture.** No application code yet.
 
 The specification is written and settled: 16 chapters under `docs/domain/` and
-`docs/product/`, and 145 invariants with stable identifiers. The architecture is derived
+`docs/product/`, and 146 invariants with stable identifiers. The architecture is derived
 from it: eleven ADRs, a physical data model, a threat model, and a one-page summary under
 `docs/architecture/`.
 

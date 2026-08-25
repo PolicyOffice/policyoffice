@@ -46,7 +46,7 @@ every service boundary is an opportunity to create a second one.
 
 ## Where the guarantees live
 
-The specification registers 145 invariants and ranks enforcement by strength: structural,
+The specification registers 146 invariants and ranks enforcement by strength: structural,
 then database constraint, then type system, then a single code path, then tests. The
 design target is that **forgetting an invariant should not be sufficient to violate it.**
 
@@ -104,12 +104,13 @@ Stated here because a reviewer will ask, and the answers are better given than d
 
 | Document | For |
 |---|---|
-| `docs/domain/invariants.md` | The 145 rules everything else serves |
+| `docs/domain/invariants.md` | The 146 rules everything else serves |
 | `data-model.md` | The schema, and which constraint enforces which invariant |
 | `threat-model.md` | Assets, actors, abuse cases, and the accepted residual risks |
 | `adr/0000` | Stack selection, and why PostgreSQL specifically |
 | `adr/0001`, `adr/0003` | Tenancy and authorization — read together |
 | `adr/0005`, `adr/0006` | Effectivity and the audit ledger — the two hardest guarantees |
+| `machine-access.md` | Constraints for the day an integration or AI agent asks what governs someone |
 | `docs/product/product-blueprint.md` | What the product is, and what it refuses to become |
 
 ### Decision record

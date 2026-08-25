@@ -287,7 +287,7 @@ create trigger legal_entity_acyclic
 create table access_grant (
   … standard tenant-owned columns …
   effect          grant_effect not null,
-  principal_type  text not null,            -- USER | GROUP
+  principal_type  text not null,            -- USER | GROUP | API_CLIENT
   principal_id    uuid not null,
   security_role_id uuid,
   capability      capability,
@@ -646,7 +646,7 @@ validation (INV-AUD-003, INV-AUD-008).
 
 | Table | Phase | Note |
 |---|---|---|
-| `api_client` | V1 | `name`, `status`, `capabilities capability[]`, `scope_type`, `scope_id`, `credential_metadata jsonb`. Authorised by the same evaluator as a human (INV-AUTH-010) |
+| `api_client` | V1 | `name`, `status`, `credential_metadata jsonb`. Identity and credentials only — **no capability or scope columns**. A machine principal holds `access_grant` rows like every other principal, and is authorised by the same evaluator (INV-AUTH-010, INV-AUTH-018) |
 | `webhook_subscription` | V1 | `endpoint_url`, `event_types text[]`, `signing_key_ref`, `status`, `cursor_sequence` — the cursor over `audit_event` from `ADR-0006` |
 | `document_relationship` | Later | `source_document_id`, `target_document_id`, `relation`, `rationale` |
 | `external_reference` | Later | `document_id`, `source_type`, `identifier`, `citation jsonb` |
