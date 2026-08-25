@@ -21,6 +21,14 @@ platform changes.
 | `03-effectivity.sh` | The exclusion constraint refuses an overlapping effective interval, including under a race | 0005 |
 | `04-append-only.sh` | Revoked privileges make the ledger append-only; the dedupe key stops a double emission | 0006 |
 | `05-gapless-sequence.sh` | The per-tenant sequence stays gapless under concurrent writers, and a rollback consumes no number | 0006 |
+| `neon.sh` | The hosting platform: EU region, roles, forced RLS, pooler semantics, revoked privileges | 0000, 0001, 0009 |
+
+The numbered checks are the local run. **`neon.sh` has no number on purpose** — it needs
+credentials and a network, so `run.sh` does not pick it up:
+
+```bash
+set -a; . ./.env; set +a && ./verification/neon.sh
+```
 
 **Roles.** `00-roles.sh` creates the three roles from `ADR-0009` — `migration_role`,
 `app_role`, `retention_role` — none of them superusers. Run it first; `run.sh` does.
@@ -162,15 +170,93 @@ old path looks more correct than it is.
 | Gapless sequence | 200 events across 8 concurrent writers, range 1..200, no holes |
 | Rollback and the sequence | Consumes no number, so a rolled-back transaction leaves no hole |
 
-## Still unverified — needs the hosting platform
+## Verified on the platform — Neon, 2026-08-25
 
-These depend on the platform rather than on Postgres, and are checked once a Neon project
-exists:
+`neon.sh`, 24 assertions against the provisioned project: PostgreSQL **18.6**,
+`aws-eu-central-1` (Frankfurt), free plan. It is deliberately **not** part of `run.sh` —
+it needs credentials and a network. Run it with `set -a; . ./.env; set +a`.
 
-- an EU region, and `btree_gist` creatable there;
-- whether a non-owner application role can be created, and `FORCE ROW LEVEL SECURITY`
-  applied — `ADR-0001` has no fallback at the same enforcement level if not;
-- `SET LOCAL` semantics through the connection pooler;
-- `CREATE INDEX CONCURRENTLY` through the pooler, which usually needs a direct connection;
-- `REVOKE … TRUNCATE` and a separate retention role;
-- restore timing from a backup, so the disaster-recovery claim is a number.
+Neon runs the same PostgreSQL minor version as the local environment, so this is a
+like-for-like comparison rather than an approximation.
+
+| Claim | Result |
+|---|---|
+| An EU region | `eu-central-1`, from the endpoint host — decision 7 holds |
+| `btree_gist` | 1.8, same as local. Creatable by the provisioned role **and** by a plain non-superuser role |
+| A non-owner application role | Creatable, `NOSUPERUSER NOBYPASSRLS`, inheriting neither through any role grant |
+| `FORCE ROW LEVEL SECURITY` with a non-superuser owner | **Binds the owner.** ADR-0001's load-bearing claim holds |
+| No tenant context | Errors rather than returning rows, on both endpoints — fails closed |
+| Cross-tenant identifier | Zero rows, not an error — INV-TEN-002 holds |
+| `SET LOCAL` through the pooler | Does not survive its transaction |
+| `REVOKE UPDATE, DELETE, TRUNCATE` | All three refused for the application role; a separate retention role may `DELETE` and not `INSERT` |
+| `CREATE INDEX CONCURRENTLY` | Works through **both** endpoints — see finding 7 |
+| Restore timing | **Not measured** — see below |
+
+### 5. The role Neon gives you cannot be the application role
+
+`neondb_owner` has `rolbypassrls = t`, directly and again through membership of
+`neon_superuser`. Row-level security does not apply to it at all.
+
+This is exactly the trap `ADR-0001` describes, sitting in the default configuration of the
+platform: connect the application with the credentials Neon hands you and INV-TEN-001 is
+silently unenforced, while every test that runs as that role passes. It is the superuser
+finding from the first run wearing different clothes.
+
+The three roles must therefore be created explicitly, by SQL, `NOSUPERUSER NOBYPASSRLS` —
+which works, and is checked here including inheritance through role grants.
+
+### 6. The pooler caches a role by OID, so recreating one by name poisons it
+
+Dropping a role and recreating it with the **same name** leaves Neon's pooled endpoint
+serving cached server connections bound to the *old* OID. Queries then fail with
+`invalid role OID: <n>` or a spurious `permission denied`, while the identical query on the
+direct endpoint succeeds. A never-before-used role name is unaffected — verified both ways.
+
+`ADR-0009` establishes the three roles **by migration**. A migration that ever drops and
+recreates a role therefore breaks production through the pooled endpoint, presenting as an
+authorization bug that heals itself once the connections cycle. That is close to the worst
+possible shape for a defect in this product.
+
+**Roles are created once and `ALTER`ed thereafter.** Never dropped and recreated.
+
+### 7. `CREATE INDEX CONCURRENTLY` works through the pooler
+
+`ADR-0009` predicted it would need a direct connection, *"which typically requires a direct
+connection."* On Neon it succeeds through the pooled endpoint as well; both indexes were
+built and confirmed present. The ADR is amended.
+
+It is still refused inside an explicit transaction block, which is Postgres behaving as
+documented and is why the migration harness must be able to mark a migration
+non-transactional.
+
+### 8. Failing closed, but by two different errors
+
+With no tenant context both endpoints refuse, which is what INV-TEN-001 requires. They
+refuse *differently*:
+
+```text
+direct : ERROR: unrecognized configuration parameter "app.tenant_id"
+pooled : ERROR: invalid input syntax for type uuid: ""
+```
+
+Through the pooler the custom GUC survives as an empty string once any transaction on that
+backend has set it, so which error appears depends on connection reuse. An application must
+never decide *"no tenant context"* by matching on the error — the policy has to fail closed
+by construction, which it does.
+
+### Two more platform behaviours worth knowing
+
+- **Neon's control plane intercepts `CREATE ROLE`** and rejects weak passwords with an HTTP
+  400. Role passwords in migrations must be generated, and this is a way CI (a plain
+  container) and production (Neon) diverge silently.
+- **PostgreSQL 16+ separates `ADMIN` from `SET`.** `CREATEROLE` confers `ADMIN` on roles it
+  creates but not the right to `SET ROLE` to them, so `REASSIGN OWNED` and dropping a schema
+  owned by another role need an explicit `GRANT … WITH SET TRUE` first.
+
+### Still not measured: restore timing
+
+`ADR-0009` asked for a number so the disaster-recovery claim in the security documentation
+is measured rather than assumed. Neon restores by branching to a past instant, which is a
+control-plane operation reachable through the console or the Neon API — not through a
+connection string. Measuring it needs a Neon API key, and it is the one item on the ADR
+lists still outstanding.

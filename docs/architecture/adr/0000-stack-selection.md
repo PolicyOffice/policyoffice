@@ -189,9 +189,13 @@ This ADR selects the stack. It does not design the system.
 Recorded rather than assumed, because this ADR was written from a specification rather
 than from a running system, and some of it depends on current vendor behaviour:
 
-- Neon free tier: EU region availability, `btree_gist`, whether `REVOKE` on the
+- ~~Neon free tier: EU region availability, `btree_gist`, whether `REVOKE` on the
   application role is permitted, and connection-pooling behaviour under a transactional
-  job queue.
+  job queue.~~ **Verified 2026-08-25** by `verification/neon.sh`: `eu-central-1`,
+  `btree_gist` 1.8, `REVOKE UPDATE/DELETE/TRUNCATE` all effective against the application
+  role, and `SET LOCAL` scoped correctly through the pooler. Two findings changed other
+  ADRs — see `ADR-0001` and `ADR-0009`. Pooling behaviour under a transactional job queue
+  is not yet exercised, because there is no queue.
 - The residency commitment against every provider in the budget posture — object storage,
   error tracking and transactional email each need an EU-jurisdiction option, or a
   Decision Request.

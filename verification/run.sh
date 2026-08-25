@@ -11,6 +11,9 @@ docker compose exec -T postgres pg_isready -U postgres -d policyoffice >/dev/nul
 ./verification/00-roles.sh > /dev/null
 echo "roles ready"
 echo
+# Numbered checks only. A check WITHOUT a numeric prefix -- neon.sh -- needs credentials
+# and a network, so it is not part of the local run. Run it separately:
+#   set -a; . ./.env; set +a && ./verification/neon.sh
 for f in $(ls verification/0[1-9]-* 2>/dev/null | sort); do
   name=$(basename "$f")
   echo "════ $name ════"
