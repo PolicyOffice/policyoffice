@@ -54,6 +54,12 @@ setting anything up by hand.**
       the superuser
 - [x] `verification/` — executable checks for the platform claims the ADRs depend on.
       34 assertions across 5 checks, all passing against PostgreSQL 18.6, from a clean volume
+- [x] **Neon verification** — `verification/neon.sh`, 24 assertions against the
+      provisioned project. `ADR-0001`'s load-bearing claim **holds**: a non-owner role with
+      `FORCE ROW LEVEL SECURITY` binds, so INV-TEN-001 stays at enforcement level 2 and no
+      Decision Request is needed. Four findings amended `ADR-0000`, `ADR-0001` and
+      `ADR-0009`; detail in `verification/README.md`. One item is still outstanding —
+      restore timing needs a Neon API key
 
 ### What verification found
 
@@ -68,6 +74,21 @@ detail in `verification/README.md`.
   So the migration role must not be a superuser, and **integration tests must never
   connect as one** — a cross-tenant negative test run as a superuser passes while proving
   nothing.
+
+Then Neon produced four more, two of which changed how migrations must be written:
+
+- **`ADR-0001`** — Neon's provisioned role `neondb_owner` holds `BYPASSRLS`. Connect the
+  application with the credentials the platform hands you and tenant isolation is silently
+  unenforced while every test passes. The three explicit roles are the only thing preventing
+  it.
+- **`ADR-0009`** — the pooled endpoint caches server connections by role **OID**, so
+  dropping and recreating a role under the same name serves `invalid role OID` and spurious
+  permission errors until connections cycle. Roles are created once and `ALTER`ed, never
+  recreated.
+- **`ADR-0009`** — `CREATE INDEX CONCURRENTLY` works through the pooler. The ADR predicted
+  it would need a direct connection.
+- **`ADR-0001`** — both endpoints fail closed with no tenant context, but with *different*
+  errors. No code path may detect missing tenant context by matching on the error.
 
 Then the move from Postgres 17 to 18 (founder decision, 2026-08-25, taken for the longer
 support runway while moving was still free) produced two more:
@@ -86,9 +107,7 @@ Both ADRs are amended and `data-model.md` is corrected.
 
 ## Remaining
 
-- [ ] **Neon verification** — the platform half of the ADR lists. The project now exists,
-      so this is unblocked and ticketed as POL-001. No fallback preserves the same
-      enforcement level if it fails, so this precedes migrations
+
 - [ ] **Repository skeleton** — the monorepo layout from `ADR-0000`, with the
   domain-package
       boundary an architecture test can enforce
@@ -109,8 +128,9 @@ Both ADRs are amended and `data-model.md` is corrected.
 ## Exit criteria
 
 - [ ] Every item on every ADR's verification list is checked, or has produced a Decision
-      Request
-- [ ] `docker compose up -d && ./verification/run.sh` passes from a clean clone
+      Request — **one outstanding**: Neon restore timing, which needs a Neon API key
+- [x] `docker compose up -d && ./verification/run.sh` passes from a clean clone — verified
+      2026-08-25 from a destroyed volume, having never actually held before
 - [ ] The migration chain builds the schema in `data-model.md` on a fresh database, and as
       an upgrade
 - [ ] Every level-1 and level-2 constraint carries its invariant ID in a

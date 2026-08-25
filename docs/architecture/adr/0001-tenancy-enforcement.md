@@ -191,18 +191,40 @@ Against PostgreSQL 18.6, by `verification/02-tenancy.sh`:
 | `FORCE` with a non-superuser owner | The policy applies to the owner |
 | `FORCE` with a superuser | **Bypassed.** See the correction above |
 
-### Still to verify on the hosting platform
+### Verified on the hosting platform — Neon, 2026-08-25
 
-- Neon: whether a non-owner role can be created and used by the application, and whether
-  `FORCE ROW LEVEL SECURITY` applies there. There is no fallback at the same enforcement
-  level, so a "no" is a Decision Request.
-- Neon's pooler: `SET LOCAL` semantics under transaction pooling, and that the driver does
-  not reuse a connection mid-transaction.
+By `verification/neon.sh`, against PostgreSQL 18.6 in `aws-eu-central-1`.
+
+| Claim | Result |
+|---|---|
+| A non-owner application role can be created and used | Yes — `NOSUPERUSER NOBYPASSRLS`, inheriting neither through any role grant |
+| `FORCE ROW LEVEL SECURITY` applies there | **Yes.** The non-superuser owner is bound by its own policy |
+| No tenant context | Errors rather than returning rows, on both endpoints |
+| A cross-tenant identifier | Zero rows, not an error (INV-TEN-002) |
+| `SET LOCAL` under transaction pooling | Does not survive its transaction |
+
+**The claim this ADR said had no fallback holds.** No Decision Request is needed.
+
+> **Amendment, 2026-08-25 — the provisioned role bypasses RLS.** Neon's `neondb_owner` has
+> `rolbypassrls`, directly and again through membership of `neon_superuser`. Row-level
+> security does not apply to it at all.
+>
+> This is the superuser finding above wearing different clothes, and it is the platform's
+> *default* configuration: connect the application with the credentials Neon hands you and
+> INV-TEN-001 is silently unenforced while every test passes. The three roles from
+> `ADR-0009` are therefore not merely good practice on this platform — they are the only
+> thing standing between the specification and an unenforced tenancy model.
+
+> **Amendment, 2026-08-25 — do not detect "no tenant context" from the error.** Both
+> endpoints fail closed, but with different errors: `unrecognized configuration parameter`
+> direct, `invalid input syntax for type uuid: ""` pooled, because the custom GUC survives
+> as an empty string on a backend that has previously set it. Which one appears depends on
+> connection reuse, so no code path may branch on it. The policy fails closed by
+> construction, which is what the invariant needs.
+
+### Still to verify
+
 - Drizzle: that the query builder can be driven entirely through a caller-supplied
   transaction handle, so the one-transaction-helper rule is enforceable.
 - Planner behaviour with RLS on a table with a composite primary key, measured rather than
   assumed.
-
-Any of these failing is a Decision Request. The fallback — composite keys plus a
-repository layer, with RLS dropped — is a level weaker and must be recorded as such
-against INV-TEN-001.
