@@ -62,6 +62,18 @@ These are not expressible as workflow files. Applied 2026-08-30:
   rejects a commit containing a recognised credential before it reaches the remote rather
   than alerting afterwards. On a public repository, "afterwards" means already published.
 
+## Dependency overrides
+
+`package.json` carries a `pnpm.overrides` block. `package.json` cannot hold comments, so
+the reasoning lives here.
+
+| Override | Why |
+|---|---|
+| `esbuild: >=0.25.0` | esbuild ≤ 0.24.2 lets any website send requests to the development server and read the response. It arrived transitively through `@esbuild-kit/*`, which `drizzle-kit` still depends on although those packages are deprecated in favour of `tsx`. Exposure was small — a dev-only tool — but the fix is one line, the dependency-review gate fails on moderate severity, and *"we assessed the exposure as low"* is a worse answer than *"we patched it"* for a product whose proposition is trustworthiness. Found the moment the dependency graph was enabled. |
+
+Remove an override when the upstream dependency no longer needs it. An override that has
+outlived its reason is a pin nobody remembers making.
+
 ## The branch ruleset for `main`
 
 Committed as `.github/rulesets/main.json`. Apply it with:
