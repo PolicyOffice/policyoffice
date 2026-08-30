@@ -1,0 +1,63 @@
+name: independent review
+
+# `agent-workflow.md` makes this one of the three merge conditions. It is an honest signal,
+# not a simulated human approval -- read `CONTRIBUTING.md` for exactly what it does and
+# does not mean.
+#
+# The property that matters: a review records the commit it reviewed. When new commits are
+# pushed the recorded sha no longer matches HEAD, the check goes back to pending, and code
+# nobody looked at cannot ride in behind a stale approval.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: independent review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event.issue.pull_request
+    permissions:
+      contents: read
+      statuses: write
+      pull-requests: read
+    steps:
+      # No checkout of pull-request code. This workflow reads comments and writes a commit
+      # status; it must never execute the code it is reporting on.
+      - name: Evaluate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event_name == 'pull_request' && github.event.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA=$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha)
+          echo "head is $HEAD_SHA"
+
+          # A review is recorded by a comment naming the exact commit it covers:
+          #     Reviewed-commit: <full 40-character sha>
+          REVIEWED=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '.[].body' | grep -oE 'Reviewed-commit: [0-9a-f]{40}' | awk '{print $2}' | tail -1 || true)
+
+          if [ "${REVIEWED:-}" = "$HEAD_SHA" ]; then
+            STATE=success
+            DESC="reviewed against the specification at this commit"
+          elif [ -n "${REVIEWED:-}" ]; then
+            STATE=pending
+            DESC="last review covered ${REVIEWED:0:7}, not this commit"
+          else
+            STATE=pending
+            DESC="awaiting a conformance review of this commit"
+          fi
+          echo "$STATE — $DESC"
+
+          gh api -X POST "repos/$REPO/statuses/$HEAD_SHA" \
+            -f state="$STATE" \
+            -f context="independent review" \
+            -f description="$DESC" \
+            -f target_url="https://github.com/$REPO/blob/main/CONTRIBUTING.md" > /dev/null

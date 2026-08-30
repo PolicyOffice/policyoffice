@@ -56,3 +56,41 @@ to be in the way, that is a question, not an obstacle to route around.
 
 See `docs/engineering/definition-of-done.md`. A feature is not done because its happy
 path renders.
+
+## What the "independent review" check means
+
+It is a required status check, and `agent-workflow.md` makes it one of the three merge
+conditions. It is worth being precise about what it does and does not assert, because a
+governance product that overstated its own controls would be a poor advertisement.
+
+**What it asserts.** A conformance review — does this do what the specification says, with
+the right invariants, audit events and authorization — was recorded against **this exact
+commit**. A review is recorded by a pull-request comment containing:
+
+```text
+Reviewed-commit: <the full 40-character sha>
+```
+
+The check compares that sha to the pull request's head. Push a new commit and the recorded
+sha no longer matches, the check returns to pending, and code nobody has read cannot merge
+behind a stale approval. That property is the entire point.
+
+**What it does not assert.** It is not a human approval, and it is not cryptographic proof
+that a different party reviewed the diff. Both agents in this project authenticate as the
+same GitHub account, so GitHub cannot distinguish the implementer from the reviewer, and
+this repository will not create a second account to manufacture an appearance of one.
+
+The independence that matters is real but procedural: the implementing agent is Codex and
+the reviewing agent is Claude Code, they run in separate sessions with separate context,
+and a model reviewing its own output catches its own misreading of a specification far less
+reliably than an independent pass does. That is why the two passes exist. The check records
+that the second pass happened; it does not prove it.
+
+**Why not require a GitHub review approval instead.** Because the only account that could
+give one belongs to the founder, and the merge policy is explicitly that nobody clicks
+anything. Requiring it would deadlock every pull request on the person the workflow exists
+to keep out of the loop. `.github/CODEOWNERS` records the same reasoning.
+
+Everything that decides *correctness* is deterministic: compilers, tests, migrations,
+static analysis. No AI runs in that path. This check sits alongside it and is honest about
+being a different kind of signal.
