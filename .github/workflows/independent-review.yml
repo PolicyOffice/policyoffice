@@ -18,8 +18,13 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    name: independent review
+  record:
+    # Named differently from the status context it writes. If the job were also called
+    # "independent review" there would be two checks with that name -- this job, which
+    # passes as soon as it has written a status, and the status itself, which carries the
+    # actual signal. A branch ruleset requiring the name would then be satisfied by the
+    # wrong one.
+    name: record independent review
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.event.issue.pull_request
     permissions:

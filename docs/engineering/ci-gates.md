@@ -31,7 +31,7 @@ gate — see `CONTRIBUTING.md`.
 | audit-event completeness | *pending* | no events are emitted yet |
 | production build | **live** | `pr.yml` → `build` |
 | dependency review | **live** | `pr.yml` → `dependency-review` |
-| secret scanning | *repository setting* | see *What the founder must enable* below |
+| secret scanning + push protection | **live** | repository setting, enabled 2026-08-30 |
 | CodeQL | **live** | `codeql.yml` |
 | Playwright critical suite (Chromium) | *pending* | there is no user-visible surface to drive |
 
@@ -52,12 +52,17 @@ authorization evaluator adds the authorization matrix in the same diff, and move
 here from *pending* to **live**. That way the gate cannot lag the capability it exists to
 constrain.
 
-## What the founder must enable
+## Repository settings, applied
 
-Two things need repository-admin scope, which the working token does not have. Neither can
-be done from a workflow file.
+These are not expressible as workflow files. Applied 2026-08-30:
 
-### 1. The branch ruleset for `main`
+- **Dependency graph** — `PUT /repos/:owner/:repo/vulnerability-alerts`. The dependency
+  review gate fails without it, which is how its absence was noticed.
+- **Secret scanning and push protection** — push protection is the one that matters: it
+  rejects a commit containing a recognised credential before it reaches the remote rather
+  than alerting afterwards. On a public repository, "afterwards" means already published.
+
+## The branch ruleset for `main`
 
 Committed as `.github/rulesets/main.json`. Apply it with:
 
@@ -74,21 +79,7 @@ Requiring code-owner approval would deadlock every Tier 2 pull request on the on
 the workflow exists to keep out of the loop. `.github/CODEOWNERS` says the same thing where
 someone would look for it.
 
-### 2. Secret scanning and push protection
-
-Free on public repositories, and not expressible as a workflow:
-
-```bash
-gh api -X PATCH repos/PolicyOffice/policyoffice \
-  -F security_and_analysis[secret_scanning][status]=enabled \
-  -F security_and_analysis[secret_scanning_push_protection][status]=enabled
-```
-
-Push protection is the one that matters: it rejects a commit containing a recognised
-credential before it reaches the remote, rather than alerting afterwards. On a public
-repository, "afterwards" means the secret is already published.
-
-### 3. Secrets for the scheduled Neon job
+## Secrets for the scheduled Neon job
 
 ```bash
 gh secret set NEON_DATABASE_URL_POOLED
