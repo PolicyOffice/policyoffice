@@ -117,11 +117,15 @@ Both ADRs are amended and `data-model.md` is corrected.
 - [x] **Test harness** — Vitest with unit/integration/property projects, `fast-check`, and
       the invariant coverage gate. Connects as `app_role`; a test citing a tenancy or
       authorization invariant while holding a privileged connection fails
-- [ ] **CI workflows** — the gate list in `agent-workflow.md`, blocking on every pull
-  request
+- [x] **CI workflows** — the gate list, blocking on every pull request, with every gate's
+      status recorded in `docs/engineering/ci-gates.md`. Gates whose subject does not exist
+      yet are listed there as pending rather than created as jobs that pass trivially. Two
+      steps need repository-admin scope and are the founder's to run: the branch ruleset and
+      secret-scanning push protection
 - [ ] **Playwright** — booted in the runner, no deployed environment
-- [ ] **Repository governance** — CODEOWNERS with the Tier 2 paths, branch rulesets, the
-      issue templates the workflow assumes
+- [~] **Repository governance** — CODEOWNERS carries the Tier 2 paths and the issue
+      templates exist. The branch ruleset is committed as `.github/rulesets/main.json` and
+      needs one founder command to apply
 - [ ] **Seeds** — reference, development, and test fixtures including the second tenant
   that
       cross-tenant negative tests need

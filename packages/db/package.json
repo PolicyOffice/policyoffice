@@ -13,7 +13,8 @@
     "migrate:new": "tsx src/cli.ts new",
     "verify:fresh": "tsx src/verify-cli.ts fresh",
     "verify:upgrade": "tsx src/verify-cli.ts upgrade",
-    "verify:drift": "tsx src/verify-cli.ts drift"
+    "verify:drift": "tsx src/verify-cli.ts drift",
+    "dev:credentials": "tsx src/dev-credentials-cli.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

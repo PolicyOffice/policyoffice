@@ -1,0 +1,41 @@
+name: neon platform verification
+
+# ADR-0009, "What becomes harder":
+#
+#   "CI's database differs from production's: a container in tests, Neon in production.
+#    The scheduled verification job against a real Neon branch exists to keep that honest."
+#
+# Deliberately NOT on pull requests. It needs credentials, and a workflow triggered by a
+# pull request must never have access to them.
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify the ADR claims against Neon
+    runs-on: ubuntu-latest
+    # Without the secrets there is nothing to verify, and a run that silently passed
+    # because it connected to nothing would be worse than no run at all.
+    if: github.repository == 'PolicyOffice/policyoffice'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify
+        env:
+          NEON_DATABASE_URL_POOLED: ${{ secrets.NEON_DATABASE_URL_POOLED }}
+          NEON_DATABASE_URL_DIRECT: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
+        run: |
+          if [ -z "$NEON_DATABASE_URL_POOLED" ] || [ -z "$NEON_DATABASE_URL_DIRECT" ]; then
+            echo "::error::NEON_DATABASE_URL_POOLED and NEON_DATABASE_URL_DIRECT are not set."
+            echo "::error::See docs/engineering/ci-gates.md for how to add them."
+            exit 1
+          fi
+          # The check needs psql. It uses the local postgres container by default; on a
+          # runner, the client is installed directly.
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          ./verification/neon.sh

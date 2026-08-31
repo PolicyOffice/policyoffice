@@ -1,0 +1,171 @@
+name: gate
+
+# The deterministic merge gate. `docs/engineering/agent-workflow.md`:
+#
+#   "No AI in the required-check path, ever. An agent's approval is a comment on a PR, not
+#    a correctness guarantee. Compilers, tests, migrations, static analysis and Playwright
+#    decide mergeability."
+#
+# Nothing in this file calls a model, an API, or any non-deterministic service.
+#
+# Which gates exist and which are still pending is recorded in
+# `docs/engineering/ci-gates.md`. A gate whose subject does not exist yet is listed there
+# as pending -- it is deliberately NOT created here as a job that passes trivially, because
+# a green check that tested nothing is worse than a missing one.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Least privilege by default. Jobs that need more say so themselves.
+permissions:
+  contents: read
+
+concurrency:
+  # A superseded run tells you about code nobody will merge.
+  group: gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm format
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm lint
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm typecheck
+
+  invariants:
+    name: domain invariant coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      # Every invariant in the registry either has a test naming it or is registered as
+      # not yet implemented, with a reason. This is what makes the traceability chain in
+      # agent-workflow.md checkable rather than decorative.
+      - run: pnpm invariants
+
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm test:unit
+
+  property:
+    name: property-based tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm test:property
+
+  integration:
+    name: integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # The same major version as docker-compose.yml and as production. ADR-0009 names
+        # "CI's database differs from production's" as a known weakness; keeping the
+        # versions equal is the cheap half of the mitigation.
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: policyoffice
+          # Deterministic collation. Evidence packs sort records, and sorting must not
+          # depend on the machine.
+          LANG: C
+          POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d policyoffice"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      MIGRATION_ADMIN_URL: postgres://postgres:postgres@localhost:5432/policyoffice
+      MIGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/policyoffice
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Build the schema and grant development logins
+        # 0001_roles.sql creates the roles NOLOGIN with no password on purpose -- a
+        # password in a migration is a secret in a public repository. Credentials are an
+        # environment concern, and this is the CI environment supplying them.
+        run: |
+          pnpm --filter @policyoffice/db migrate
+          pnpm --filter @policyoffice/db dev:credentials
+      - name: Integration tests
+        # Connect as app_role, never the owner and never a superuser. A superuser bypasses
+        # row-level security entirely, so a cross-tenant negative test run as one passes
+        # while proving nothing (verification/README.md, finding 2).
+        run: pnpm test:integration
+
+  migrations:
+    name: migration validation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: policyoffice
+          LANG: C
+          POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d policyoffice"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      MIGRATION_ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      # Three separate checks, per ADR-0009: the chain builds a schema from nothing; new
+      # migrations apply to the previous schema WITH DATA; and the built schema matches the
+      # Drizzle definition. Each against a throwaway database.
+      - run: pnpm --filter @policyoffice/db verify:fresh
+      - run: pnpm --filter @policyoffice/db verify:upgrade
+      - run: pnpm --filter @policyoffice/db verify:drift
+
+  build:
+    name: production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+
+  dependency-review:
+    name: dependency review
+    runs-on: ubuntu-latest
+    # Compares the base and head dependency trees, so it has nothing to compare on a push.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          # AGPL and other strong copyleft licences are a procurement problem for a
+          # source-available product. Flag rather than discover during a security review.
+          deny-licenses: AGPL-3.0, AGPL-3.0-only, AGPL-3.0-or-later, GPL-3.0, GPL-3.0-only

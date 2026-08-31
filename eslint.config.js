@@ -33,6 +33,8 @@ export default tseslint.config(
     // events and operational logs separately modelled, and an ad-hoc console.log in a
     // request path is how the two start blurring. A migration CLI printing what it
     // applied is not that.
+    // Entrypoints end in `-cli.ts` (or are named `cli.ts`). That is the convention: if a
+    // file writes to stdout as its interface, its name says so.
     files: ["tooling/**/*.ts", "**/cli.ts", "**/*-cli.ts", "*.config.ts", "*.config.js"],
     rules: { "no-console": "off" },
   },
