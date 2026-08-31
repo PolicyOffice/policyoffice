@@ -4,7 +4,7 @@ A governance feature is not done because the happy path renders. This product's
 dangerous defects are failures of **state, authorization, time and evidence**.
 
 A change is done when every applicable row below is satisfied. Rows marked *always*
-apply to every change touching `src/`.
+apply to every change touching application code.
 
 | # | Dimension | Requirement | Applies |
 |---|---|---|---|
@@ -26,7 +26,7 @@ apply to every change touching `src/`.
 
 ## The spec-drift rule
 
-If a PR changes domain behaviour under `src/domain/` but changes nothing under
+If a PR changes domain behaviour under `packages/domain/` but changes nothing under
 `docs/domain/`, one of two things is true: the documentation is now stale, or the
 change was not actually a domain change. CI flags it; the PR must either update the
 docs or carry the `no-spec-change` label with a one-line reason.

@@ -50,6 +50,11 @@ Decision Request.
    audit or evidence.
 7. **Privacy is minimal by default.** Do not collect personal data because "an auditor
    might want it." New personal-data fields require justification in the PR.
+8. **Never record a review of your own work.** The `independent review` status is set by a
+   `Reviewed-commit: <sha>` comment, and it is the one merge condition that is not
+   automated. Posting it on your own pull request would unblock your own merge and defeat
+   the only gate a machine cannot check. Leave it pending; the reviewing agent posts it.
+   This is the whole reason the two-agent split exists — see *Agent lanes* below.
 
 ## Working rules
 
@@ -58,8 +63,27 @@ Decision Request.
 - One PR closes exactly one issue (`Closes #142`). Small and coherent.
 - Squash merge only. Branch deleted on merge. `main` is always releasable.
 - Never commit secrets, `.env`, or Playwright auth state.
+- `main` is protected: no direct pushes. Every change is a pull request, and twelve
+  deterministic checks plus the review status must be green before it merges.
 - Agent authorship is attributed honestly in commit trailers. That is a feature of this
   project, not something to hide.
+
+## Working on the code
+
+| Need | Command |
+|---|---|
+| The toolchain | `nvm use` (Node 24, from `.nvmrc`), then `pnpm install` |
+| Postgres, object storage, mail | `docker compose up -d` |
+| Everything CI runs | `pnpm check` — format, lint, typecheck, invariant coverage, tests, build |
+| The migration checks | `pnpm db:verify` — fresh install, upgrade with data, schema drift |
+| The platform claims | `./verification/run.sh` — 34 assertions, no application needed |
+
+Integration tests connect as `app_role` and **fail rather than skip** when no database is
+reachable. A skipped integration suite is a green build that tested nothing.
+
+The layout is `apps/web`, `apps/worker`, `packages/domain`, `packages/db`,
+`packages/testing` and `tooling/` — recorded in `ADR-0000`. `packages/domain` is
+framework-free and an architecture test enforces it.
 
 ## Picking up work
 
