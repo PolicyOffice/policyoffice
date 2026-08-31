@@ -26,7 +26,7 @@ gate — see `CONTRIBUTING.md`.
 | domain invariant tests | **live** | `pr.yml` → `invariants` |
 | integration tests (real Postgres) | **live** | `pr.yml` → `integration`, service container, connecting as `app_role` |
 | migration validation: fresh **and** upgrade | **live** | `pr.yml` → `migrations`, plus the drift check |
-| tenant-isolation suite | *pending* | no schema. Arrives with the tenancy migration |
+| tenant-isolation suite | **live** | `pr.yml` → `tenant-isolation`, schema-discovered forced RLS and cross-tenant negatives |
 | authorization matrix | *pending* | no authorization evaluator exists |
 | audit-event completeness | *pending* | no events are emitted yet |
 | production build | **live** | `pr.yml` → `build` |
@@ -77,7 +77,7 @@ outlived its reason is a pin nobody remembers making.
 ## The branch ruleset for `main`
 
 **Applied 2026-08-31.** Committed as `.github/rulesets/main.json` and active: a direct push
-to `main` is rejected, twelve checks are required, merges are squash-only, history is
+to `main` is rejected, thirteen checks are required, merges are squash-only, history is
 linear, and the branch cannot be force-pushed or deleted.
 
 Re-apply after editing the file with:

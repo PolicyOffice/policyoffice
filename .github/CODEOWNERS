@@ -87,6 +87,13 @@
 # and becomes one it cannot break -- or fails to.
 /packages/db/migrations/              @aca333
 
+# The typed schema, schema-discovered RLS assertion, and its restricted-role integration
+# suite are the three sides of the tenancy gate added by POL-006. Omitting or weakening a
+# table in any one of them can turn a cross-tenant disclosure into a green build.
+/packages/db/src/schema.ts                    @aca333
+/packages/db/src/tenancy-schema.ts            @aca333
+/packages/db/src/tenant-isolation.int.test.ts @aca333
+
 # The runner and the three checks. There is deliberately no down-migration path; adding
 # one must be a visible change to this design, not a convenience.
 /packages/db/src/runner.ts            @aca333

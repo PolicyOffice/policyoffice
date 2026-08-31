@@ -18,10 +18,6 @@ Format, parsed strictly:
 
 ## INV-TEN — Tenant isolation
 
-- INV-TEN-001 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-TEN-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-TEN-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-TEN-005 — MVP; no schema or domain code yet (Phase 2/3)
 
 ## INV-ORG — Organisational structure
 
@@ -120,7 +116,6 @@ Format, parsed strictly:
 - INV-AUTH-011 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-012 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-013 — V1; no schema or domain code yet (Phase 2/3)
-- INV-AUTH-014 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-015 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-016 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-017 — MVP; no schema or domain code yet (Phase 2/3)
@@ -202,8 +197,5 @@ Format, parsed strictly:
 
 ## INV-TIME — Time and concurrency
 
-- INV-TIME-001 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-TIME-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-TIME-003 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-TIME-004 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-TIME-005 — MVP; no schema or domain code yet (Phase 2/3)

@@ -16,6 +16,7 @@
     "check": "pnpm format && pnpm lint && pnpm typecheck && pnpm invariants && pnpm test && pnpm build",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
+    "test:tenant-isolation": "vitest run --project integration packages/db/src/tenant-isolation.int.test.ts",
     "test:property": "vitest run --project property",
     "invariants": "tsx tooling/invariant-coverage.ts",
     "db:verify": "pnpm --filter @policyoffice/db verify:fresh && pnpm --filter @policyoffice/db verify:upgrade && pnpm --filter @policyoffice/db verify:drift"

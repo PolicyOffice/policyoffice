@@ -233,6 +233,30 @@ export async function verifyDrift(): Promise<{ drifted: boolean; diff: string }>
       .map((s) => s.trim())
       .filter((s) => s.length > 0 && !s.startsWith("--"));
     for (const statement of statements) await sql.query(statement);
+
+    // Drizzle can render ENABLE ROW LEVEL SECURITY and policies, but it has no schema
+    // primitive for FORCE. The convention is universal and schema-discoverable, so apply
+    // FORCE to every Drizzle-rendered table carrying tenant_id before comparing snapshots.
+    // If a migration omitted FORCE, its side still differs and the drift check fails.
+    const { rows } = await sql.query<{ schema_name: string; table_name: string }>(`
+      select n.nspname as schema_name, c.relname as table_name
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+       where c.relkind = 'r'
+         and n.nspname not in ('pg_catalog', 'information_schema')
+         and exists (
+           select 1 from pg_attribute a
+            where a.attrelid = c.oid
+              and a.attname = 'tenant_id'
+              and a.attnum > 0
+              and not a.attisdropped
+         )
+    `);
+    for (const row of rows) {
+      const schema = row.schema_name.replaceAll('"', '""');
+      const table = row.table_name.replaceAll('"', '""');
+      await sql.query(`alter table "${schema}"."${table}" force row level security`);
+    }
     return snapshot(sql);
   });
 
