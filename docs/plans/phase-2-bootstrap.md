@@ -113,7 +113,11 @@ Both ADRs are amended and `data-model.md` is corrected.
 - [x] **Migration harness** — forward-only SQL with per-file checksums, the three roles,
       `btree_gist`, non-transactional migrations, session timeouts, and the fresh/upgrade/
       drift checks. No down-migration path exists
-- [ ] **First migrations** — tenancy, identity, the document spine, the audit ledger
+- [ ] **First migrations** — ticketed: POL-006 tenancy and identity (#34), POL-007 the
+      audit ledger (#35), POL-008 organisation (#36). The **document spine** is deliberately
+      not yet ticketed: it carries INV-VER-*, INV-EFF-* and the immutability triggers — the
+      densest Tier 2 work in the product — and is better written once #34 has landed and
+      shown how the conventions hold up
 - [x] **Test harness** — Vitest with unit/integration/property projects, `fast-check`, and
       the invariant coverage gate. Connects as `app_role`; a test citing a tenancy or
       authorization invariant while holding a privileged connection fails
@@ -123,12 +127,11 @@ Both ADRs are amended and `data-model.md` is corrected.
       steps need repository-admin scope and are the founder's to run: the branch ruleset and
       secret-scanning push protection
 - [ ] **Playwright** — booted in the runner, no deployed environment
-- [~] **Repository governance** — CODEOWNERS carries the Tier 2 paths and the issue
-      templates exist. The branch ruleset is committed as `.github/rulesets/main.json` and
-      needs one founder command to apply
-- [ ] **Seeds** — reference, development, and test fixtures including the second tenant
-  that
-      cross-tenant negative tests need
+- [x] **Repository governance** — CODEOWNERS carries the Tier 2 paths, the issue templates
+      exist, and the branch ruleset is **applied** (2026-08-31): twelve required checks,
+      squash-only, linear history, no force-push, no deletion. A direct push to `main` is
+      rejected. Secret scanning, push protection and the dependency graph are enabled
+- [ ] **Seeds** — ticketed as POL-009 (#37)
 
 ## Exit criteria
 
@@ -140,7 +143,8 @@ Both ADRs are amended and `data-model.md` is corrected.
       an upgrade
 - [ ] Every level-1 and level-2 constraint carries its invariant ID in a
       `comment on constraint`
-- [ ] CI blocks a pull request that breaks a tenant-isolation or authorization test
+- [ ] CI blocks a pull request that breaks a tenant-isolation or authorization test — the
+      gate exists and blocks; the tenant-isolation suite itself arrives with #34
 - [ ] A cross-tenant negative test exists and **fails** when RLS is removed — proving the
       test tests something
 

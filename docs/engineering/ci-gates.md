@@ -76,7 +76,11 @@ outlived its reason is a pin nobody remembers making.
 
 ## The branch ruleset for `main`
 
-Committed as `.github/rulesets/main.json`. Apply it with:
+**Applied 2026-08-31.** Committed as `.github/rulesets/main.json` and active: a direct push
+to `main` is rejected, twelve checks are required, merges are squash-only, history is
+linear, and the branch cannot be force-pushed or deleted.
+
+Re-apply after editing the file with:
 
 ```bash
 gh api -X POST repos/PolicyOffice/policyoffice/rulesets --input .github/rulesets/main.json
