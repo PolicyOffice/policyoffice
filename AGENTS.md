@@ -120,6 +120,11 @@ Open a **Decision Request** issue (template provided) and stop, when you hit:
 - anything that would change a rule in `docs/domain/`;
 - a new category of personal data, a retention change, or a new subprocessor;
 - anything irreversible or externally visible;
+- **live repository or platform configuration** — branch rulesets, required status checks,
+  security settings, secrets, org or repository permissions. These are governance, not
+  implementation: they take effect immediately, for everyone, and are not reviewable as a
+  diff. Change the committed definition in your pull request and say so; applying it is a
+  separate, deliberate step;
 - a disagreement between agents that tests cannot settle.
 
 A blocked ticket with a clear question is a good outcome. A ticket that quietly

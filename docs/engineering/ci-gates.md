@@ -45,6 +45,32 @@ gate — see `CONTRIBUTING.md`.
 | property-based applicability resolution | *partly* | the `property` project runs; the applicability tests need a resolver (INV-APL-001) |
 | backup-restore drill | *pending* | needs a Neon API key; the restore-timing item is still open on `ADR-0009` |
 
+## The ordering rule: add the job, merge it, then require it
+
+A required status check may enter the **applied** ruleset only once its job exists on
+`main`. Never from the branch that introduces it.
+
+The reason, learned the hard way on 2026-08-31: a check was added to the applied ruleset
+while its job existed only on one feature branch. Every *other* open pull request became
+permanently unmergeable, because a status nothing would ever report was required of them.
+The gate looked correct and the repository was deadlocked.
+
+So the sequence is:
+
+1. add the job to `pr.yml` **and** the context to `.github/rulesets/main.json`, in the same
+   pull request — `tooling/ci-gates.test.ts` fails if they disagree;
+2. merge it;
+3. re-apply the ruleset **from `main`**, where the job now exists.
+
+Between 2 and 3 the committed file and the applied ruleset differ by one context. That gap
+is deliberate and is the safe direction: a check that exists but is not yet required blocks
+nobody, while a check that is required but does not exist blocks everybody.
+
+**Applying the ruleset is not an implementing agent's job.** It is live configuration, it
+takes effect immediately for everyone, and it is not reviewable as a diff — `AGENTS.md`
+lists it under *Escalate, do not improvise*. Change the file in your pull request; someone
+else applies it afterwards, in the order above.
+
 ## Each pending gate arrives with the code it protects
 
 Not as a follow-up ticket, and not as a placeholder job. The pull request that adds an
