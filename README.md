@@ -24,7 +24,8 @@ from it: eleven ADRs, a physical data model and a threat model under `docs/archi
 
 The platform those ADRs depend on is **executed, not assumed** — 34 assertions against
 local PostgreSQL and 24 against Neon, in `verification/`. Six ADR claims turned out to be
-wrong and were amended. There is no schema yet.
+wrong and were amended. The migration chain now contains the tenancy and identity
+foundation; the remaining Phase 2 schema arrives in dependency order.
 
 ## Repository map
 
@@ -76,6 +77,7 @@ tree rather than in configuration:
 |---|---|---|
 | `pnpm test:unit` | `*.test.ts` | nothing |
 | `pnpm test:integration` | `*.int.test.ts` | `docker compose up -d` |
+| `pnpm test:tenant-isolation` | the schema-discovered tenant isolation suite | `docker compose up -d` |
 | `pnpm test:property` | `*.prop.test.ts` | nothing |
 
 Integration tests connect as `app_role` — never the owner, never a superuser. A superuser

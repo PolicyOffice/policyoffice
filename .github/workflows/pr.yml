@@ -120,6 +120,37 @@ jobs:
         # while proving nothing (verification/README.md, finding 2).
         run: pnpm test:integration
 
+  tenant-isolation:
+    name: tenant-isolation suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: policyoffice
+          LANG: C
+          POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d policyoffice"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      MIGRATION_ADMIN_URL: postgres://postgres:postgres@localhost:5432/policyoffice
+      MIGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/policyoffice
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Build the schema and grant development logins
+        run: |
+          pnpm --filter @policyoffice/db migrate
+          pnpm --filter @policyoffice/db dev:credentials
+      - name: Prove tenant isolation through the restricted application role
+        # The suite discovers tables by tenant_id. A newly added tenant-owned table with
+        # no forced RLS or tenant policy makes this gate red without changing the test.
+        run: pnpm test:tenant-isolation
+
   migrations:
     name: migration validation
     runs-on: ubuntu-latest

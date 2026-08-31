@@ -1,21 +1,218 @@
 /**
- * The Drizzle schema.
+ * The typed description of the schema built by 0003_tenancy_and_identity.sql.
  *
- * `ADR-0000`: Drizzle for schema and typed queries, hand-written SQL for migrations. The
- * DDL carries the guarantees -- exclusion constraints, triggers, revoked privileges,
- * composite foreign keys including `tenant_id` -- and a migration tool that abstracts DDL
- * away is disqualifying. So this file describes the schema for typed queries; it does not
- * generate it.
- *
- * Which raises the obvious question: what stops the two disagreeing? The drift check in
- * `verify.ts` builds one database from the migration chain and another from this
- * definition, then compares them. A mismatch fails CI. Without that, "the model and the
- * database disagree" is a runtime discovery.
- *
- * Empty right now, deliberately. POL-003 is the harness; the tables arrive with POL-006
- * onward, and `data-model.md` § Verification is their exit criterion.
+ * PostgreSQL mechanisms that Drizzle cannot render (FORCE ROW LEVEL SECURITY, triggers,
+ * grants and comments) remain in the hand-written migration and are asserted directly by
+ * integration tests. verify.ts supplies FORCE to the Drizzle-side throwaway database so
+ * the drift comparison still checks the universal tenant-table convention.
  */
+import { sql } from "drizzle-orm";
+import {
+  check,
+  customType,
+  foreignKey,
+  integer,
+  jsonb,
+  pgEnum,
+  pgPolicy,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
-// No tables yet. The drift check is exercised against this emptiness, which is a real
-// assertion: it fails if a migration creates a table this file does not describe.
-export {};
+const instant = (name: string) => timestamp(name, { withTimezone: true });
+const tstzrange = customType<{ data: string }>({ dataType: () => "tstzrange" });
+const tenantPolicy = () =>
+  pgPolicy("tenant_isolation", {
+    using: sql`tenant_id = current_setting('app.tenant_id')::uuid`,
+  });
+
+export const tenantStatus = pgEnum("tenant_status", ["ACTIVE", "SUSPENDED", "CLOSED"]);
+export const appUserStatus = pgEnum("app_user_status", ["INVITED", "ACTIVE", "DEACTIVATED"]);
+export const credentialKind = pgEnum("credential_kind", ["PASSWORD", "OIDC", "SAML"]);
+export const userGroupSource = pgEnum("user_group_source", ["LOCAL", "SCIM"]);
+export const userGroupStatus = pgEnum("user_group_status", ["ACTIVE", "RETIRED"]);
+
+export const tenant = pgTable("tenant", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  status: tenantStatus("status").notNull(),
+  defaultTimezone: text("default_timezone").notNull(),
+  defaultLocale: text("default_locale").notNull(),
+  residencyProfile: text("residency_profile").notNull(),
+  governanceProfileCode: text("governance_profile_code"),
+  createdAt: instant("created_at").defaultNow().notNull(),
+});
+
+export const appUser = pgTable(
+  "app_user",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    externalIdentityId: text("external_identity_id"),
+    displayName: text("display_name").notNull(),
+    contactEmail: text("contact_email").notNull(),
+    status: appUserStatus("status").notNull(),
+    locale: text("locale"),
+    timezone: text("timezone"),
+    deactivatedAt: instant("deactivated_at"),
+  },
+  (t) => [
+    primaryKey({ name: "app_user_pkey", columns: [t.tenantId, t.id] }),
+    unique("app_user_id_unique").on(t.id),
+    foreignKey({
+      name: "app_user_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    unique("app_user_external_identity_unique").on(t.tenantId, t.externalIdentityId),
+    uniqueIndex("app_user_tenant_email_unique").on(t.tenantId, sql`lower(${t.contactEmail})`),
+    check(
+      "app_user_deactivation_consistent",
+      sql`(${t.status} = 'DEACTIVATED' and ${t.deactivatedAt} is not null)
+          or (${t.status} <> 'DEACTIVATED' and ${t.deactivatedAt} is null)`,
+    ),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const userCredential = pgTable(
+  "user_credential",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    userId: uuid("user_id").notNull(),
+    kind: credentialKind("kind").notNull(),
+    secretHash: text("secret_hash").notNull(),
+    params: jsonb("params").default({}).notNull(),
+    rotatedAt: instant("rotated_at"),
+  },
+  (t) => [
+    primaryKey({ name: "user_credential_pkey", columns: [t.tenantId, t.id] }),
+    unique("user_credential_id_unique").on(t.id),
+    foreignKey({
+      name: "user_credential_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "user_credential_user_fk",
+      columns: [t.tenantId, t.userId],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const userSession = pgTable(
+  "user_session",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    userId: uuid("user_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    issuedAt: instant("issued_at").notNull(),
+    idleExpiresAt: instant("idle_expires_at").notNull(),
+    absoluteExpiresAt: instant("absolute_expires_at").notNull(),
+    revokedAt: instant("revoked_at"),
+    userAgentClass: text("user_agent_class").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "user_session_pkey", columns: [t.tenantId, t.id] }),
+    unique("user_session_id_unique").on(t.id),
+    foreignKey({
+      name: "user_session_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "user_session_user_fk",
+      columns: [t.tenantId, t.userId],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const userGroup = pgTable(
+  "user_group",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    name: text("name").notNull(),
+    source: userGroupSource("source").notNull(),
+    externalId: text("external_id"),
+    status: userGroupStatus("status").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "user_group_pkey", columns: [t.tenantId, t.id] }),
+    unique("user_group_id_unique").on(t.id),
+    foreignKey({
+      name: "user_group_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    uniqueIndex("user_group_tenant_name_unique").on(t.tenantId, sql`lower(${t.name})`),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const groupMembership = pgTable(
+  "group_membership",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    groupId: uuid("group_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    validity: tstzrange("validity").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "group_membership_pkey", columns: [t.tenantId, t.id] }),
+    unique("group_membership_id_unique").on(t.id),
+    foreignKey({
+      name: "group_membership_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "group_membership_group_fk",
+      columns: [t.tenantId, t.groupId],
+      foreignColumns: [userGroup.tenantId, userGroup.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "group_membership_user_fk",
+      columns: [t.tenantId, t.userId],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    unique("group_membership_identity_validity_unique").on(
+      t.tenantId,
+      t.groupId,
+      t.userId,
+      t.validity,
+    ),
+    check(
+      "group_membership_validity_half_open",
+      sql`not isempty(${t.validity}) and lower_inc(${t.validity}) and not upper_inc(${t.validity})`,
+    ),
+    tenantPolicy(),
+  ],
+).enableRLS();

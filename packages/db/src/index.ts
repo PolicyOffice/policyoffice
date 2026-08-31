@@ -18,3 +18,9 @@ export {
   type StatusLine,
 } from "./runner.js";
 export { snapshot, verifyDrift, verifyFresh, verifyUpgrade, withTempDatabase } from "./verify.js";
+export {
+  TENANT_TABLE_SECURITY_QUERY,
+  tenantTableSecurityProblems,
+  type TenantTableSecurityProblem,
+  type TenantTableSecurityRow,
+} from "./tenancy-schema.js";
