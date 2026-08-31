@@ -75,6 +75,12 @@ The check compares that sha to the pull request's head. Push a new commit and th
 sha no longer matches, the check returns to pending, and code nobody has read cannot merge
 behind a stale approval. That property is the entire point.
 
+**The implementer never posts it.** Recording a review of your own pull request is
+prohibited (`AGENTS.md` rule 8). It is the one merge condition a machine cannot verify,
+which is exactly why it depends on discipline rather than on a check — and why breaking it
+is a process failure rather than a shortcut. If your pull request is blocked on this
+status, it is waiting for someone else, and that is the system working.
+
 **What it does not assert.** It is not a human approval, and it is not cryptographic proof
 that a different party reviewed the diff. Both agents in this project authenticate as the
 same GitHub account, so GitHub cannot distinguish the implementer from the reviewer, and
