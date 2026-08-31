@@ -185,6 +185,48 @@ export async function verifyUpgrade(): Promise<void> {
     )`);
     await sql.query("insert into upgrade_fixture (payload) values ('before the upgrade')");
 
+    // Keep data in the exact table affected by 0004 and later identity migrations. A
+    // generic unrelated row would let a uniqueness migration pass while proving nothing
+    // about preserving an existing membership.
+    const membershipTable = await sql.query<{ present: boolean }>(
+      "select to_regclass('public.group_membership') is not null as present",
+    );
+    if (membershipTable.rows[0]?.present) {
+      await sql.query(`
+        insert into tenant
+          (id, name, status, default_timezone, default_locale, residency_profile, created_at)
+        values
+          ('30000000-0000-0000-0000-000000000003', 'Upgrade tenant', 'ACTIVE',
+           'Europe/Tallinn', 'en', 'EU', '2026-01-01T00:00:00Z');
+
+        insert into app_user
+          (tenant_id, id, created_at, updated_at, display_name, contact_email, status)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0001-000000000003',
+           '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z',
+           'Upgrade user', 'upgrade@example.test', 'ACTIVE');
+
+        insert into user_group
+          (tenant_id, id, created_at, updated_at, name, source, status)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0002-000000000003',
+           '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z',
+           'Upgrade group', 'LOCAL', 'ACTIVE');
+
+        insert into group_membership
+          (tenant_id, id, created_at, updated_at, group_id, user_id, validity)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0003-000000000003',
+           '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z',
+           '30000000-0000-0000-0002-000000000003',
+           '30000000-0000-0000-0001-000000000003',
+           tstzrange('2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', '[)'));
+      `);
+    }
+
     // Apply the rest.
     const result = await applyMigrations(sql);
     if (!result.applied.includes(latest.name)) {
@@ -194,6 +236,15 @@ export async function verifyUpgrade(): Promise<void> {
     const { rows } = await sql.query<{ payload: string }>("select payload from upgrade_fixture");
     if (rows[0]?.payload !== "before the upgrade") {
       throw new Error("data present before the upgrade did not survive it");
+    }
+    if (membershipTable.rows[0]?.present) {
+      const membership = await sql.query<{ count: number }>(
+        `select count(*)::int as count from group_membership
+          where id = '30000000-0000-0000-0003-000000000003'`,
+      );
+      if (membership.rows[0]?.count !== 1) {
+        throw new Error("membership data present before the upgrade did not survive it");
+      }
     }
   });
 }

@@ -267,6 +267,23 @@ describe("the tenancy and identity schema", () => {
     expect(rows.length).toBeGreaterThan(10);
     expect(rows.filter((row) => !row.comment?.includes("INV-TEN-003"))).toEqual([]);
   });
+
+  it("refuses a duplicate membership for the same group, user and validity", async () => {
+    try {
+      await withTenant(TENANT_A, (sql) =>
+        sql.query(
+          `insert into group_membership
+             (tenant_id, id, group_id, user_id, validity)
+           values ($1, $2, $3, $4,
+                   tstzrange('2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', '[)'))`,
+          [TENANT_A, "10000000-0000-0000-0010-000000000001", GROUP_A, USER_A],
+        ),
+      );
+      expect.unreachable("an exact duplicate membership unexpectedly succeeded");
+    } catch (error) {
+      expect(databaseCode(error)).toBe("23505");
+    }
+  });
 });
 
 describe("the tenant-isolation gate", () => {

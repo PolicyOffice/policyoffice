@@ -203,6 +203,12 @@ export const groupMembership = pgTable(
       columns: [t.tenantId, t.userId],
       foreignColumns: [appUser.tenantId, appUser.id],
     }).onDelete("restrict"),
+    unique("group_membership_identity_validity_unique").on(
+      t.tenantId,
+      t.groupId,
+      t.userId,
+      t.validity,
+    ),
     check(
       "group_membership_validity_half_open",
       sql`not isempty(${t.validity}) and lower_inc(${t.validity}) and not upper_inc(${t.validity})`,
