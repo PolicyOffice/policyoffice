@@ -163,7 +163,7 @@ async function readAppliedMigrations(sql: Client): Promise<Map<string, AppliedMi
  * this explicit grant is made. INHERIT stays false so the administrative session never
  * owns objects accidentally merely by holding the membership.
  */
-async function prepareMigrationRole(sql: Client): Promise<void> {
+async function assertAdministrativeConnection(sql: Client): Promise<void> {
   const { rows } = await sql.query<{ session_user: string }>("select session_user");
   if (rows[0]?.session_user === MIGRATION_ROLE) {
     throw new Error(
@@ -174,7 +174,10 @@ async function prepareMigrationRole(sql: Client): Promise<void> {
       ].join(" "),
     );
   }
+}
 
+async function prepareMigrationRole(sql: Client): Promise<void> {
+  await assertAdministrativeConnection(sql);
   await sql.query(`
     do $policyoffice_database_grant$
     begin
@@ -264,6 +267,9 @@ export async function applyMigrations(
 ): Promise<ApplyResult> {
   await sql.query(`set lock_timeout = ${LOCK_TIMEOUT_MS}`);
   await sql.query(`set statement_timeout = ${STATEMENT_TIMEOUT_MS}`);
+  // Fail before inspecting the ledger or running 0001. On a clean database there is no
+  // ledger yet, but migration_role still cannot bootstrap or alter itself.
+  await assertAdministrativeConnection(sql);
 
   const migrations = readMigrations(dir);
   let hasLedger = await ledgerExists(sql);

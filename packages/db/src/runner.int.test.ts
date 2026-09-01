@@ -76,6 +76,29 @@ describe("applying the chain", () => {
     });
   });
 
+  it("rejects migration_role clearly before bootstrapping a clean database", async () => {
+    await withTempDatabase("wrong_clean_role", async (_url, sql) => {
+      const before = await sql.query<{ ledger: string | null }>(
+        `select to_regclass('public.${LEDGER_TABLE}')::text as ledger`,
+      );
+      expect(before.rows[0]?.ledger).toBeNull();
+
+      try {
+        await sql.query(`set session authorization ${MIGRATION_ROLE}`);
+        await expect(applyMigrations(sql)).rejects.toThrow(
+          /require an administrative connection, not migration_role/i,
+        );
+      } finally {
+        await sql.query("reset session authorization");
+      }
+
+      const after = await sql.query<{ ledger: string | null }>(
+        `select to_regclass('public.${LEDGER_TABLE}')::text as ledger`,
+      );
+      expect(after.rows[0]?.ledger).toBeNull();
+    });
+  });
+
   it("re-running applies nothing -- idempotent by ledger, not by luck", async () => {
     await withTempDatabase("idempotent", async (_url, sql) => {
       await applyMigrations(sql);
