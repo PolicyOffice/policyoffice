@@ -52,8 +52,49 @@ Review any open PRs.
 Address the review comments on any PRs that have them.
 ```
 
+**Landing a pull request.** This is the one step that is genuinely yours, because the
+`independent review` status is set by a comment and only a reviewer may post it. Claude
+hands you both commands together:
+
+```bash
+gh pr comment <n> --body 'Reviewed-commit: <full 40-character sha>'
+```
+
+```bash
+gh pr merge <n> --squash --delete-branch
+```
+
+The first sets the review status; until it is green the pull request is `BLOCKED`, however
+many other checks pass. The second lands it. Claude checks `mergeStateStatus` is `CLEAN`
+before offering the merge, so it should not bounce.
+
+**Answering a Decision Request.** An agent that cannot build a ticket as specified stops,
+opens a `[DECISION]` issue and releases its claim. Most are answerable in one line. Some
+are not yours at all — if the ticket was simply written wrong, Claude answers and amends it,
+and tells you it did. Anything involving money, privacy, a domain rule or something
+irreversible is genuinely yours.
+
 If a ticket ever needs more than one line of instruction from you, the ticket was not
 finished. That is a specification failure, not an operator failure.
+
+## Where each agent works
+
+The two agents share one repository through **git worktrees**, because they cannot share a
+working tree — the same index and the same `HEAD` means one agent's `git add -A` sweeps up
+the other's files, and one agent's branch checkout blocks the other's `--delete-branch`.
+Both happened before this was set up.
+
+| Checkout | Agent | Sits on |
+|---|---|---|
+| `PolicyManagement/` | Codex | `main` between tickets, its feature branch while working |
+| `policyoffice-claude/` | Claude Code | detached at `origin/main` |
+
+The reviewer's worktree stays **detached**, never on a named branch. `gh pr merge
+--delete-branch` fails if either worktree holds the branch being deleted, and that failure
+aborts the remote delete too — leaving a merged branch on the origin.
+
+Note that `docker compose` derives its project name from the directory, so running it from
+the second worktree would start a *second* Postgres. Drive Docker from `PolicyManagement/`.
 
 ## Local Codex or cloud Codex
 
