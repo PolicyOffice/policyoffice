@@ -63,10 +63,24 @@ Claude reviews the diff against the specification  →  comments  →  review ch
         ↓
 Codex fixes  →  CI green
         ↓
-GitHub auto-merges (squash). Nobody clicks anything.
+Claude records `Reviewed-commit: <sha>`  →  independent review turns green
+        ↓
+squash merge, branch deleted
 ```
 
-The founder appears in this loop **only** when an agent raises a Decision Request.
+**How the last step happens today: the founder runs `gh pr merge`.** Auto-merge is not
+enabled on the repository, so the intended *"nobody clicks anything"* is not yet true. The
+honest description of the current loop is that the founder has three touchpoints — starting
+Codex, asking Claude to review, and landing the pull request — plus answering Decision
+Requests.
+
+Enabling auto-merge would remove the third. It is a deliberate decision rather than an
+oversight: with it on, a pull request merges the instant the last check goes green,
+including the review status, and nobody sees it land. That is the design this document
+describes, and it is worth choosing on purpose rather than drifting into.
+
+`docs/engineering/running-the-agents.md` § *Landing a pull request* has the operator's
+actual steps.
 
 ## Merge policy
 
