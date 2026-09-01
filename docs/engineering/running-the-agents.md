@@ -52,21 +52,23 @@ Review any open PRs.
 Address the review comments on any PRs that have them.
 ```
 
-**Landing a pull request.** This is the one step that is genuinely yours, because the
-`independent review` status is set by a comment and only a reviewer may post it. Claude
-hands you both commands together:
+**Landing a pull request.** Usually nothing. Auto-merge is enabled: a pull request merges
+the moment its last required check goes green, and deletes its own branch.
+
+`independent review` is one of those checks, and it is set by a comment naming the exact
+head sha. For **Codex's** pull requests Claude posts it after reviewing, and the merge
+follows on its own — you do nothing.
+
+For a pull request **Claude authored** — documentation, tickets, fixes to its own earlier
+work — it may not review itself (`AGENTS.md` rule 8), so it needs you:
 
 ```bash
 gh pr comment <n> --body 'Reviewed-commit: <full 40-character sha>'
 ```
 
-```bash
-gh pr merge <n> --squash --delete-branch
-```
-
-The first sets the review status; until it is green the pull request is `BLOCKED`, however
-many other checks pass. The second lands it. Claude checks `mergeStateStatus` is `CLEAN`
-before offering the merge, so it should not bounce.
+That is the whole of it. The merge happens by itself afterwards. There is no
+`gh pr merge` step any more; if you find yourself typing one, something upstream is wrong
+and worth asking about rather than working around.
 
 **Answering a Decision Request.** An agent that cannot build a ticket as specified stops,
 opens a `[DECISION]` issue and releases its claim. Most are answerable in one line. Some

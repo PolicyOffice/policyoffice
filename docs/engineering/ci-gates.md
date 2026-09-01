@@ -84,6 +84,9 @@ These are not expressible as workflow files. Applied 2026-08-30:
 
 - **Dependency graph** — `PUT /repos/:owner/:repo/vulnerability-alerts`. The dependency
   review gate fails without it, which is how its absence was noticed.
+- **Auto-merge and delete-branch-on-merge** — enabled 2026-09-01. A pull request merges
+  when its last required check passes and removes its own branch. Auto-merge is not a
+  bypass: it waits for *every* required check, `independent review` included.
 - **Secret scanning and push protection** — push protection is the one that matters: it
   rejects a commit containing a recognised credential before it reaches the remote rather
   than alerting afterwards. On a public repository, "afterwards" means already published.

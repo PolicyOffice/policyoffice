@@ -68,16 +68,24 @@ Claude records `Reviewed-commit: <sha>`  →  independent review turns green
 squash merge, branch deleted
 ```
 
-**How the last step happens today: the founder runs `gh pr merge`.** Auto-merge is not
-enabled on the repository, so the intended *"nobody clicks anything"* is not yet true. The
-honest description of the current loop is that the founder has three touchpoints — starting
-Codex, asking Claude to review, and landing the pull request — plus answering Decision
-Requests.
+**Auto-merge is enabled** (2026-09-01, founder's decision). A pull request merges the
+instant its last required check goes green and deletes its own branch. Nobody clicks
+anything.
 
-Enabling auto-merge would remove the third. It is a deliberate decision rather than an
-oversight: with it on, a pull request merges the instant the last check goes green,
-including the review status, and nobody sees it land. That is the design this document
-describes, and it is worth choosing on purpose rather than drifting into.
+`independent review` is one of those required checks, so the loop still turns on a human
+or agent recording `Reviewed-commit: <sha>`. Auto-merge does not skip that; it removes the
+clicking that used to follow it.
+
+Which leaves the founder with **two touchpoints for implementation work** — starting Codex,
+and asking Claude to review — plus answering Decision Requests.
+
+The exception is a pull request Claude *authored*: rule 8 forbids recording a review of your
+own work, so those need a second party. Today that is the founder, and it is one comment
+rather than two commands.
+
+The trade this makes, stated plainly: work now lands without anyone watching it. The pull
+request page becomes the record rather than a terminal. That is the intended design, and it
+is why every gate above it has to be real.
 
 `docs/engineering/running-the-agents.md` § *Landing a pull request* has the operator's
 actual steps.
