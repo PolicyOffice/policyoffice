@@ -64,6 +64,41 @@ exempt from its own policies (`ADR-0001`).
 Extensions — `btree_gist` for `ADR-0005` — are created by `migration_role`, since the
 application role will not have the privilege.
 
+> **Amendment, 2026-09-01 — connect administratively; execute as `migration_role`.** A
+> clean database cannot be migrated by connecting as `migration_role`: the first migration
+> has not created it yet, and once created it deliberately lacks the privilege to alter its
+> own role attributes. `MIGRATION_DATABASE_URL` is therefore an administrative connection.
+> The runner uses that authority only for `0001_roles.sql`, database/schema grants and an
+> explicit `SET` membership; it switches to `migration_role` before creating the checksum
+> ledger or executing every ordinary migration. The administrative connection never owns
+> a modelled object.
+>
+> The switch belongs in the runner, not in migration files. Object ownership is an
+> INV-TEN-001 enforcement precondition — `FORCE ROW LEVEL SECURITY` cannot bind a
+> superuser owner — so it must not depend on every migration author remembering an
+> incantation. Transactional migrations use `SET LOCAL ROLE`; non-transactional migrations
+> use a session-scoped `SET ROLE` which the runner resets in `finally`. The role bootstrap
+> is the sole exception because a role cannot create or constrain itself.
+>
+> PostgreSQL 16 separated role-membership `ADMIN` from `SET`. The runner grants the
+> administrative session `SET TRUE, INHERIT FALSE` on `migration_role`: enough to narrow
+> for DDL, without silently inheriting ownership privileges. The ledger comment is applied
+> only when the table is created, so a later administrator is not rejected for lacking
+> ownership; ledgers created by the pre-amendment runner are reassigned to
+> `migration_role`. Migrations `0001` through `0004` remain byte-for-byte immutable. Their
+> hand-written role switches in `0003` and `0004` are historical and harmless; newly
+> generated migrations omit them because the runner owns the convention.
+>
+> **Trusted-extension members are the deliberate exception (decision #43).** PostgreSQL
+> runs a trusted extension's installation script as its bootstrap superuser, even when a
+> non-superuser owns the extension. `btree_gist` therefore contributes functions and types
+> that `migration_role` cannot own on Neon's non-superuser administrative path. Ownership
+> verification excludes catalog objects carrying an extension-membership dependency
+> (`pg_depend.deptype = 'e'`), asserts the extension itself has a non-superuser owner, and
+> states INV-TEN-001 directly: no table with RLS may be owned by a role holding `SUPERUSER`
+> or `BYPASSRLS`. Extension members contain no tables, asserted on the clean schema, so the
+> exclusion cannot hide a table capable of bypassing its own tenant policy.
+
 ### Every constraint that carries an invariant says so
 
 ```sql

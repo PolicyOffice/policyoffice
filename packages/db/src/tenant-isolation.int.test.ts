@@ -219,18 +219,17 @@ describe("the tenancy and identity schema", () => {
     }
   });
 
-  it("is owned by migration_role rather than a superuser", async () => {
+  it("INV-TEN-001: every application table and the migration ledger have the non-superuser owner", async () => {
     const { rows } = await withAppRole((sql) =>
       sql.query<{ table_name: string; owner: string }>(`
         select c.relname as table_name, pg_get_userbyid(c.relowner) as owner
           from pg_class c join pg_namespace n on n.oid = c.relnamespace
          where n.nspname = 'public'
            and c.relkind = 'r'
-           and c.relname <> 'schema_migration'
          order by c.relname
       `),
     );
-    expect(rows).toHaveLength(6);
+    expect(rows).toHaveLength(7);
     expect(rows.filter((row) => row.owner !== "migration_role")).toEqual([]);
   });
 

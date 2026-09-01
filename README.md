@@ -92,6 +92,7 @@ is a green build that tested nothing.
 Migrations are forward-only, hand-written SQL, applied by our own runner:
 
 ```bash
+pnpm --filter @policyoffice/db migrate
 pnpm --filter @policyoffice/db migrate:status
 ```
 
@@ -100,6 +101,12 @@ no revert command, and no down migration to revert to** — a down migration is 
 tool pointed at an evidence ledger, so recovery is a forward migration or a restore. A
 merged migration is immutable: the runner records a checksum and refuses to proceed if a
 file changes.
+
+`MIGRATION_DATABASE_URL` is an administrative connection, defaulting locally to the
+Docker Compose `postgres` role. That connection is used only to create or constrain the
+three roles and to grant an explicit `SET ROLE` path. The runner executes every ordinary
+migration and owns its checksum ledger as `migration_role`, which remains
+`NOSUPERUSER NOBYPASSRLS`; new migration files do not need to switch roles themselves.
 
 ```bash
 pnpm db:verify
