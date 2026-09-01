@@ -28,6 +28,16 @@ export const MIGRATIONS_DIR = fileURLToPath(new URL("../migrations", import.meta
 export const LEDGER_TABLE = "schema_migration";
 
 /**
+ * The administrative connection bootstraps this role; every ordinary migration and the
+ * ledger itself run as it. Keeping the switch here means migration authors cannot forget
+ * the ownership boundary that makes forced RLS bind the schema owner (INV-TEN-001).
+ */
+export const MIGRATION_ROLE = "migration_role";
+
+/** The one migration that must run before migration_role is able to run anything. */
+const ROLE_BOOTSTRAP_MIGRATION = "0001_roles.sql";
+
+/**
  * Marker opting a migration out of a transaction.
  *
  * `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block, so such migrations
@@ -84,28 +94,133 @@ export function readMigrations(dir: string = MIGRATIONS_DIR): Migration[] {
   });
 }
 
+async function ledgerExists(sql: Client): Promise<boolean> {
+  const { rows } = await sql.query<{ present: boolean }>(
+    `select to_regclass('public.${LEDGER_TABLE}') is not null as present`,
+  );
+  return rows[0]?.present ?? false;
+}
+
+async function migrationRoleExists(sql: Client): Promise<boolean> {
+  const { rows } = await sql.query<{ present: boolean }>(
+    `select exists (select 1 from pg_roles where rolname = '${MIGRATION_ROLE}') as present`,
+  );
+  return rows[0]?.present ?? false;
+}
+
+/**
+ * Create the ledger and its comment as one exception-protected operation.
+ *
+ * `CREATE TABLE IF NOT EXISTS` followed by an unconditional `COMMENT` is not idempotent
+ * across owners: COMMENT still requires ownership when another administrator runs the
+ * chain later. Catching duplicate_table keeps the comment on the creation path only, and
+ * also closes the race between two first invocations.
+ *
+ * The caller determines ownership. applyMigrations always calls this after switching to
+ * migration_role.
+ */
 export async function ensureLedger(sql: Client): Promise<void> {
   await sql.query(`
-    create table if not exists ${LEDGER_TABLE} (
-      name        text        primary key,
-      checksum    text        not null,
-      applied_at  timestamptz not null default now(),
-      duration_ms integer     not null
-    )`);
-  await sql.query(
-    `comment on table ${LEDGER_TABLE} is
-       'Applied migrations and their checksums. Runner bookkeeping, not modelled state -- excluded from the drift check.'`,
-  );
+    do $policyoffice_ledger$
+    begin
+      begin
+        create table public.${LEDGER_TABLE} (
+          name        text        primary key,
+          checksum    text        not null,
+          applied_at  timestamptz not null default now(),
+          duration_ms integer     not null
+        );
+        comment on table public.${LEDGER_TABLE} is
+          'Applied migrations and their checksums. Runner bookkeeping, not modelled state -- excluded from the drift check.';
+      exception
+        when duplicate_table then null;
+      end;
+    end
+    $policyoffice_ledger$;
+  `);
 }
 
 export async function appliedMigrations(sql: Client): Promise<Map<string, AppliedMigration>> {
-  await ensureLedger(sql);
+  if (!(await ledgerExists(sql))) return new Map();
+  return readAppliedMigrations(sql);
+}
+
+async function readAppliedMigrations(sql: Client): Promise<Map<string, AppliedMigration>> {
   const { rows } = await sql.query<{ name: string; checksum: string; applied_at: Date }>(
-    `select name, checksum, applied_at from ${LEDGER_TABLE} order by name`,
+    `select name, checksum, applied_at from public.${LEDGER_TABLE} order by name`,
   );
   return new Map(
     rows.map((r) => [r.name, { name: r.name, checksum: r.checksum, appliedAt: r.applied_at }]),
   );
+}
+
+/**
+ * Give the administrative session an explicit SET-only path into migration_role and give
+ * that role the database/schema privileges needed by all migrations.
+ *
+ * PostgreSQL 16 separated ADMIN from SET on role memberships. The role creator therefore
+ * has enough authority to administer migration_role but cannot necessarily SET ROLE until
+ * this explicit grant is made. INHERIT stays false so the administrative session never
+ * owns objects accidentally merely by holding the membership.
+ */
+async function prepareMigrationRole(sql: Client): Promise<void> {
+  const { rows } = await sql.query<{ session_user: string }>("select session_user");
+  if (rows[0]?.session_user === MIGRATION_ROLE) {
+    throw new Error(
+      [
+        "Migrations require an administrative connection, not migration_role.",
+        "The administrator bootstraps roles and explicitly SET ROLEs for DDL;",
+        "migration_role remains NOSUPERUSER NOBYPASSRLS and owns the created objects.",
+      ].join(" "),
+    );
+  }
+
+  await sql.query(`
+    do $policyoffice_database_grant$
+    begin
+      execute format(
+        'grant connect, create on database %I to ${MIGRATION_ROLE}',
+        current_database()
+      );
+    end
+    $policyoffice_database_grant$;
+  `);
+  await sql.query(`grant usage, create on schema public to ${MIGRATION_ROLE} with grant option`);
+  await sql.query(`
+    do $policyoffice_set_grant$
+    begin
+      execute format(
+        'grant ${MIGRATION_ROLE} to %I with set true, inherit false',
+        session_user
+      );
+    end
+    $policyoffice_set_grant$;
+  `);
+}
+
+/** Move ledgers created by the old runner off their administrative/superuser owner. */
+async function normalizeLedgerOwner(sql: Client): Promise<void> {
+  const { rows } = await sql.query<{ owner: string }>(`
+    select pg_get_userbyid(c.relowner) as owner
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public'
+       and c.relname = '${LEDGER_TABLE}'
+       and c.relkind = 'r'
+  `);
+  const owner = rows[0]?.owner;
+  if (owner && owner !== MIGRATION_ROLE) {
+    await sql.query(`alter table public.${LEDGER_TABLE} owner to ${MIGRATION_ROLE}`);
+  }
+}
+
+async function asMigrationRole<T>(sql: Client, fn: () => Promise<T>): Promise<T> {
+  await sql.query(`set role ${MIGRATION_ROLE}`);
+  try {
+    return await fn();
+  } finally {
+    await sql.query("reset role");
+  }
 }
 
 export class MigrationTamperedError extends Error {
@@ -150,10 +265,24 @@ export async function applyMigrations(
   await sql.query(`set lock_timeout = ${LOCK_TIMEOUT_MS}`);
   await sql.query(`set statement_timeout = ${STATEMENT_TIMEOUT_MS}`);
 
-  const already = await appliedMigrations(sql);
+  const migrations = readMigrations(dir);
+  let hasLedger = await ledgerExists(sql);
+  let rolePrepared = false;
+  let already = new Map<string, AppliedMigration>();
+
+  if (hasLedger) {
+    if (!(await migrationRoleExists(sql))) {
+      throw new Error(`${LEDGER_TABLE} exists but ${MIGRATION_ROLE} does not`);
+    }
+    await prepareMigrationRole(sql);
+    rolePrepared = true;
+    await normalizeLedgerOwner(sql);
+    already = await asMigrationRole(sql, () => readAppliedMigrations(sql));
+  }
+
   const result: ApplyResult = { applied: [], alreadyApplied: [] };
 
-  for (const migration of readMigrations(dir)) {
+  for (const migration of migrations) {
     const record = already.get(migration.name);
     if (record) {
       if (record.checksum !== migration.checksum) {
@@ -164,10 +293,42 @@ export async function applyMigrations(
     }
 
     const started = Date.now();
+    const bootstrapsRoles = migration.name === ROLE_BOOTSTRAP_MIGRATION;
     if (migration.transactional) {
       await sql.query("begin");
       try {
-        await sql.query(migration.sql);
+        if (bootstrapsRoles) {
+          // A role cannot create or constrain itself. This is the administrative
+          // connection's sole DDL exception; 0001 creates roles but no owned objects.
+          await sql.query(migration.sql);
+          await prepareMigrationRole(sql);
+          rolePrepared = true;
+        } else {
+          if (!rolePrepared) {
+            if (!(await migrationRoleExists(sql))) {
+              throw new Error(
+                `${MIGRATION_ROLE} does not exist; apply ${ROLE_BOOTSTRAP_MIGRATION} first`,
+              );
+            }
+            await prepareMigrationRole(sql);
+            rolePrepared = true;
+          }
+          await sql.query(`set local role ${MIGRATION_ROLE}`);
+        }
+
+        // The ledger is created by migration_role, including on a completely clean
+        // database where 0001 had to run before the role existed.
+        await sql.query(`set local role ${MIGRATION_ROLE}`);
+        if (!hasLedger) {
+          await ensureLedger(sql);
+          hasLedger = true;
+        }
+
+        if (!bootstrapsRoles) await sql.query(migration.sql);
+
+        // Merged migrations 0003 and 0004 explicitly RESET ROLE at the end. They are
+        // immutable, so re-establish the runner convention before touching its ledger.
+        await sql.query(`set local role ${MIGRATION_ROLE}`);
         await recordApplied(sql, migration, Date.now() - started);
         await sql.query("commit");
       } catch (error) {
@@ -175,11 +336,41 @@ export async function applyMigrations(
         throw error;
       }
     } else {
+      if (bootstrapsRoles) {
+        throw new Error(`${ROLE_BOOTSTRAP_MIGRATION} must remain transactional`);
+      }
+      if (!rolePrepared) {
+        if (!(await migrationRoleExists(sql))) {
+          throw new Error(
+            `${MIGRATION_ROLE} does not exist; apply ${ROLE_BOOTSTRAP_MIGRATION} first`,
+          );
+        }
+        await prepareMigrationRole(sql);
+        rolePrepared = true;
+      }
+      if (!hasLedger) {
+        await sql.query("begin");
+        try {
+          await sql.query(`set local role ${MIGRATION_ROLE}`);
+          await ensureLedger(sql);
+          await sql.query("commit");
+          hasLedger = true;
+        } catch (error) {
+          await sql.query("rollback");
+          throw error;
+        }
+      }
+
       // Unwrapped, and alone. If this fails partway there is no rollback -- the recovery
       // is a forward migration, which is what ADR-0009 asks for rather than pretending
       // otherwise.
-      await sql.query(migration.sql);
-      await recordApplied(sql, migration, Date.now() - started);
+      await asMigrationRole(sql, async () => {
+        await sql.query(migration.sql);
+        // A legacy migration may have RESET ROLE. Restore the central convention before
+        // recording the checksum.
+        await sql.query(`set role ${MIGRATION_ROLE}`);
+        await recordApplied(sql, migration, Date.now() - started);
+      });
     }
     log(`applied ${migration.name} (${Date.now() - started}ms)`);
     result.applied.push(migration.name);
@@ -188,11 +379,10 @@ export async function applyMigrations(
 }
 
 async function recordApplied(sql: Client, migration: Migration, durationMs: number): Promise<void> {
-  await sql.query(`insert into ${LEDGER_TABLE} (name, checksum, duration_ms) values ($1, $2, $3)`, [
-    migration.name,
-    migration.checksum,
-    durationMs,
-  ]);
+  await sql.query(
+    `insert into public.${LEDGER_TABLE} (name, checksum, duration_ms) values ($1, $2, $3)`,
+    [migration.name, migration.checksum, durationMs],
+  );
 }
 
 export interface StatusLine {
@@ -201,8 +391,17 @@ export interface StatusLine {
 }
 
 export async function status(sql: Client, dir: string = MIGRATIONS_DIR): Promise<StatusLine[]> {
-  const already = await appliedMigrations(sql);
-  return readMigrations(dir).map((m) => {
+  const migrations = readMigrations(dir);
+  if (!(await ledgerExists(sql))) {
+    return migrations.map((m) => ({ name: m.name, state: "pending" as const }));
+  }
+  if (!(await migrationRoleExists(sql))) {
+    throw new Error(`${LEDGER_TABLE} exists but ${MIGRATION_ROLE} does not`);
+  }
+  await prepareMigrationRole(sql);
+  await normalizeLedgerOwner(sql);
+  const already = await asMigrationRole(sql, () => readAppliedMigrations(sql));
+  return migrations.map((m) => {
     const record = already.get(m.name);
     if (!record) return { name: m.name, state: "pending" as const };
     return { name: m.name, state: record.checksum === m.checksum ? "applied" : "changed" };
@@ -231,6 +430,8 @@ export function createMigration(slug: string, dir: string = MIGRATIONS_DIR): str
       "--",
       "-- Forward-only. Once merged this file is immutable: the runner records its checksum",
       "-- and refuses to proceed if it changes. A correction is a new migration.",
+      "--",
+      `-- The runner executes this file as ${MIGRATION_ROLE}; do not SET or RESET ROLE here.`,
       "--",
       "-- Every constraint carrying an invariant states which one, where the enforcement is:",
       "--",

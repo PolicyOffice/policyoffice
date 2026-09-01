@@ -9,23 +9,20 @@
  * There is no revert command, and there is no down migration to revert to. See runner.ts.
  */
 import { Client } from "pg";
+import { migrationDatabaseUrl } from "./migration-connection.js";
 import { applyMigrations, createMigration, MigrationTamperedError, status } from "./runner.js";
 
-const url = (): string =>
-  process.env.MIGRATION_DATABASE_URL ??
-  "postgres://migration_role:migration_role@localhost:5432/policyoffice";
-
 async function withClient<T>(fn: (sql: Client) => Promise<T>): Promise<T> {
-  const sql = new Client({ connectionString: url() });
+  const sql = new Client({ connectionString: migrationDatabaseUrl() });
   try {
     await sql.connect();
   } catch (cause) {
     throw new Error(
       [
-        "Could not connect as migration_role.",
+        "Could not open the administrative migration connection.",
         "",
         "Start the local environment with:",
-        "  docker compose up -d && ./verification/00-roles.sh",
+        "  docker compose up -d",
         "",
         `Cause: ${cause instanceof Error ? cause.message : String(cause)}`,
       ].join("\n"),

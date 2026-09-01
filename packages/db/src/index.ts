@@ -6,6 +6,7 @@ export {
   ensureLedger,
   MigrationTamperedError,
   MIGRATIONS_DIR,
+  MIGRATION_ROLE,
   LEDGER_TABLE,
   LOCK_TIMEOUT_MS,
   STATEMENT_TIMEOUT_MS,

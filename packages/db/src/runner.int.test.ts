@@ -1,12 +1,11 @@
 /**
  * The migration harness, against a real PostgreSQL.
  *
- * These tests cite no invariant in their titles, deliberately. They exercise the machinery
- * that will carry INV-EFF-002 (btree_gist and EXCLUDE), INV-AUD-002 (revoked privileges)
- * and INV-TEN-001 (the non-bypassing application role) -- but the invariants themselves
- * constrain tables that do not exist yet. Claiming them here would mark them covered while
- * the product has no schema, and nobody would notice when the real tables landed untested.
- * See tooling/invariants-pending.md.
+ * Harness-only tests cite no invariant in their titles: machinery is not the rule it will
+ * eventually carry. The clean-chain ownership test is the deliberate exception. It builds
+ * the real tenancy schema and names INV-TEN-001 because a superuser/BYPASSRLS table owner
+ * would weaken that schema's enforcement, not merely the harness. See
+ * tooling/invariants-pending.md.
  */
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +14,10 @@ import { describe, expect, it } from "vitest";
 import {
   applyMigrations,
   appliedMigrations,
+  ensureLedger,
+  LEDGER_TABLE,
   LOCK_TIMEOUT_MS,
+  MIGRATION_ROLE,
   MigrationTamperedError,
   readMigrations,
   status,
@@ -30,7 +32,7 @@ function fixtureDir(files: Record<string, string>): string {
 }
 
 describe("applying the chain", () => {
-  it("applies every migration in order and records a checksum for each", async () => {
+  it("applies every migration from clean through the documented administrative connection", async () => {
     await withTempDatabase("apply", async (_url, sql) => {
       const result = await applyMigrations(sql);
       expect(result.applied).toEqual(readMigrations().map((m) => m.name));
@@ -42,12 +44,58 @@ describe("applying the chain", () => {
     });
   });
 
+  it("re-running through a different administrative role succeeds", async () => {
+    await withTempDatabase("different_admin", async (_url, sql) => {
+      await applyMigrations(sql);
+      const secondAdmin = `po_second_admin_${process.pid}_${Date.now()}`;
+      await sql.query(`create role ${secondAdmin} nosuperuser nobypassrls`);
+      await sql.query(`
+        do $second_admin_database$
+        begin
+          execute format(
+            'grant connect, create on database %I to ${secondAdmin} with grant option',
+            current_database()
+          );
+        end
+        $second_admin_database$;
+      `);
+      await sql.query(`grant usage, create on schema public to ${secondAdmin} with grant option`);
+      await sql.query(
+        `grant ${MIGRATION_ROLE} to ${secondAdmin} with admin true, set true, inherit false`,
+      );
+      try {
+        await sql.query(`set session authorization ${secondAdmin}`);
+        const result = await applyMigrations(sql);
+        expect(result.applied).toEqual([]);
+        expect(result.alreadyApplied).toEqual(readMigrations().map((m) => m.name));
+      } finally {
+        await sql.query("reset session authorization");
+        await sql.query(`drop owned by ${secondAdmin}`);
+        await sql.query(`drop role ${secondAdmin}`);
+      }
+    });
+  });
+
   it("re-running applies nothing -- idempotent by ledger, not by luck", async () => {
     await withTempDatabase("idempotent", async (_url, sql) => {
       await applyMigrations(sql);
       const second = await applyMigrations(sql);
       expect(second.applied).toEqual([]);
       expect(second.alreadyApplied).toEqual(readMigrations().map((m) => m.name));
+    });
+  });
+
+  it("owns an ordinary migration object without role SQL in the migration file", async () => {
+    const dir = fixtureDir({ "0001_owned.sql": "create table centrally_owned (id int);" });
+    await withTempDatabase("central_owner", async (_url, sql) => {
+      await applyMigrations(sql, dir);
+      const { rows } = await sql.query<{ owner: string }>(`
+        select pg_get_userbyid(c.relowner) as owner
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relname = 'centrally_owned'
+      `);
+      expect(rows[0]?.owner).toBe(MIGRATION_ROLE);
     });
   });
 
@@ -91,6 +139,46 @@ describe("applying the chain", () => {
   });
 });
 
+describe("the migration ledger", () => {
+  it("is idempotent across owners because only its creator applies the comment", async () => {
+    await withTempDatabase("ledger_owners", async (_url, sql) => {
+      const suffix = `${process.pid}_${Date.now()}`;
+      const first = `po_ledger_first_${suffix}`;
+      const second = `po_ledger_second_${suffix}`;
+      await sql.query(`create role ${first}`);
+      await sql.query(`create role ${second}`);
+      await sql.query(`grant usage, create on schema public to ${first}, ${second}`);
+
+      try {
+        await sql.query(`set role ${first}`);
+        await ensureLedger(sql);
+        await sql.query("reset role");
+
+        await sql.query(`set role ${second}`);
+        await ensureLedger(sql);
+        await sql.query("reset role");
+
+        const { rows } = await sql.query<{ owner: string; comment: string }>(`
+          select pg_get_userbyid(c.relowner) as owner,
+                 obj_description(c.oid, 'pg_class') as comment
+            from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'public' and c.relname = '${LEDGER_TABLE}'
+        `);
+        expect(rows[0]?.owner).toBe(first);
+        expect(rows[0]?.comment).toContain("Applied migrations and their checksums");
+      } finally {
+        await sql.query("reset role");
+        await sql.query(`alter table if exists public.${LEDGER_TABLE} owner to current_user`);
+        await sql.query(`drop owned by ${first}`);
+        await sql.query(`drop owned by ${second}`);
+        await sql.query(`drop role ${first}`);
+        await sql.query(`drop role ${second}`);
+      }
+    });
+  });
+});
+
 describe("non-transactional migrations", () => {
   it("runs CREATE INDEX CONCURRENTLY when the migration opts out of a transaction", async () => {
     const dir = fixtureDir({
@@ -101,10 +189,17 @@ describe("non-transactional migrations", () => {
     await withTempDatabase("concurrent", async (_url, sql) => {
       const result = await applyMigrations(sql, dir);
       expect(result.applied).toEqual(["0001_table.sql", "0002_index.sql"]);
-      const { rows } = await sql.query(
-        "select count(*)::int as n from pg_indexes where indexname = 't_id_idx'",
-      );
-      expect(rows[0]).toMatchObject({ n: 1 });
+      const { rows } = await sql.query<{ name: string; owner: string }>(`
+        select c.relname as name, pg_get_userbyid(c.relowner) as owner
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relname in ('t', 't_id_idx')
+         order by c.relname
+      `);
+      expect(rows).toEqual([
+        { name: "t", owner: MIGRATION_ROLE },
+        { name: "t_id_idx", owner: MIGRATION_ROLE },
+      ]);
     });
   });
 
@@ -144,6 +239,99 @@ describe("the migration session", () => {
 });
 
 describe("what the chain actually builds", () => {
+  it("INV-TEN-001: clean-chain ownership cannot bypass row-level security", async () => {
+    await withTempDatabase("ownership", async (_url, sql) => {
+      await applyMigrations(sql);
+
+      // State the enforcement property directly: FORCE RLS does not bind a superuser or
+      // BYPASSRLS owner, regardless of what that role happens to be named.
+      const bypassingOwners = await sql.query<{
+        table_name: string;
+        owner: string;
+      }>(`
+        select n.nspname || '.' || c.relname as table_name, r.rolname as owner
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_roles r on r.oid = c.relowner
+         where c.relkind in ('r', 'p')
+           and c.relrowsecurity
+           and (r.rolsuper or r.rolbypassrls)
+         order by 1
+      `);
+      expect(bypassingOwners.rows).toEqual([]);
+
+      // Decision #43: a trusted extension's script runs as PostgreSQL's bootstrap
+      // superuser, so its member functions and types are deliberately not owned by the
+      // non-superuser caller. Extension members are safe to exclude from our ownership
+      // convention because PostgreSQL contributes no tables, asserted here rather than
+      // left as an inherited assumption. The RLS assertion above excludes nothing.
+      const extensionTables = await sql.query<{ name: string }>(`
+        select n.nspname || '.' || c.relname as name
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_depend d
+            on d.classid = 'pg_class'::regclass
+           and d.objid = c.oid
+           and d.deptype = 'e'
+         where c.relkind in ('r', 'p')
+         order by 1
+      `);
+      expect(extensionTables.rows).toEqual([]);
+
+      const definedObjects = await sql.query<{
+        kind: string;
+        name: string;
+        owner: string;
+      }>(`
+        with owned_object(kind, name, owner_oid, class_id, object_id) as (
+          select case c.relkind when 'S' then 'sequence' else 'table' end,
+                 n.nspname || '.' || c.relname,
+                 c.relowner,
+                 'pg_class'::regclass::oid,
+                 c.oid
+            from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'public' and c.relkind in ('r', 'p', 'S')
+          union all
+          select 'type', n.nspname || '.' || t.typname, t.typowner,
+                 'pg_type'::regclass::oid, t.oid
+            from pg_type t
+            join pg_namespace n on n.oid = t.typnamespace
+           where n.nspname = 'public' and t.typisdefined
+          union all
+          select 'function', n.nspname || '.' || p.oid::regprocedure::text, p.proowner,
+                 'pg_proc'::regclass::oid, p.oid
+            from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public'
+        )
+        select o.kind, o.name, r.rolname as owner
+          from owned_object o
+          join pg_roles r on r.oid = o.owner_oid
+         where not exists (
+           select 1
+             from pg_depend d
+            where d.classid = o.class_id
+              and d.objid = o.object_id
+              and d.deptype = 'e'
+         )
+         order by o.kind, o.name
+      `);
+
+      expect(definedObjects.rows.length).toBeGreaterThan(6);
+      expect(definedObjects.rows.filter((row) => row.owner !== MIGRATION_ROLE)).toEqual([]);
+
+      const extension = await sql.query<{ owner: string; superuser: boolean }>(`
+        select r.rolname as owner, r.rolsuper as superuser
+          from pg_extension e
+          join pg_roles r on r.oid = e.extowner
+         where e.extname = 'btree_gist'
+      `);
+      expect(extension.rows).toHaveLength(1);
+      expect(extension.rows[0]?.superuser).toBe(false);
+    });
+  });
+
   it("creates three roles, none of them a superuser and none bypassing RLS", async () => {
     // The attributes are re-applied on every run, not only at creation, so an existing
     // role cannot drift away from them.

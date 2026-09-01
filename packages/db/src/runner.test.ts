@@ -4,9 +4,11 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import type { Client } from "pg";
+import { describe, expect, it, vi } from "vitest";
 import * as runner from "./runner.js";
-import { checksum, nextMigrationName, readMigrations } from "./runner.js";
+import { DEFAULT_MIGRATION_DATABASE_URL, migrationDatabaseUrl } from "./migration-connection.js";
+import { checksum, ensureLedger, nextMigrationName, readMigrations } from "./runner.js";
 
 const dirWith = (files: Record<string, string>): string => {
   const dir = mkdtempSync(join(tmpdir(), "po-unit-"));
@@ -71,6 +73,34 @@ describe("reading migrations", () => {
       "0001_a.sql": "-- see policyoffice:non-transactional for the marker\nselect 1;",
     });
     expect(readMigrations(dir)[0]?.transactional).toBe(true);
+  });
+});
+
+describe("the administrative connection default", () => {
+  it("uses the local postgres administrator when no environment override is present", () => {
+    expect(migrationDatabaseUrl({})).toBe(DEFAULT_MIGRATION_DATABASE_URL);
+    expect(DEFAULT_MIGRATION_DATABASE_URL).toBe(
+      "postgres://postgres:postgres@localhost:5432/policyoffice",
+    );
+  });
+
+  it("honours an explicit administrative connection URL", () => {
+    expect(
+      migrationDatabaseUrl({ MIGRATION_DATABASE_URL: "postgres://admin@example.test/db" }),
+    ).toBe("postgres://admin@example.test/db");
+  });
+});
+
+describe("the migration ledger", () => {
+  it("keeps its ownership-requiring comment inside duplicate-protected creation", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    await ensureLedger({ query } as unknown as Client);
+
+    expect(query).toHaveBeenCalledOnce();
+    const statement = String(query.mock.calls[0]?.[0]);
+    expect(statement).toMatch(/create table public\.schema_migration/);
+    expect(statement).toMatch(/comment on table public\.schema_migration/);
+    expect(statement).toMatch(/exception\s+when duplicate_table then null/s);
   });
 });
 
