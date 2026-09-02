@@ -18,6 +18,15 @@ import {
 } from "../packages/domain/src/audit.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
+const AUDIT_EMITTER = "packages/domain/src/audit.ts";
+const AUDIT_TABLE_DEFINITION = "packages/db/src/schema.ts";
+const RAW_AUDIT_INSERT = /insert\s+into\s+(?:public\.)?audit_event\b/i;
+const AUDIT_TABLE_EXPORT_REFERENCE = /\bauditEvent\b/;
+
+interface ProductionSource {
+  path: string;
+  source: string;
+}
 
 function sourceFiles(directory: string): string[] {
   const files: string[] = [];
@@ -51,6 +60,45 @@ function productionSourceFiles(): string[] {
     .flatMap(sourceFiles);
 }
 
+function productionSources(): ProductionSource[] {
+  return productionSourceFiles().map((file) => ({
+    path: relative(ROOT, file),
+    source: readFileSync(file, "utf8"),
+  }));
+}
+
+/**
+ * Keep the raw SQL emitter unique and make the Drizzle table unavailable to a second
+ * production path. Matching the table-export identifier deliberately covers imports,
+ * re-exports, aliases' import clauses and namespace-property access without trying to
+ * enumerate every API that could eventually accept a Drizzle table.
+ */
+function auditWritePathProblems(sources: readonly ProductionSource[]): string[] {
+  const problems: string[] = [];
+  const rawInsertPaths = sources
+    .filter(({ source }) => RAW_AUDIT_INSERT.test(source))
+    .map(({ path }) => path);
+
+  if (!rawInsertPaths.includes(AUDIT_EMITTER)) {
+    problems.push(`${AUDIT_EMITTER}: canonical raw insert is missing`);
+  }
+  for (const path of rawInsertPaths) {
+    if (path !== AUDIT_EMITTER) problems.push(`${path}: contains a raw audit_event insert`);
+  }
+
+  for (const { path, source } of sources) {
+    if (
+      path !== AUDIT_EMITTER &&
+      path !== AUDIT_TABLE_DEFINITION &&
+      AUDIT_TABLE_EXPORT_REFERENCE.test(source)
+    ) {
+      problems.push(`${path}: references the auditEvent table export`);
+    }
+  }
+
+  return problems.sort();
+}
+
 describe("audit-event completeness", () => {
   it("INV-AUD-008: every catalogued event has exactly one typed, versioned registry entry", () => {
     const documented = documentedEventTypes();
@@ -69,12 +117,10 @@ describe("audit-event completeness", () => {
     expect(
       IMPLEMENTED_AUDIT_EVENT_TYPES.filter((eventType) => !AUDIT_EVENT_TYPES.includes(eventType)),
     ).toEqual([]);
-    const productionReferences = productionSourceFiles()
-      .filter((file) => !file.endsWith("packages/domain/src/audit.ts"))
-      .flatMap((file) =>
-        [...readFileSync(file, "utf8").matchAll(/["']([a-z_]+\.[a-z_]+)["']/g)].map(
-          (match) => match[1]!,
-        ),
+    const productionReferences = productionSources()
+      .filter(({ path }) => path !== AUDIT_EMITTER)
+      .flatMap(({ source }) =>
+        [...source.matchAll(/["']([a-z_]+\.[a-z_]+)["']/g)].map((match) => match[1]!),
       )
       .filter((name) => (AUDIT_EVENT_TYPES as readonly string[]).includes(name));
 
@@ -84,12 +130,32 @@ describe("audit-event completeness", () => {
   });
 
   it("INV-AUD-001 / INV-AUD-004 / INV-AUD-007: audit.ts is the only production ledger insertion path", () => {
-    const insertionFiles = productionSourceFiles()
-      .filter((file) =>
-        /insert\s+into\s+(?:public\.)?audit_event\b/i.test(readFileSync(file, "utf8")),
-      )
-      .map((file) => relative(ROOT, file));
+    expect(auditWritePathProblems(productionSources())).toEqual([]);
+  });
 
-    expect(insertionFiles).toEqual(["packages/domain/src/audit.ts"]);
+  it("INV-AUD-001: the sole-path gate rejects raw SQL and Drizzle-table bypasses", () => {
+    const fixture: ProductionSource[] = [
+      {
+        path: AUDIT_EMITTER,
+        source: "await transaction.query('insert into audit_event (tenant_id) values ($1)')",
+      },
+      {
+        path: AUDIT_TABLE_DEFINITION,
+        source: "export const auditEvent = pgTable('audit_event', {});",
+      },
+      {
+        path: "apps/worker/src/raw-bypass.ts",
+        source: "await sql.query('INSERT INTO public.audit_event (tenant_id) values ($1)')",
+      },
+      {
+        path: "packages/db/src/drizzle-bypass.ts",
+        source: 'import { auditEvent } from "./schema.js"; db.insert(auditEvent).values(values);',
+      },
+    ];
+
+    expect(auditWritePathProblems(fixture)).toEqual([
+      "apps/worker/src/raw-bypass.ts: contains a raw audit_event insert",
+      "packages/db/src/drizzle-bypass.ts: references the auditEvent table export",
+    ]);
   });
 });
