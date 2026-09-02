@@ -227,6 +227,16 @@ export async function verifyUpgrade(): Promise<void> {
       `);
     }
 
+    const eventSequenceBeforeUpgrade = await sql.query<{ present: boolean }>(
+      "select to_regclass('public.tenant_event_sequence') is not null as present",
+    );
+    if (eventSequenceBeforeUpgrade.rows[0]?.present && membershipTable.rows[0]?.present) {
+      await sql.query(`
+        insert into tenant_event_sequence (tenant_id, next_sequence)
+        values ('30000000-0000-0000-0000-000000000003', 7)
+      `);
+    }
+
     // Apply the rest.
     const result = await applyMigrations(sql);
     if (!result.applied.includes(latest.name)) {
@@ -246,16 +256,17 @@ export async function verifyUpgrade(): Promise<void> {
         throw new Error("membership data present before the upgrade did not survive it");
       }
     }
-    const eventSequenceTable = await sql.query<{ present: boolean }>(
+    const eventSequenceAfterUpgrade = await sql.query<{ present: boolean }>(
       "select to_regclass('public.tenant_event_sequence') is not null as present",
     );
-    if (eventSequenceTable.rows[0]?.present && membershipTable.rows[0]?.present) {
+    if (eventSequenceAfterUpgrade.rows[0]?.present && membershipTable.rows[0]?.present) {
       const sequence = await sql.query<{ next_sequence: string }>(
         `select next_sequence from tenant_event_sequence
           where tenant_id = '30000000-0000-0000-0000-000000000003'`,
       );
-      if (sequence.rows[0]?.next_sequence !== "1") {
-        throw new Error("the audit sequence was not initialized for an existing tenant");
+      const expected = eventSequenceBeforeUpgrade.rows[0]?.present ? "7" : "1";
+      if (sequence.rows[0]?.next_sequence !== expected) {
+        throw new Error("the audit sequence was not preserved or initialized during upgrade");
       }
     }
   });
@@ -291,11 +302,29 @@ export async function verifyDrift(): Promise<{ drifted: boolean; diff: string }>
   );
 
   const fromSchema = await withTempDatabase("drizzle", async (_url, sql) => {
+    // The organisation schema uses GiST equality operators for UUID columns. Production
+    // receives them from 0002_extensions; the schema-only database needs the same
+    // prerequisite before applying Drizzle's exported indexes.
+    await sql.query("create extension if not exists btree_gist");
+
     const statements = drizzleSql
       .split(/;\s*$/m)
       .map((s) => s.trim())
       .filter((s) => s.length > 0 && !s.startsWith("--"));
     for (const statement of statements) await sql.query(statement);
+
+    // Drizzle 0.45 has no exclusion-constraint primitive. Keep the unmodelled fragment
+    // here rather than weakening drift coverage: if the migration omits or changes it,
+    // the migration snapshot will still differ from this independently built schema.
+    await sql.query(`
+      alter table org_membership
+        add constraint org_membership_no_overlap exclude using gist (
+          tenant_id with =,
+          user_id with =,
+          org_unit_id with =,
+          validity with &&
+        )
+    `);
 
     // Drizzle can render ENABLE ROW LEVEL SECURITY and policies, but it has no schema
     // primitive for FORCE. The convention is universal and schema-discoverable, so apply
