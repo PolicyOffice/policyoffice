@@ -19,14 +19,6 @@ Format, parsed strictly:
 ## INV-TEN — Tenant isolation
 
 
-## INV-ORG — Organisational structure
-
-- INV-ORG-001 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-ORG-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-ORG-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-ORG-004 — V1; no schema or domain code yet (Phase 2/3)
-- INV-ORG-005 — MVP; no schema or domain code yet (Phase 2/3)
-
 ## INV-DOC — Document identity and lifecycle
 
 - INV-DOC-001 — MVP; no schema or domain code yet (Phase 2/3)
@@ -115,7 +107,6 @@ Format, parsed strictly:
 - INV-AUTH-011 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-012 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-013 — V1; no schema or domain code yet (Phase 2/3)
-- INV-AUTH-015 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-016 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-017 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-018 — V1; no schema or domain code yet (Phase 2/3)
@@ -132,7 +123,6 @@ Format, parsed strictly:
 - INV-APL-007 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-008 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-009 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-010 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APL-011 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APL-012 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-013 — V1; no schema or domain code yet (Phase 2/3)

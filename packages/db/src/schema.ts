@@ -9,6 +9,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   customType,
   foreignKey,
@@ -38,6 +39,18 @@ export const appUserStatus = pgEnum("app_user_status", ["INVITED", "ACTIVE", "DE
 export const credentialKind = pgEnum("credential_kind", ["PASSWORD", "OIDC", "SAML"]);
 export const userGroupSource = pgEnum("user_group_source", ["LOCAL", "SCIM"]);
 export const userGroupStatus = pgEnum("user_group_status", ["ACTIVE", "RETIRED"]);
+export const legalEntityStatus = pgEnum("legal_entity_status", ["ACTIVE", "DORMANT", "CLOSED"]);
+export const orgUnitStatus = pgEnum("org_unit_status", ["ACTIVE", "INACTIVE"]);
+export const jurisdictionLevel = pgEnum("jurisdiction_level", [
+  "SUPRANATIONAL",
+  "NATIONAL",
+  "REGIONAL",
+  "SECTORAL",
+]);
+export const jurisdictionStatus = pgEnum("jurisdiction_status", ["ACTIVE", "RETIRED"]);
+export const governanceBodyStatus = pgEnum("governance_body_status", ["ACTIVE", "DISSOLVED"]);
+export const governanceSeatRole = pgEnum("governance_seat_role", ["CHAIR", "SECRETARY", "MEMBER"]);
+export const spaceStatus = pgEnum("space_status", ["ACTIVE", "ARCHIVED"]);
 
 export const tenant = pgTable("tenant", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -215,6 +228,287 @@ export const groupMembership = pgTable(
       "group_membership_validity_half_open",
       sql`not isempty(${t.validity}) and lower_inc(${t.validity}) and not upper_inc(${t.validity})`,
     ),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const legalEntity = pgTable(
+  "legal_entity",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    legalName: text("legal_name").notNull(),
+    registrationNumber: text("registration_number"),
+    countryOfRegistration: text("country_of_registration"),
+    parentLegalEntityId: uuid("parent_legal_entity_id"),
+    status: legalEntityStatus("status").notNull(),
+    closedAt: instant("closed_at"),
+  },
+  (t) => [
+    primaryKey({ name: "legal_entity_pkey", columns: [t.tenantId, t.id] }),
+    unique("legal_entity_id_unique").on(t.id),
+    foreignKey({
+      name: "legal_entity_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "legal_entity_parent_fk",
+      columns: [t.tenantId, t.parentLegalEntityId],
+      foreignColumns: [t.tenantId, t.id],
+    }).onDelete("restrict"),
+    check("legal_entity_not_own_parent", sql`${t.id} <> ${t.parentLegalEntityId}`),
+    check(
+      "legal_entity_closure_consistent",
+      sql`(${t.status} = 'CLOSED' and ${t.closedAt} is not null)
+          or (${t.status} <> 'CLOSED' and ${t.closedAt} is null)`,
+    ),
+    index("legal_entity_parent_idx").on(t.tenantId, t.parentLegalEntityId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const orgUnit = pgTable(
+  "org_unit",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    name: text("name").notNull(),
+    code: text("code"),
+    legalEntityId: uuid("legal_entity_id").notNull(),
+    parentOrgUnitId: uuid("parent_org_unit_id"),
+    status: orgUnitStatus("status").notNull(),
+    closedAt: instant("closed_at"),
+  },
+  (t) => [
+    primaryKey({ name: "org_unit_pkey", columns: [t.tenantId, t.id] }),
+    unique("org_unit_id_unique").on(t.id),
+    foreignKey({
+      name: "org_unit_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "org_unit_legal_entity_fk",
+      columns: [t.tenantId, t.legalEntityId],
+      foreignColumns: [legalEntity.tenantId, legalEntity.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "org_unit_parent_fk",
+      columns: [t.tenantId, t.parentOrgUnitId],
+      foreignColumns: [t.tenantId, t.id],
+    }).onDelete("restrict"),
+    check("org_unit_not_own_parent", sql`${t.id} <> ${t.parentOrgUnitId}`),
+    check(
+      "org_unit_closure_consistent",
+      sql`(${t.status} = 'INACTIVE' and ${t.closedAt} is not null)
+          or (${t.status} <> 'INACTIVE' and ${t.closedAt} is null)`,
+    ),
+    index("org_unit_legal_entity_idx").on(t.tenantId, t.legalEntityId),
+    index("org_unit_parent_idx").on(t.tenantId, t.parentOrgUnitId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const jurisdiction = pgTable(
+  "jurisdiction",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    level: jurisdictionLevel("level").notNull(),
+    status: jurisdictionStatus("status").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "jurisdiction_pkey", columns: [t.tenantId, t.id] }),
+    unique("jurisdiction_id_unique").on(t.id),
+    foreignKey({
+      name: "jurisdiction_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    unique("jurisdiction_tenant_code_unique").on(t.tenantId, t.code),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const orgMembership = pgTable(
+  "org_membership",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    userId: uuid("user_id").notNull(),
+    legalEntityId: uuid("legal_entity_id").notNull(),
+    orgUnitId: uuid("org_unit_id").notNull(),
+    validity: tstzrange("validity").notNull(),
+    isPrimary: boolean("is_primary").default(false).notNull(),
+    jurisdictionIds: uuid("jurisdiction_ids")
+      .array()
+      .default(sql`'{}'::uuid[]`)
+      .notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "org_membership_pkey", columns: [t.tenantId, t.id] }),
+    unique("org_membership_id_unique").on(t.id),
+    foreignKey({
+      name: "org_membership_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "org_membership_user_fk",
+      columns: [t.tenantId, t.userId],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "org_membership_legal_entity_fk",
+      columns: [t.tenantId, t.legalEntityId],
+      foreignColumns: [legalEntity.tenantId, legalEntity.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "org_membership_org_unit_fk",
+      columns: [t.tenantId, t.orgUnitId],
+      foreignColumns: [orgUnit.tenantId, orgUnit.id],
+    }).onDelete("restrict"),
+    check(
+      "org_membership_validity_half_open",
+      sql`not isempty(${t.validity}) and lower_inc(${t.validity}) and not upper_inc(${t.validity})`,
+    ),
+    index("org_membership_user_validity_idx").using("gist", t.tenantId, t.userId, t.validity),
+    index("org_membership_legal_entity_idx").on(t.tenantId, t.legalEntityId),
+    index("org_membership_org_unit_idx").on(t.tenantId, t.orgUnitId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const governanceBody = pgTable(
+  "governance_body",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    legalEntityId: uuid("legal_entity_id").notNull(),
+    parentBodyId: uuid("parent_body_id"),
+    quorumRule: jsonb("quorum_rule").default({}).notNull(),
+    status: governanceBodyStatus("status").notNull(),
+    closedAt: instant("closed_at"),
+  },
+  (t) => [
+    primaryKey({ name: "governance_body_pkey", columns: [t.tenantId, t.id] }),
+    unique("governance_body_id_unique").on(t.id),
+    foreignKey({
+      name: "governance_body_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    unique("governance_body_tenant_code_unique").on(t.tenantId, t.code),
+    foreignKey({
+      name: "governance_body_legal_entity_fk",
+      columns: [t.tenantId, t.legalEntityId],
+      foreignColumns: [legalEntity.tenantId, legalEntity.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "governance_body_parent_fk",
+      columns: [t.tenantId, t.parentBodyId],
+      foreignColumns: [t.tenantId, t.id],
+    }).onDelete("restrict"),
+    check("governance_body_not_own_parent", sql`${t.id} <> ${t.parentBodyId}`),
+    check(
+      "governance_body_closure_consistent",
+      sql`(${t.status} = 'DISSOLVED' and ${t.closedAt} is not null)
+          or (${t.status} <> 'DISSOLVED' and ${t.closedAt} is null)`,
+    ),
+    index("governance_body_legal_entity_idx").on(t.tenantId, t.legalEntityId),
+    index("governance_body_parent_idx").on(t.tenantId, t.parentBodyId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const bodyMembership = pgTable(
+  "body_membership",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    bodyId: uuid("body_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    seatRole: governanceSeatRole("seat_role"),
+    validity: tstzrange("validity").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "body_membership_pkey", columns: [t.tenantId, t.id] }),
+    unique("body_membership_id_unique").on(t.id),
+    foreignKey({
+      name: "body_membership_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "body_membership_body_fk",
+      columns: [t.tenantId, t.bodyId],
+      foreignColumns: [governanceBody.tenantId, governanceBody.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "body_membership_user_fk",
+      columns: [t.tenantId, t.userId],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    check(
+      "body_membership_validity_half_open",
+      sql`not isempty(${t.validity}) and lower_inc(${t.validity}) and not upper_inc(${t.validity})`,
+    ),
+    index("body_membership_body_idx").on(t.tenantId, t.bodyId),
+    index("body_membership_user_idx").on(t.tenantId, t.userId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const space = pgTable(
+  "space",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    name: text("name").notNull(),
+    code: text("code"),
+    owningOrgUnitId: uuid("owning_org_unit_id").notNull(),
+    status: spaceStatus("status").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "space_pkey", columns: [t.tenantId, t.id] }),
+    unique("space_id_unique").on(t.id),
+    foreignKey({
+      name: "space_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "space_owning_org_unit_fk",
+      columns: [t.tenantId, t.owningOrgUnitId],
+      foreignColumns: [orgUnit.tenantId, orgUnit.id],
+    }).onDelete("restrict"),
+    index("space_owning_org_unit_idx").on(t.tenantId, t.owningOrgUnitId),
     tenantPolicy(),
   ],
 ).enableRLS();

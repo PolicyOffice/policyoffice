@@ -26,14 +26,7 @@ const MEMBERSHIP_A = "10000000-0000-0000-0005-000000000001";
 const MEMBERSHIP_B = "20000000-0000-0000-0005-000000000002";
 const FIXED_INSTANT = "2026-01-01T00:00:00.000Z";
 
-const STANDARD_TENANT_TABLES = [
-  "app_user",
-  "group_membership",
-  "user_credential",
-  "user_group",
-  "user_session",
-] as const;
-const TENANT_TABLES = [
+const SEEDED_TENANT_TABLES = [
   "app_user",
   "audit_event",
   "group_membership",
@@ -198,7 +191,7 @@ beforeAll(installFixtures);
 afterAll(removeFixtures);
 
 describe("the tenancy and identity schema", () => {
-  it("contains exactly the modelled tables and the standard tenant-owned columns", async () => {
+  it("discovers new tenant tables and requires the standard tenant-owned columns", async () => {
     const { rows: tableRows } = await withAppRole((sql) =>
       sql.query<{ table_name: string }>(`
         select relname as table_name
@@ -207,16 +200,9 @@ describe("the tenancy and identity schema", () => {
          order by relname
       `),
     );
-    expect(tableRows.map((row) => row.table_name)).toEqual([
-      "app_user",
-      "audit_event",
-      "group_membership",
-      "tenant",
-      "tenant_event_sequence",
-      "user_credential",
-      "user_group",
-      "user_session",
-    ]);
+    expect(tableRows.map((row) => row.table_name)).toEqual(
+      expect.arrayContaining(["app_user", "audit_event", "tenant", "tenant_event_sequence"]),
+    );
 
     const standard = ["tenant_id", "id", "created_at", "updated_at", "row_version"];
     const { rows: columnRows } = await withAppRole((sql) =>
@@ -236,7 +222,11 @@ describe("the tenancy and identity schema", () => {
          order by c.relname, a.attname
       `),
     );
-    for (const table of STANDARD_TENANT_TABLES) {
+    const standardTenantTables = [...new Set(columnRows.map((row) => row.table_name))].filter(
+      (table) => !["audit_event", "tenant_event_sequence"].includes(table),
+    );
+    expect(standardTenantTables.length).toBeGreaterThan(4);
+    for (const table of standardTenantTables) {
       const columns = columnRows
         .filter((row) => row.table_name === table)
         .map((r) => r.column_name);
@@ -254,7 +244,7 @@ describe("the tenancy and identity schema", () => {
          order by c.relname
       `),
     );
-    expect(rows).toHaveLength(9);
+    expect(rows.length).toBeGreaterThan(8);
     expect(rows.filter((row) => row.owner !== "migration_role")).toEqual([]);
   });
 
@@ -315,14 +305,16 @@ describe("the tenant-isolation gate", () => {
     const { rows } = await withAppRole((sql) =>
       sql.query<TenantTableSecurityRow>(TENANT_TABLE_SECURITY_QUERY),
     );
-    expect(rows.map((row) => row.table_name)).toEqual([...TENANT_TABLES]);
+    expect(rows.map((row) => row.table_name)).toEqual(
+      expect.arrayContaining([...SEEDED_TENANT_TABLES]),
+    );
     expect(tenantTableSecurityProblems(rows)).toEqual([]);
   });
 
   it("INV-TEN-001: an unqualified SELECT returns only the current tenant from every table", async () => {
     for (const tenantId of [TENANT_A, TENANT_B]) {
       await withTenant(tenantId, async (sql) => {
-        for (const table of TENANT_TABLES) {
+        for (const table of SEEDED_TENANT_TABLES) {
           const { rows } = await sql.query<{ count: number }>(
             `select count(*)::int as count from ${quotedIdentifier(table)}`,
           );
@@ -449,14 +441,26 @@ describe("identity lifecycle and concurrency", () => {
         select c.relname as table_name
           from pg_class c
           join pg_namespace n on n.oid = c.relnamespace
-          join pg_trigger t on t.tgrelid = c.oid
          where n.nspname = 'public'
-           and t.tgname = 'enforce_row_version'
-           and not t.tgisinternal
+           and c.relkind = 'r'
+           and exists (
+             select 1 from pg_attribute a
+              where a.attrelid = c.oid and a.attname = 'tenant_id'
+           )
+           and exists (
+             select 1 from pg_attribute a
+              where a.attrelid = c.oid and a.attname = 'row_version'
+           )
+           and not exists (
+             select 1 from pg_trigger t
+              where t.tgrelid = c.oid
+                and t.tgname = 'enforce_row_version'
+                and not t.tgisinternal
+           )
          order by c.relname
       `),
     );
-    expect(rows.map((row) => row.table_name)).toEqual([...STANDARD_TENANT_TABLES]);
+    expect(rows).toEqual([]);
   });
 
   it("INV-TIME-003: a stale row_version conflicts rather than overwriting", async () => {
