@@ -170,12 +170,20 @@ So the two moments are separated.
    version already claims an instant
 3. Close the predecessor's interval: effective_until = successor's effective_from
 4. The exclusion constraint accepts or rejects the whole thing
-5. Enqueue version.published on the outbox                       — INV-AUD-004
+5. Insert version.published into the ledger, in this transaction — INV-AUD-004
 6. Commit
 ```
 
 After this commits the schedule is coherent for all time: no gap, no overlap, nothing left
 for a job to get right. **INV-EFF-003's atomicity is satisfied here**, not at midnight.
+
+> **[corrected 2026-09-02]** Both sequences above said *"enqueue … on the outbox"*. There
+> is no outbox. `ADR-0006` decides that the ledger is written in the same transaction and
+> that no second table exists, and `data-model.md` defines none. The wording was loose
+> rather than a different decision — INV-AUD-004 offers same-transaction emission *or* an
+> outbox, and this architecture has always taken the first branch, which is the stronger of
+> the two. It is corrected here because the loose reading already cost a Decision Request
+> (#47) against POL-007, and four document-spine tickets cite these sequences.
 
 **At the effective instant — bookkeeping and audit:**
 
@@ -185,8 +193,8 @@ for a job to get right. **INV-EFF-003's atomicity is satisfied here**, not at mi
       withdrawn or cancelled?  → no-op, commit                   — INV-EFF-008
       already transitioned?    → no-op, commit                   — INV-EFF-007
 3. lifecycle_state: predecessor → SUPERSEDED, successor → EFFECTIVE
-4. Enqueue version.superseded and version.effective              — INV-AUD-004
-5. If the variant now has no version holding the instant, enqueue
+4. Insert version.superseded and version.effective into the ledger — INV-AUD-004
+5. If the variant now has no version holding the instant, insert
    governance.policy_gap                                          — INV-EFF-005
 6. Commit
 ```

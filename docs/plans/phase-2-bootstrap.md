@@ -115,11 +115,31 @@ Both ADRs are amended and `data-model.md` is corrected.
       drift checks. No down-migration path exists
 - [ ] **First migrations** — tenancy and identity are done (POL-006, #34), on a chain that
       can now be applied by its documented command (POL-010, #41). Remaining: the audit
-      ledger (POL-007, #35) and organisation (POL-008, #36). **The document spine is not yet
-      ticketed** — `document`, `document_variant`, `document_version` with the INV-EFF-002
-      exclusion constraint and the INV-VER-003/007 immutability triggers, then
-      `content_revision` and attachments. It is the densest Tier 2 work in the product and
-      wants at least two tickets rather than one
+      ledger (POL-007, #35) and organisation (POL-008, #36)
+- [ ] **The document spine** — **ticketed 2026-09-02**, once #34 had landed and shown how
+      the conventions hold up. It wanted more than two tickets; it got eight, every one
+      Tier 2:
+
+  | Ticket | What | Phase |
+  |---|---|---|
+  | POL-011 (#49) | `configuration_version`, `document_type`, `information_classification` — the three foreign keys `document_version` cannot be `not null` without | 2 |
+  | POL-012 (#50) | `document` and `document_variant`, and the one-baseline guarantee | 2 |
+  | POL-013 (#51) | `document_version`, the INV-EFF-002 exclusion constraint, the INV-VER-003/007 immutability triggers | 2 |
+  | POL-014 (#52) | `content_revision` and `content_attachment` | 2 |
+  | POL-015 (#53) | Canonicalisation and the content digest — pure, framework-free, **no dependencies** | 3 |
+  | POL-016 (#54) | The publication transaction, where INV-EFF-003's atomicity actually lives | 3 |
+  | POL-017 (#55) | The effective-instant transition, which only narrates what publication decided | 3 |
+  | POL-018 (#56) | `applicability_rule` and `alignment_obligation` — tables only; resolution is V1 | 2 |
+
+  Three forward references are resolved across the chain rather than designed around, each
+  recorded in both the ticket that creates the column and the ticket that adds the
+  constraint: `document_type.mandated_by_document_version_id` (POL-011 → POL-013),
+  `document_version.approved_revision_id` (POL-013 → POL-014), and INV-DOC-008's
+  retirement trigger (POL-012 → POL-013).
+
+  POL-015 is the only one of the eight with no dependency, and it is deliberately separated
+  from the tables that store its output: a pure function over values earns property-based
+  tests that are far harder to write against a database.
 - [ ] **Playwright** — booted in the runner, no deployed environment
 - [x] **Repository governance** — CODEOWNERS carries the Tier 2 paths, the issue templates
       exist, and the branch ruleset is **applied** (2026-08-31): thirteen required checks,
