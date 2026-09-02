@@ -269,6 +269,38 @@ separates `ADMIN` from `SET`.** `CREATEROLE` confers `ADMIN` on roles it creates
 right to `SET ROLE` to them, so `REASSIGN OWNED` and dropping a schema owned by another role
 require an explicit `GRANT … WITH SET TRUE` first.
 
+> **Amendment, 2026-09-01 — ownership stops at the extension boundary.** Found while
+> implementing POL-010; the decision is recorded in issue #43.
+>
+> The migration chain runs on an **administrative** connection which immediately
+> `SET ROLE`s to `migration_role`, so every object the chain defines is owned by a
+> non-superuser and `FORCE ROW LEVEL SECURITY` binds it. That is centralised in the runner
+> rather than repeated per migration, so a migration author cannot forget it.
+>
+> It does not extend to the internals of a trusted extension. `btree_gist` is trusted, and
+> PostgreSQL runs a trusted extension's script as the **bootstrap superuser** even when a
+> non-superuser installs it. Its 215 member functions and 12 types are therefore owned by
+> that superuser, `migration_role` cannot reassign them, and on Neon's non-superuser
+> administrative path nothing can.
+>
+> Rewriting those owners locally was rejected: it works only through a real superuser, so
+> it would make local verification stronger than the deployable system — a check reporting
+> green about something production cannot satisfy.
+>
+> **What is asserted instead**, and it is stronger than the ownership proxy it replaced:
+>
+> 1. no table with row-level security is owned by a role holding `rolsuper` or
+>    `rolbypassrls` — INV-TEN-001's mechanism stated directly, which also catches a table
+>    owned by some *other* bypassing role;
+> 2. every object the chain defines is owned by `migration_role`, excluding extension
+>    members (`pg_depend.deptype = 'e'`);
+> 3. **extension members include zero tables** — asserted, not assumed, so the exclusion
+>    fails loudly if a future extension ever ships one.
+>
+> The connection is administrative by necessity rather than convenience: a migration that
+> creates roles cannot run as one of them. Connecting as `migration_role` is refused with
+> an explicit error before any migration executes.
+
 ### Still to verify
 
 - Restore timing from a Neon backup, measured once, so the disaster-recovery claim in
