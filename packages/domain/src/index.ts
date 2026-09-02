@@ -25,3 +25,26 @@
 
 /** Marker for the domain module. Replaced by real exports as the model lands. */
 export const DOMAIN_PACKAGE = "@policyoffice/domain" as const;
+
+export {
+  AUDIT_ACTOR_TYPES,
+  AUDIT_EVENT_SCHEMAS,
+  AUDIT_EVENT_TYPES,
+  AUDIT_OUTCOMES,
+  AUDIT_SOURCE_CHANNELS,
+  IMPLEMENTED_AUDIT_EVENT_TYPES,
+  InvalidAuditEventError,
+  emitAuditEvent,
+  emitAuditEvents,
+  validateAuditEvent,
+  type AuditActorType,
+  type AuditEventInput,
+  type AuditEventSchema,
+  type AuditEventType,
+  type AuditOutcome,
+  type AuditSourceChannel,
+  type AuditTransaction,
+  type EmittedAuditEvent,
+  type SafeAuditSnapshot,
+  type SafeAuditValue,
+} from "./audit.js";

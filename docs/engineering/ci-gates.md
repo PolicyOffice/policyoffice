@@ -28,7 +28,7 @@ gate — see `CONTRIBUTING.md`.
 | migration validation: fresh **and** upgrade | **live** | `pr.yml` → `migrations`, plus the drift check |
 | tenant-isolation suite | **live** | `pr.yml` → `tenant-isolation`, schema-discovered forced RLS and cross-tenant negatives |
 | authorization matrix | *pending* | no authorization evaluator exists |
-| audit-event completeness | *pending* | no events are emitted yet |
+| audit-event completeness | **live** | `pr.yml` → `audit-events`; catalogue, versioned registry and the sole insertion path stay in step |
 | production build | **live** | `pr.yml` → `build` |
 | dependency review | **live** | `pr.yml` → `dependency-review` |
 | secret scanning + push protection | **live** | repository setting, enabled 2026-08-30 |

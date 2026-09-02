@@ -246,6 +246,18 @@ export async function verifyUpgrade(): Promise<void> {
         throw new Error("membership data present before the upgrade did not survive it");
       }
     }
+    const eventSequenceTable = await sql.query<{ present: boolean }>(
+      "select to_regclass('public.tenant_event_sequence') is not null as present",
+    );
+    if (eventSequenceTable.rows[0]?.present && membershipTable.rows[0]?.present) {
+      const sequence = await sql.query<{ next_sequence: string }>(
+        `select next_sequence from tenant_event_sequence
+          where tenant_id = '30000000-0000-0000-0000-000000000003'`,
+      );
+      if (sequence.rows[0]?.next_sequence !== "1") {
+        throw new Error("the audit sequence was not initialized for an existing tenant");
+      }
+    }
   });
 }
 

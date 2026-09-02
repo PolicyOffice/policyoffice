@@ -1,5 +1,7 @@
 export {
   withAppRole,
+  withRetentionRole,
+  withRetentionTenant,
   withTenant,
   withoutTenant,
   withMigrationRole__PRIVILEGED,

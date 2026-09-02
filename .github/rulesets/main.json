@@ -32,6 +32,7 @@
           { "context": "property-based tests" },
           { "context": "integration tests" },
           { "context": "tenant-isolation suite" },
+          { "context": "audit-event completeness" },
           { "context": "migration validation" },
           { "context": "production build" },
           { "context": "dependency review" },

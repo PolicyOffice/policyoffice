@@ -67,7 +67,6 @@ Format, parsed strictly:
 - INV-EFF-004 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-EFF-005 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-EFF-006 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-EFF-007 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-EFF-008 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-EFF-009 — V1; no schema or domain code yet (Phase 2/3)
 
@@ -165,15 +164,7 @@ Format, parsed strictly:
 
 ## INV-AUD — Audit
 
-- INV-AUD-001 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUD-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUD-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUD-004 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUD-005 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUD-006 — V1; no schema or domain code yet (Phase 2/3)
-- INV-AUD-007 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUD-008 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUD-009 — MVP; no schema or domain code yet (Phase 2/3)
 
 ## INV-EVD — Evidence
 

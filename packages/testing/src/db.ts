@@ -39,6 +39,11 @@ const MIGRATION_URL = () =>
     "TEST_DATABASE_URL_MIGRATION",
     "postgres://migration_role:migration_role@localhost:5432/policyoffice",
   );
+const RETENTION_URL = () =>
+  url(
+    "TEST_DATABASE_URL_RETENTION",
+    "postgres://retention_role:retention_role@localhost:5432/policyoffice",
+  );
 const SUPERUSER_URL = () =>
   url("TEST_DATABASE_URL_SUPERUSER", "postgres://postgres:postgres@localhost:5432/policyoffice");
 
@@ -94,6 +99,11 @@ export async function withAppRole<T>(fn: (sql: Sql) => Promise<T>): Promise<T> {
   return using(await connect(APP_URL(), "app_role"), fn);
 }
 
+/** The disposal-only role. It may remove eligible audit rows but can never append one. */
+export async function withRetentionRole<T>(fn: (sql: Sql) => Promise<T>): Promise<T> {
+  return using(await connect(RETENTION_URL(), "retention_role"), fn);
+}
+
 /**
  * `app_role`, inside a transaction, with the tenant context set for its duration.
  *
@@ -106,6 +116,22 @@ export async function withAppRole<T>(fn: (sql: Sql) => Promise<T>): Promise<T> {
  */
 export async function withTenant<T>(tenantId: string, fn: (sql: Sql) => Promise<T>): Promise<T> {
   return withAppRole(async (sql) => {
+    await sql.query("begin");
+    try {
+      await sql.query("select set_config('app.tenant_id', $1, true)", [tenantId]);
+      return await fn(sql);
+    } finally {
+      await sql.query("rollback");
+    }
+  });
+}
+
+/** retention_role with tenant context, always rolled back like the application helper. */
+export async function withRetentionTenant<T>(
+  tenantId: string,
+  fn: (sql: Sql) => Promise<T>,
+): Promise<T> {
+  return withRetentionRole(async (sql) => {
     await sql.query("begin");
     try {
       await sql.query("select set_config('app.tenant_id', $1, true)", [tenantId]);

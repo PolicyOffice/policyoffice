@@ -26,9 +26,18 @@ const MEMBERSHIP_A = "10000000-0000-0000-0005-000000000001";
 const MEMBERSHIP_B = "20000000-0000-0000-0005-000000000002";
 const FIXED_INSTANT = "2026-01-01T00:00:00.000Z";
 
-const TENANT_TABLES = [
+const STANDARD_TENANT_TABLES = [
   "app_user",
   "group_membership",
+  "user_credential",
+  "user_group",
+  "user_session",
+] as const;
+const TENANT_TABLES = [
+  "app_user",
+  "audit_event",
+  "group_membership",
+  "tenant_event_sequence",
   "user_credential",
   "user_group",
   "user_session",
@@ -48,6 +57,8 @@ async function clearTenant(sql: Sql, tenantId: string): Promise<void> {
   await sql.query("begin");
   try {
     await sql.query("select set_config('app.tenant_id', $1, true)", [tenantId]);
+    await sql.query("delete from audit_event where tenant_id = $1", [tenantId]);
+    await sql.query("delete from tenant_event_sequence where tenant_id = $1", [tenantId]);
     await sql.query("delete from group_membership where tenant_id = $1", [tenantId]);
     await sql.query("delete from user_session where tenant_id = $1", [tenantId]);
     await sql.query("delete from user_credential where tenant_id = $1", [tenantId]);
@@ -121,6 +132,18 @@ async function seedTenant(sql: Sql, fixture: FixtureIds): Promise<void> {
                tstzrange('2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', '[)'))`,
       [fixture.tenantId, fixture.membershipId, FIXED_INSTANT, fixture.groupId, fixture.userId],
     );
+    await sql.query("insert into tenant_event_sequence (tenant_id, next_sequence) values ($1, 2)", [
+      fixture.tenantId,
+    ]);
+    await sql.query(
+      `insert into audit_event (
+         tenant_id, sequence, event_type, event_schema_version, occurred_at, actor_type,
+         actor_id, subject_type, subject_id, action, outcome, request_id, correlation_id,
+         source_channel, configuration_version_id, dedupe_key
+       ) values ($1, 1, 'user.provisioned', 1, $3, 'SYSTEM', null, 'USER', $2,
+                 'PROVISION', 'SUCCESS', $2, $2, 'IMPORT', $2, $4)`,
+      [fixture.tenantId, fixture.userId, FIXED_INSTANT, `user.provisioned:${fixture.userId}`],
+    );
     await sql.query("commit");
   } catch (error) {
     await sql.query("rollback");
@@ -186,8 +209,10 @@ describe("the tenancy and identity schema", () => {
     );
     expect(tableRows.map((row) => row.table_name)).toEqual([
       "app_user",
+      "audit_event",
       "group_membership",
       "tenant",
+      "tenant_event_sequence",
       "user_credential",
       "user_group",
       "user_session",
@@ -211,7 +236,7 @@ describe("the tenancy and identity schema", () => {
          order by c.relname, a.attname
       `),
     );
-    for (const table of TENANT_TABLES) {
+    for (const table of STANDARD_TENANT_TABLES) {
       const columns = columnRows
         .filter((row) => row.table_name === table)
         .map((r) => r.column_name);
@@ -229,7 +254,7 @@ describe("the tenancy and identity schema", () => {
          order by c.relname
       `),
     );
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(9);
     expect(rows.filter((row) => row.owner !== "migration_role")).toEqual([]);
   });
 
@@ -431,7 +456,7 @@ describe("identity lifecycle and concurrency", () => {
          order by c.relname
       `),
     );
-    expect(rows.map((row) => row.table_name)).toEqual([...TENANT_TABLES]);
+    expect(rows.map((row) => row.table_name)).toEqual([...STANDARD_TENANT_TABLES]);
   });
 
   it("INV-TIME-003: a stale row_version conflicts rather than overwriting", async () => {

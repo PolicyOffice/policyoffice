@@ -627,7 +627,10 @@ create table audit_event (
   primary key (tenant_id, sequence),
   unique (event_id),
   unique (tenant_id, dedupe_key),                    -- INV-AUD-001, INV-EFF-007
-  check (pg_column_size(safe_before) + pg_column_size(safe_after) < 8192)
+  check (
+    coalesce(pg_column_size(safe_before), 0)
+      + coalesce(pg_column_size(safe_after), 0) < 8192
+  )
 );
 
 -- INV-AUD-002: append-only through every application surface.
@@ -635,6 +638,10 @@ create table audit_event (
 -- configured schedule and never otherwise (ADR-0006, ADR-0009).
 revoke update, delete, truncate on audit_event from app_role;
 ```
+
+> **Corrected 2026-09-02.** The size check coalesces each absent snapshot to zero.
+> PostgreSQL otherwise evaluates the sum to `null` when either side is absent, and a
+> `check` accepts that unknown result — leaving the ordinary one-snapshot case unbounded.
 
 The envelope fields INV-AUD-005 requires are columns, not `jsonb` keys, so a missing one
 is a constraint violation rather than a discovery during an audit. Family-specific
