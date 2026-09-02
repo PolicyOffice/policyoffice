@@ -122,29 +122,54 @@ export const AUDIT_EVENT_TYPES = [
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
-/** No governance transition emits yet; #35 builds the contract and the sole write path. */
-export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [];
+/** Production transitions that currently emit through the sole write path. */
+export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = ["configuration.changed"];
 
 export interface AuditEventSchema {
   readonly safeBeforeKeys: readonly string[];
   readonly safeAfterKeys: readonly string[];
+  readonly requiredSafeBeforeKeys: readonly string[];
+  readonly requiredSafeAfterKeys: readonly string[];
+  readonly safeAfterRequired: boolean;
 }
 
 const ENVELOPE_ONLY_SCHEMA: AuditEventSchema = Object.freeze({
   safeBeforeKeys: Object.freeze([]),
   safeAfterKeys: Object.freeze([]),
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: Object.freeze([]),
+  safeAfterRequired: false,
+});
+
+const CONFIGURATION_SNAPSHOT_KEYS = Object.freeze([
+  "configurationVersionId",
+  "effectiveFrom",
+  "payloadDigest",
+  "sequence",
+  "weakening",
+]);
+
+const CONFIGURATION_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: CONFIGURATION_SNAPSHOT_KEYS,
+  safeAfterKeys: CONFIGURATION_SNAPSHOT_KEYS,
+  requiredSafeBeforeKeys: CONFIGURATION_SNAPSHOT_KEYS,
+  requiredSafeAfterKeys: CONFIGURATION_SNAPSHOT_KEYS,
+  safeAfterRequired: true,
 });
 
 /**
- * INV-AUD-008: every permanent event name has a versioned schema entry. Version 1 starts
- * with the shared envelope only. A ticket that adds family-specific snapshots adds a new
- * version and leaves version 1 interpretable forever; arbitrary metadata is never accepted.
+ * INV-AUD-008: placeholder schemas are finalized when an event type first becomes
+ * implemented. From that point onward its shape is published and any change adds a new
+ * version, leaving every emitted version interpretable forever.
  */
-export const AUDIT_EVENT_SCHEMAS = Object.freeze(
-  Object.fromEntries(
-    AUDIT_EVENT_TYPES.map((eventType) => [eventType, Object.freeze({ 1: ENVELOPE_ONLY_SCHEMA })]),
-  ),
-) as unknown as Readonly<Record<AuditEventType, Readonly<Record<number, AuditEventSchema>>>>;
+const auditEventSchemas = Object.fromEntries(
+  AUDIT_EVENT_TYPES.map((eventType) => [eventType, Object.freeze({ 1: ENVELOPE_ONLY_SCHEMA })]),
+) as unknown as Record<AuditEventType, Readonly<Record<number, AuditEventSchema>>>;
+auditEventSchemas["configuration.changed"] = Object.freeze({
+  1: CONFIGURATION_CHANGED_SCHEMA_V1,
+});
+
+export const AUDIT_EVENT_SCHEMAS = Object.freeze(auditEventSchemas);
 
 export const AUDIT_ACTOR_TYPES = ["USER", "BODY", "API_CLIENT", "SYSTEM"] as const;
 export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];
@@ -234,8 +259,13 @@ function snapshot(
   value: unknown,
   field: string,
   allowedKeys: readonly string[],
+  requiredKeys: readonly string[],
+  required: boolean,
 ): asserts value is SafeAuditSnapshot | null | undefined {
-  if (value === undefined || value === null) return;
+  if (value === undefined || value === null) {
+    if (required) throw new InvalidAuditEventError(`${field} is required`);
+    return;
+  }
   if (!record(value)) throw new InvalidAuditEventError(`${field} must be an object`);
 
   const allowed = new Set(allowedKeys);
@@ -245,6 +275,53 @@ function snapshot(
     }
     if (item !== null && !["string", "number", "boolean"].includes(typeof item)) {
       throw new InvalidAuditEventError(`${field}.${key} must be a scalar`);
+    }
+  }
+  for (const key of requiredKeys) {
+    if (!Object.hasOwn(value, key)) {
+      throw new InvalidAuditEventError(`${field}.${key} is required by this event schema`);
+    }
+  }
+}
+
+function validateConfigurationChangedSnapshots(input: Record<string, unknown>): void {
+  if (input.eventType !== "configuration.changed" || !record(input.safeAfter)) return;
+
+  requiredUuid(input.safeAfter.configurationVersionId, "safeAfter.configurationVersionId");
+  requiredString(input.safeAfter.effectiveFrom, "safeAfter.effectiveFrom");
+  if (Number.isNaN(Date.parse(input.safeAfter.effectiveFrom))) {
+    throw new InvalidAuditEventError("safeAfter.effectiveFrom must be an instant");
+  }
+  requiredString(input.safeAfter.payloadDigest, "safeAfter.payloadDigest");
+  if (typeof input.safeAfter.weakening !== "boolean") {
+    throw new InvalidAuditEventError("safeAfter.weakening must be a boolean");
+  }
+  const afterSequence = input.safeAfter.sequence;
+  if (!Number.isInteger(afterSequence) || Number(afterSequence) < 1) {
+    throw new InvalidAuditEventError("safeAfter.sequence must be a positive integer");
+  }
+  if (afterSequence === 1 && input.safeBefore !== undefined && input.safeBefore !== null) {
+    throw new InvalidAuditEventError("safeBefore must be null for the first configuration version");
+  }
+  if (Number(afterSequence) > 1) {
+    if (!record(input.safeBefore)) {
+      throw new InvalidAuditEventError(
+        "safeBefore is required after the first configuration version",
+      );
+    }
+    requiredUuid(input.safeBefore.configurationVersionId, "safeBefore.configurationVersionId");
+    requiredString(input.safeBefore.effectiveFrom, "safeBefore.effectiveFrom");
+    if (Number.isNaN(Date.parse(input.safeBefore.effectiveFrom))) {
+      throw new InvalidAuditEventError("safeBefore.effectiveFrom must be an instant");
+    }
+    requiredString(input.safeBefore.payloadDigest, "safeBefore.payloadDigest");
+    if (typeof input.safeBefore.weakening !== "boolean") {
+      throw new InvalidAuditEventError("safeBefore.weakening must be a boolean");
+    }
+    if (input.safeBefore.sequence !== Number(afterSequence) - 1) {
+      throw new InvalidAuditEventError(
+        "safeBefore.sequence must immediately precede safeAfter.sequence",
+      );
     }
   }
 }
@@ -305,8 +382,21 @@ export function validateAuditEvent(input: unknown): asserts input is AuditEventI
   if (input.dedupeKey !== undefined && input.dedupeKey !== null) {
     requiredString(input.dedupeKey, "dedupeKey");
   }
-  snapshot(input.safeBefore, "safeBefore", schema.safeBeforeKeys);
-  snapshot(input.safeAfter, "safeAfter", schema.safeAfterKeys);
+  snapshot(
+    input.safeBefore,
+    "safeBefore",
+    schema.safeBeforeKeys,
+    schema.requiredSafeBeforeKeys,
+    false,
+  );
+  snapshot(
+    input.safeAfter,
+    "safeAfter",
+    schema.safeAfterKeys,
+    schema.requiredSafeAfterKeys,
+    schema.safeAfterRequired,
+  );
+  validateConfigurationChangedSnapshots(input);
 }
 
 interface StoredAuditEventRow extends Record<string, unknown> {

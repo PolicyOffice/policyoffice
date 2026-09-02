@@ -64,6 +64,34 @@ describe("the audit event envelope", () => {
       /not declared/i,
     );
   });
+
+  it("INV-CFG-004: defines the first published configuration snapshot contract as v1", () => {
+    const configurationEvent = event({
+      eventType: "configuration.changed",
+      eventSchemaVersion: 1,
+      safeBefore: null,
+      safeAfter: {
+        configurationVersionId: "10000000-0000-0000-0004-000000000001",
+        sequence: 1,
+        effectiveFrom: "2027-01-15T09:42:17.231Z",
+        payloadDigest: "sha256:configuration",
+        weakening: false,
+      },
+    });
+    expect(() => validateAuditEvent(configurationEvent)).not.toThrow();
+    expect(() => validateAuditEvent({ ...configurationEvent, eventSchemaVersion: 2 })).toThrow(
+      /not registered/i,
+    );
+    expect(() => validateAuditEvent({ ...configurationEvent, safeAfter: null })).toThrow(
+      /safeAfter is required/i,
+    );
+    expect(() =>
+      validateAuditEvent({
+        ...configurationEvent,
+        safeAfter: { ...configurationEvent.safeAfter, sequence: 2 },
+      }),
+    ).toThrow(/safeBefore is required/i);
+  });
 });
 
 describe("the typed audit emitter", () => {

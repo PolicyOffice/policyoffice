@@ -56,6 +56,7 @@ async function clearTenant(sql: Sql, tenantId: string): Promise<void> {
     await sql.query("delete from user_session where tenant_id = $1", [tenantId]);
     await sql.query("delete from user_credential where tenant_id = $1", [tenantId]);
     await sql.query("delete from user_group where tenant_id = $1", [tenantId]);
+    await sql.query("delete from configuration_version where tenant_id = $1", [tenantId]);
     await sql.query("delete from app_user where tenant_id = $1", [tenantId]);
     await sql.query("commit");
   } catch (error) {
@@ -124,6 +125,13 @@ async function seedTenant(sql: Sql, fixture: FixtureIds): Promise<void> {
        values ($1, $2, $3, $3, $4, $5,
                tstzrange('2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', '[)'))`,
       [fixture.tenantId, fixture.membershipId, FIXED_INSTANT, fixture.groupId, fixture.userId],
+    );
+    await sql.query(
+      `insert into configuration_version (
+         tenant_id, id, sequence, effective_from, changed_by, change_reason,
+         weakening, payload_digest
+       ) values ($1, $2, 1, $3, $2, 'Tenant fixture', false, $4)`,
+      [fixture.tenantId, fixture.userId, FIXED_INSTANT, `sha256:${fixture.label.toLowerCase()}`],
     );
     await sql.query("insert into tenant_event_sequence (tenant_id, next_sequence) values ($1, 2)", [
       fixture.tenantId,

@@ -51,6 +51,11 @@ export const jurisdictionStatus = pgEnum("jurisdiction_status", ["ACTIVE", "RETI
 export const governanceBodyStatus = pgEnum("governance_body_status", ["ACTIVE", "DISSOLVED"]);
 export const governanceSeatRole = pgEnum("governance_seat_role", ["CHAIR", "SECRETARY", "MEMBER"]);
 export const spaceStatus = pgEnum("space_status", ["ACTIVE", "ARCHIVED"]);
+export const documentTypeStatus = pgEnum("document_type_status", ["ACTIVE", "RETIRED"]);
+export const informationClassificationStatus = pgEnum("information_classification_status", [
+  "ACTIVE",
+  "RETIRED",
+]);
 
 export const tenant = pgTable("tenant", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -513,6 +518,104 @@ export const space = pgTable(
   ],
 ).enableRLS();
 
+export const configurationVersion = pgTable(
+  "configuration_version",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    sequence: integer("sequence").notNull(),
+    effectiveFrom: instant("effective_from").notNull(),
+    changedBy: uuid("changed_by").notNull(),
+    changeReason: text("change_reason").notNull(),
+    weakening: boolean("weakening").default(false).notNull(),
+    payloadDigest: text("payload_digest").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "configuration_version_pkey", columns: [t.tenantId, t.id] }),
+    unique("configuration_version_id_unique").on(t.id),
+    foreignKey({
+      name: "configuration_version_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "configuration_version_changed_by_fk",
+      columns: [t.tenantId, t.changedBy],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    unique("configuration_version_tenant_sequence_unique").on(t.tenantId, t.sequence),
+    check("configuration_version_sequence_positive", sql`${t.sequence} >= 1`),
+    index("configuration_version_changed_by_idx").on(t.tenantId, t.changedBy),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const documentType = pgTable(
+  "document_type",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    rank: integer("rank").notNull(),
+    mandatedAuthority: jsonb("mandated_authority").notNull(),
+    defaultWorkflowTemplateId: uuid("default_workflow_template_id"),
+    defaultReviewRule: jsonb("default_review_rule").notNull(),
+    requiresAttestationByDefault: boolean("requires_attestation_by_default")
+      .default(false)
+      .notNull(),
+    mandatedByDocumentVersionId: uuid("mandated_by_document_version_id"),
+    status: documentTypeStatus("status").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "document_type_pkey", columns: [t.tenantId, t.id] }),
+    unique("document_type_id_unique").on(t.id),
+    foreignKey({
+      name: "document_type_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    unique("document_type_tenant_code_unique").on(t.tenantId, t.code),
+    unique("document_type_tenant_rank_unique").on(t.tenantId, t.rank),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const informationClassification = pgTable(
+  "information_classification",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    rank: integer("rank").notNull(),
+    handlingInstructions: text("handling_instructions").notNull(),
+    externallyDisclosable: boolean("externally_disclosable").notNull(),
+    status: informationClassificationStatus("status").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "information_classification_pkey", columns: [t.tenantId, t.id] }),
+    unique("information_classification_id_unique").on(t.id),
+    foreignKey({
+      name: "information_classification_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    unique("information_classification_tenant_code_unique").on(t.tenantId, t.code),
+    unique("information_classification_tenant_rank_unique").on(t.tenantId, t.rank),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
 export const tenantEventSequence = pgTable(
   "tenant_event_sequence",
   {
@@ -572,6 +675,11 @@ export const auditEvent = pgTable(
       columns: [t.tenantId],
       foreignColumns: [tenant.id],
     }).onDelete("restrict"),
+    foreignKey({
+      name: "audit_event_configuration_version_fk",
+      columns: [t.tenantId, t.configurationVersionId],
+      foreignColumns: [configurationVersion.tenantId, configurationVersion.id],
+    }).onDelete("restrict"),
     unique("audit_event_dedupe_unique").on(t.tenantId, t.dedupeKey),
     check("audit_event_sequence_positive", sql`${t.sequence} >= 1`),
     check("audit_event_type_name", sql`${t.eventType} ~ '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$'`),
@@ -589,6 +697,7 @@ export const auditEvent = pgTable(
     ),
     index("audit_event_document_sequence_idx").on(t.tenantId, t.documentId, t.sequence),
     index("audit_event_correlation_idx").on(t.tenantId, t.correlationId),
+    index("audit_event_configuration_version_idx").on(t.tenantId, t.configurationVersionId),
     tenantPolicy(),
   ],
 ).enableRLS();

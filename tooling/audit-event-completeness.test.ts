@@ -100,15 +100,20 @@ function auditWritePathProblems(sources: readonly ProductionSource[]): string[] 
 }
 
 describe("audit-event completeness", () => {
-  it("INV-AUD-008: every catalogued event has exactly one typed, versioned registry entry", () => {
+  it("INV-AUD-008: every catalogued event has a typed, gapless version registry", () => {
     const documented = documentedEventTypes();
     expect(documented.length).toBeGreaterThan(100);
     expect([...AUDIT_EVENT_TYPES].sort()).toEqual(documented);
     expect(Object.keys(AUDIT_EVENT_SCHEMAS).sort()).toEqual(documented);
 
     for (const eventType of AUDIT_EVENT_TYPES) {
-      const versions = Object.keys(AUDIT_EVENT_SCHEMAS[eventType]).map(Number);
-      expect(versions, eventType).toEqual([1]);
+      const versions = Object.keys(AUDIT_EVENT_SCHEMAS[eventType])
+        .map(Number)
+        .sort((left, right) => left - right);
+      expect(versions.length, eventType).toBeGreaterThan(0);
+      expect(versions, eventType).toEqual(
+        Array.from({ length: versions.at(-1) ?? 0 }, (_, index) => index + 1),
+      );
     }
   });
 
