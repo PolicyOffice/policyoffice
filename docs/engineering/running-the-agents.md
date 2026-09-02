@@ -222,6 +222,27 @@ code.
 Revisit Actions-triggered automation once tickets are reliably good enough that unattended
 implementation has become boring.
 
+## A review loop only helps while the implementer is running
+
+Claude can be put on a timer to review whatever appears — `/loop 20m review any open PRs`.
+It is genuinely useful, and it has one precondition that is easy to miss: **Codex is
+session-bound too.** It does not run as a daemon and does not start the next ticket by
+itself.
+
+Tried on 2026-09-01 while the founder was out. Codex finished its queue, the loop then woke
+three times to an empty backlog, and it was cancelled. Nothing broke; it simply spent quota
+confirming that nothing had changed.
+
+So if you want work happening unattended:
+
+- start Codex **first**, with enough queued to outlast the time you are away — name several
+  issues explicitly rather than relying on the selection rule to keep finding more;
+- then start the review loop;
+- expect it to stop being useful the moment Codex's session ends.
+
+With a short queue, one review pass when you return is cheaper than polling. The loop earns
+its cost when there is a real stream of pull requests, not when there might be.
+
 ## Managing context
 
 Context is re-sent on every turn, so a long conversation costs more per message than a

@@ -113,19 +113,13 @@ Both ADRs are amended and `data-model.md` is corrected.
 - [x] **Migration harness** — forward-only SQL with per-file checksums, the three roles,
       `btree_gist`, non-transactional migrations, session timeouts, and the fresh/upgrade/
       drift checks. No down-migration path exists
-- [ ] **First migrations** — tenancy and identity are implemented by POL-006 (#34); POL-007
-      the audit ledger (#35) and POL-008 organisation (#36) remain. The **document spine**
-      is deliberately not yet ticketed: it carries INV-VER-*, INV-EFF-* and the
-      immutability triggers — the densest Tier 2 work in the product — and is better written
-      once #34 has landed and shown how the conventions hold up
-- [x] **Test harness** — Vitest with unit/integration/property projects, `fast-check`, and
-      the invariant coverage gate. Connects as `app_role`; a test citing a tenancy or
-      authorization invariant while holding a privileged connection fails
-- [x] **CI workflows** — the gate list, blocking on every pull request, with every gate's
-      status recorded in `docs/engineering/ci-gates.md`. Gates whose subject does not exist
-      yet are listed there as pending rather than created as jobs that pass trivially. Two
-      steps need repository-admin scope and are the founder's to run: the branch ruleset and
-      secret-scanning push protection
+- [ ] **First migrations** — tenancy and identity are done (POL-006, #34), on a chain that
+      can now be applied by its documented command (POL-010, #41). Remaining: the audit
+      ledger (POL-007, #35) and organisation (POL-008, #36). **The document spine is not yet
+      ticketed** — `document`, `document_variant`, `document_version` with the INV-EFF-002
+      exclusion constraint and the INV-VER-003/007 immutability triggers, then
+      `content_revision` and attachments. It is the densest Tier 2 work in the product and
+      wants at least two tickets rather than one
 - [ ] **Playwright** — booted in the runner, no deployed environment
 - [x] **Repository governance** — CODEOWNERS carries the Tier 2 paths, the issue templates
       exist, and the branch ruleset is **applied** (2026-08-31): thirteen required checks,
