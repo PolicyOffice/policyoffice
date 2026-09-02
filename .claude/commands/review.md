@@ -38,7 +38,32 @@ would unblock your own merge and defeat the only condition a machine cannot chec
 If a PR contradicts a rule in `docs/domain/`, do not suggest a workaround — say so plainly
 and add the `decision-required` label.
 
-Report a one-line verdict per PR when done, and hand the operator both commands they need:
-the `Reviewed-commit` comment if you are approving, and `gh pr merge <n> --squash
---delete-branch`. Check `mergeStateStatus` is `CLEAN` first, so you are not handing over a
-command that will bounce.
+Report a one-line verdict per PR when done.
+
+**Do not hand the operator a merge command.** Auto-merge is allowed repository-wide and
+branches delete themselves on merge, so a pull request merges the moment its last required
+check goes green. `docs/engineering/running-the-agents.md` is explicit: *"There is no
+`gh pr merge` step any more; if you find yourself typing one, something upstream is wrong
+and worth asking about rather than working around."*
+
+Two things follow, and both are yours rather than the operator's:
+
+- **Enable auto-merge on any pull request you approve**, if it is not already on:
+
+  ```bash
+  gh pr merge <n> --auto --squash
+  ```
+
+  This is safe: every required check still gates it, `independent review` included. It is
+  also necessary — Codex does not enable auto-merge on its own pull requests, so without
+  this step an approved pull request sits green and unmerged waiting for a click that the
+  workflow is designed never to need.
+
+- **Never wait for `mergeStateStatus: CLEAN` before reviewing.** It cannot be clean while
+  `independent review` is pending, and that check stays pending precisely until you post
+  the comment. `BLOCKED`, with `independent review` as the only outstanding check, is the
+  normal state to review in.
+
+The operator's only remaining job is a pull request **you** authored, which rule 8 forbids
+you to review. That one needs them to post the `Reviewed-commit` comment themselves, and
+nothing else.
