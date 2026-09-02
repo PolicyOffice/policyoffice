@@ -17,12 +17,28 @@ from you since its most recent commit:
    wrong — that an applied migration's checksum still matches, that a constraint actually
    refuses what it claims to refuse, that a test fails when the thing it guards is removed.
    Run them. This is the difference between a review and a proofread.
-6. Post the review as a **pull request comment**, citing invariant IDs in every finding.
+6. **If you are approving, enable auto-merge now — before you post the comment.**
+
+   ```bash
+   gh pr merge <n> --auto --squash
+   ```
+
+   The order is not cosmetic. GitHub accepts `--auto` only while something still blocks the
+   pull request, and posting `Reviewed-commit:` clears the last blocking check. Enable it
+   afterwards and the command is refused with *"Pull request is in clean status"*, leaving
+   an approved pull request green, mergeable and stuck. Enable it first and the review
+   comment is what releases the merge.
+
+   Skip this step when you are not approving. Enabling it is safe either way — every
+   required check still gates the merge — but a pull request you are sending back does not
+   need it.
+
+7. Post the review as a **pull request comment**, citing invariant IDs in every finding.
    Not `gh pr review` — GitHub refuses `--approve` and `--request-changes` on a pull
    request opened by the same account, and both agents authenticate as the founder's.
    `CONTRIBUTING.md` explains why this repository will not create a second account to work
    around that.
-7. **When, and only when, the diff is correct**, end the comment with:
+8. **When, and only when, the diff is correct**, end the comment with:
 
    ```text
    Reviewed-commit: <the full 40-character head sha>
@@ -48,16 +64,10 @@ and worth asking about rather than working around."*
 
 Two things follow, and both are yours rather than the operator's:
 
-- **Enable auto-merge on any pull request you approve**, if it is not already on:
-
-  ```bash
-  gh pr merge <n> --auto --squash
-  ```
-
-  This is safe: every required check still gates it, `independent review` included. It is
-  also necessary — Codex does not enable auto-merge on its own pull requests, so without
-  this step an approved pull request sits green and unmerged waiting for a click that the
-  workflow is designed never to need.
+- **Enabling auto-merge is step 6, and it happens before you post the comment.** Codex does
+  not enable it on its own pull requests, so without that step an approved pull request sits
+  green and unmerged waiting for a click the workflow is designed never to need — and doing
+  it after the comment is refused outright.
 
 - **Never wait for `mergeStateStatus: CLEAN` before reviewing.** It cannot be clean while
   `independent review` is pending, and that check stays pending precisely until you post
