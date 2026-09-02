@@ -25,7 +25,6 @@ Format, parsed strictly:
 - INV-DOC-002 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-003 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-004 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-DOC-005 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-006 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-007 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-008 — MVP; no schema or domain code yet (Phase 2/3)
@@ -88,10 +87,7 @@ Format, parsed strictly:
 
 - INV-CFG-001 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-CFG-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-CFG-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-CFG-004 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-CFG-005 — V1; no schema or domain code yet (Phase 2/3)
-- INV-CFG-006 — MVP; no schema or domain code yet (Phase 2/3)
 
 ## INV-AUTH — Authorization
 
@@ -110,7 +106,6 @@ Format, parsed strictly:
 - INV-AUTH-016 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-017 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-018 — V1; no schema or domain code yet (Phase 2/3)
-- INV-AUTH-019 — MVP; no schema or domain code yet (Phase 2/3)
 
 ## INV-APL — Applicability and variants
 

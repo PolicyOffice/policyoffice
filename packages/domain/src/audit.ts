@@ -122,8 +122,8 @@ export const AUDIT_EVENT_TYPES = [
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
-/** No governance transition emits yet; #35 builds the contract and the sole write path. */
-export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [];
+/** Production transitions that currently emit through the sole write path. */
+export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = ["configuration.changed"];
 
 export interface AuditEventSchema {
   readonly safeBeforeKeys: readonly string[];
@@ -135,16 +135,37 @@ const ENVELOPE_ONLY_SCHEMA: AuditEventSchema = Object.freeze({
   safeAfterKeys: Object.freeze([]),
 });
 
+const CONFIGURATION_CHANGED_SCHEMA_V2: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([
+    "configurationVersionId",
+    "effectiveFrom",
+    "payloadDigest",
+    "sequence",
+    "weakening",
+  ]),
+  safeAfterKeys: Object.freeze([
+    "configurationVersionId",
+    "effectiveFrom",
+    "payloadDigest",
+    "sequence",
+    "weakening",
+  ]),
+});
+
 /**
  * INV-AUD-008: every permanent event name has a versioned schema entry. Version 1 starts
  * with the shared envelope only. A ticket that adds family-specific snapshots adds a new
  * version and leaves version 1 interpretable forever; arbitrary metadata is never accepted.
  */
-export const AUDIT_EVENT_SCHEMAS = Object.freeze(
-  Object.fromEntries(
-    AUDIT_EVENT_TYPES.map((eventType) => [eventType, Object.freeze({ 1: ENVELOPE_ONLY_SCHEMA })]),
-  ),
-) as unknown as Readonly<Record<AuditEventType, Readonly<Record<number, AuditEventSchema>>>>;
+const auditEventSchemas = Object.fromEntries(
+  AUDIT_EVENT_TYPES.map((eventType) => [eventType, Object.freeze({ 1: ENVELOPE_ONLY_SCHEMA })]),
+) as unknown as Record<AuditEventType, Readonly<Record<number, AuditEventSchema>>>;
+auditEventSchemas["configuration.changed"] = Object.freeze({
+  1: ENVELOPE_ONLY_SCHEMA,
+  2: CONFIGURATION_CHANGED_SCHEMA_V2,
+});
+
+export const AUDIT_EVENT_SCHEMAS = Object.freeze(auditEventSchemas);
 
 export const AUDIT_ACTOR_TYPES = ["USER", "BODY", "API_CLIENT", "SYSTEM"] as const;
 export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];

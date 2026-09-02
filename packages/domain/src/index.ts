@@ -48,3 +48,10 @@ export {
   type SafeAuditSnapshot,
   type SafeAuditValue,
 } from "./audit.js";
+
+export {
+  CONFIGURATION_MANAGEMENT_CAPABILITY,
+  recordConfigurationChange,
+  type ConfigurationChangeInput,
+  type RecordedConfigurationVersion,
+} from "./configuration.js";

@@ -21,7 +21,6 @@ const ROLLBACK_TENANT = "74000000-0000-0000-0000-000000000004";
 const OTHER_TENANT = "75000000-0000-0000-0000-000000000005";
 const GROUP_ID = "71000000-0000-0000-0001-000000000001";
 const SUBJECT_ID = "71000000-0000-0000-0002-000000000001";
-const CONFIGURATION_ID = "71000000-0000-0000-0003-000000000001";
 const REQUEST_ID = "71000000-0000-0000-0004-000000000001";
 const CORRELATION_ID = "71000000-0000-0000-0005-000000000001";
 const TENANTS = [
@@ -31,6 +30,11 @@ const TENANTS = [
   ROLLBACK_TENANT,
   OTHER_TENANT,
 ] as const;
+
+function fixtureId(tenantId: string, kind: "user" | "configuration"): string {
+  const marker = kind === "user" ? "0001" : "0003";
+  return `${tenantId.slice(0, 19)}${marker}${tenantId.slice(23)}`;
+}
 
 function transaction(sql: Sql): AuditTransaction {
   return {
@@ -58,7 +62,7 @@ function event(
     requestId: REQUEST_ID,
     correlationId: CORRELATION_ID,
     sourceChannel: "JOB",
-    configurationVersionId: CONFIGURATION_ID,
+    configurationVersionId: fixtureId(tenantId, "configuration"),
     dedupeKey: `version.effective:${suffix}`,
     ...overrides,
   };
@@ -86,6 +90,8 @@ async function clearTenant(sql: Sql, tenantId: string): Promise<void> {
     await sql.query("delete from audit_event where tenant_id = $1", [tenantId]);
     await sql.query("delete from tenant_event_sequence where tenant_id = $1", [tenantId]);
     await sql.query("delete from user_group where tenant_id = $1", [tenantId]);
+    await sql.query("delete from configuration_version where tenant_id = $1", [tenantId]);
+    await sql.query("delete from app_user where tenant_id = $1", [tenantId]);
     await sql.query("commit");
   } catch (error) {
     await sql.query("rollback");
@@ -104,6 +110,37 @@ async function installFixtures(): Promise<void> {
          values ($1, $2, 'ACTIVE', 'Europe/Tallinn', 'en', 'EU')`,
         [tenantId, `Audit tenant ${index + 1}`],
       );
+      await sql.query("begin");
+      try {
+        await sql.query("select set_config('app.tenant_id', $1, true)", [tenantId]);
+        await sql.query(
+          `insert into app_user (tenant_id, id, display_name, contact_email, status)
+           values ($1, $2, $3, $4, 'ACTIVE')`,
+          [
+            tenantId,
+            fixtureId(tenantId, "user"),
+            `Audit configuration user ${index + 1}`,
+            `audit-configuration-${index + 1}@example.test`,
+          ],
+        );
+        await sql.query(
+          `insert into configuration_version (
+             tenant_id, id, sequence, effective_from, changed_by, change_reason,
+             weakening, payload_digest
+           ) values ($1, $2, 1, $3, $4, 'Audit fixture', false, $5)`,
+          [
+            tenantId,
+            fixtureId(tenantId, "configuration"),
+            "2027-01-01T00:00:00.000Z",
+            fixtureId(tenantId, "user"),
+            `sha256:audit-${index + 1}`,
+          ],
+        );
+        await sql.query("commit");
+      } catch (error) {
+        await sql.query("rollback");
+        throw error;
+      }
     }
     await sql.query("begin");
     try {

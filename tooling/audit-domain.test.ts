@@ -64,6 +64,25 @@ describe("the audit event envelope", () => {
       /not declared/i,
     );
   });
+
+  it("INV-CFG-004: versions the declared configuration before/after snapshot contract", () => {
+    const configurationEvent = event({
+      eventType: "configuration.changed",
+      eventSchemaVersion: 2,
+      safeBefore: null,
+      safeAfter: {
+        configurationVersionId: "10000000-0000-0000-0004-000000000001",
+        sequence: 1,
+        effectiveFrom: "2027-01-15T09:42:17.231Z",
+        payloadDigest: "sha256:configuration",
+        weakening: false,
+      },
+    });
+    expect(() => validateAuditEvent(configurationEvent)).not.toThrow();
+    expect(() => validateAuditEvent({ ...configurationEvent, eventSchemaVersion: 1 })).toThrow(
+      /not declared/i,
+    );
+  });
 });
 
 describe("the typed audit emitter", () => {
