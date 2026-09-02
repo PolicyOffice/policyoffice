@@ -8,9 +8,11 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   check,
   customType,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -213,6 +215,86 @@ export const groupMembership = pgTable(
       "group_membership_validity_half_open",
       sql`not isempty(${t.validity}) and lower_inc(${t.validity}) and not upper_inc(${t.validity})`,
     ),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const tenantEventSequence = pgTable(
+  "tenant_event_sequence",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    nextSequence: bigint("next_sequence", { mode: "bigint" })
+      .default(sql`1`)
+      .notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "tenant_event_sequence_pkey", columns: [t.tenantId] }),
+    foreignKey({
+      name: "tenant_event_sequence_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    check("tenant_event_sequence_positive", sql`${t.nextSequence} >= 1`),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const auditEvent = pgTable(
+  "audit_event",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    eventId: uuid("event_id").defaultRandom().notNull(),
+    sequence: bigint("sequence", { mode: "bigint" }).notNull(),
+    eventType: text("event_type").notNull(),
+    eventSchemaVersion: integer("event_schema_version").notNull(),
+    occurredAt: instant("occurred_at").notNull(),
+    recordedAt: instant("recorded_at").defaultNow().notNull(),
+    actorType: text("actor_type").notNull(),
+    actorId: uuid("actor_id"),
+    originatingActorId: uuid("originating_actor_id"),
+    elevationSessionId: uuid("elevation_session_id"),
+    subjectType: text("subject_type").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    documentId: uuid("document_id"),
+    documentVariantId: uuid("document_variant_id"),
+    documentVersionId: uuid("document_version_id"),
+    action: text("action").notNull(),
+    outcome: text("outcome").notNull(),
+    reasonCode: text("reason_code"),
+    requestId: uuid("request_id"),
+    correlationId: uuid("correlation_id").notNull(),
+    sourceChannel: text("source_channel").notNull(),
+    safeBefore: jsonb("safe_before"),
+    safeAfter: jsonb("safe_after"),
+    configurationVersionId: uuid("configuration_version_id"),
+    correctsEventId: uuid("corrects_event_id"),
+    dedupeKey: text("dedupe_key"),
+  },
+  (t) => [
+    primaryKey({ name: "audit_event_pkey", columns: [t.tenantId, t.sequence] }),
+    unique("audit_event_event_id_unique").on(t.eventId),
+    foreignKey({
+      name: "audit_event_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    unique("audit_event_dedupe_unique").on(t.tenantId, t.dedupeKey),
+    check("audit_event_sequence_positive", sql`${t.sequence} >= 1`),
+    check("audit_event_type_name", sql`${t.eventType} ~ '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$'`),
+    check("audit_event_schema_version_positive", sql`${t.eventSchemaVersion} >= 1`),
+    check(
+      "audit_event_actor_type",
+      sql`${t.actorType} in ('USER', 'BODY', 'API_CLIENT', 'SYSTEM')`,
+    ),
+    check("audit_event_outcome", sql`${t.outcome} in ('SUCCESS', 'FAILURE')`),
+    check("audit_event_source_channel", sql`${t.sourceChannel} in ('WEB', 'API', 'JOB', 'IMPORT')`),
+    check(
+      "audit_event_safe_snapshot_size",
+      sql`coalesce(pg_column_size(${t.safeBefore}), 0)
+          + coalesce(pg_column_size(${t.safeAfter}), 0) < 8192`,
+    ),
+    index("audit_event_document_sequence_idx").on(t.tenantId, t.documentId, t.sequence),
+    index("audit_event_correlation_idx").on(t.tenantId, t.correlationId),
     tenantPolicy(),
   ],
 ).enableRLS();
