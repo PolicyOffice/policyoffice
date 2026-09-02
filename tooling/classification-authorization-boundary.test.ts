@@ -4,8 +4,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
+const SCHEMA_DEFINITION = "packages/db/src/schema.ts";
 const AUTHORIZATION_PATH =
   /(?:^|\/)(?:authorization|authorizer|authz|access[-_.]?(?:grant|evaluator)|permissions?|capabilities?)(?:\/|\.|[-_.])/i;
+const AUTHORIZATION_SOURCE =
+  /\b(?:access_grant|accessGrant|applicability_rule|applicabilityRule|security_role|securityRole)\b/;
 const CLASSIFICATION_REFERENCE =
   /\b(?:information_classification|informationClassification(?:Id)?|classification_id|classificationId)\b/;
 
@@ -27,7 +30,10 @@ function sourceFiles(directory: string): string[] {
 function authorizationClassificationProblems(sources: readonly ProductionSource[]): string[] {
   return sources
     .filter(
-      ({ path, source }) => AUTHORIZATION_PATH.test(path) && CLASSIFICATION_REFERENCE.test(source),
+      ({ path, source }) =>
+        path !== SCHEMA_DEFINITION &&
+        (AUTHORIZATION_PATH.test(path) || AUTHORIZATION_SOURCE.test(source)) &&
+        CLASSIFICATION_REFERENCE.test(source),
     )
     .map(({ path }) => `${path}: authorization surface references information classification`)
     .sort();
@@ -52,8 +58,21 @@ describe("the information-classification authorization boundary", () => {
           source:
             "export function authorize(classificationId: string): boolean { return !!classificationId; }",
         },
+        {
+          path: "packages/db/src/evaluator.ts",
+          source: "select classification_id from access_grant",
+        },
+        {
+          path: SCHEMA_DEFINITION,
+          source: "export const accessGrant = {}; export const informationClassification = {};",
+        },
+        {
+          path: "packages/domain/src/document.ts",
+          source: "export interface DocumentInput { classificationId: string }",
+        },
       ]),
     ).toEqual([
+      "packages/db/src/evaluator.ts: authorization surface references information classification",
       "packages/domain/src/authorization.ts: authorization surface references information classification",
     ]);
   });

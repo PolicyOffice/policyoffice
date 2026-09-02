@@ -194,7 +194,7 @@ export async function recordConfigurationChange(
   const emittedEvent = await emitAuditEvent(transaction, {
     tenantId: input.tenantId,
     eventType: "configuration.changed",
-    eventSchemaVersion: 2,
+    eventSchemaVersion: 1,
     occurredAt: input.occurredAt,
     actor: { type: "USER", id: input.changedBy },
     subject: { type: "CONFIGURATION_VERSION", id: row.id },

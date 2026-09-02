@@ -256,7 +256,7 @@ describe("the configuration schema", () => {
              tenant_id, sequence, event_type, event_schema_version, occurred_at,
              actor_type, actor_id, subject_type, subject_id, action, outcome,
              request_id, correlation_id, source_channel, configuration_version_id
-           ) values ($1, 999, 'configuration.changed', 2, $2, 'USER', $3,
+           ) values ($1, 999, 'configuration.changed', 1, $2, 'USER', $3,
                      'CONFIGURATION_VERSION', $4, 'CREATE_CONFIGURATION_VERSION',
                      'SUCCESS', $5, $6, 'WEB', $4)`,
           [TENANT, FIXED_INSTANT, USER, OTHER_CONFIGURATION, REQUEST_ID, CORRELATION_ID],

@@ -65,10 +65,10 @@ describe("the audit event envelope", () => {
     );
   });
 
-  it("INV-CFG-004: versions the declared configuration before/after snapshot contract", () => {
+  it("INV-CFG-004: defines the first published configuration snapshot contract as v1", () => {
     const configurationEvent = event({
       eventType: "configuration.changed",
-      eventSchemaVersion: 2,
+      eventSchemaVersion: 1,
       safeBefore: null,
       safeAfter: {
         configurationVersionId: "10000000-0000-0000-0004-000000000001",
@@ -79,9 +79,18 @@ describe("the audit event envelope", () => {
       },
     });
     expect(() => validateAuditEvent(configurationEvent)).not.toThrow();
-    expect(() => validateAuditEvent({ ...configurationEvent, eventSchemaVersion: 1 })).toThrow(
-      /not declared/i,
+    expect(() => validateAuditEvent({ ...configurationEvent, eventSchemaVersion: 2 })).toThrow(
+      /not registered/i,
     );
+    expect(() => validateAuditEvent({ ...configurationEvent, safeAfter: null })).toThrow(
+      /safeAfter is required/i,
+    );
+    expect(() =>
+      validateAuditEvent({
+        ...configurationEvent,
+        safeAfter: { ...configurationEvent.safeAfter, sequence: 2 },
+      }),
+    ).toThrow(/safeBefore is required/i);
   });
 });
 
