@@ -108,6 +108,26 @@ three roles and to grant an explicit `SET ROLE` path. The runner executes every 
 migration and owns its checksum ledger as `migration_role`, which remains
 `NOSUPERUSER NOBYPASSRLS`; new migration files do not need to switch roles themselves.
 
+Deterministic local fixtures are separate from migrations and from each other:
+
+```bash
+pnpm db:seed:reference
+pnpm db:seed:development
+pnpm db:seed:test
+```
+
+Each command runs against Docker Compose with no arguments and is safe to repeat. Reference
+values are PostgreSQL enum labels owned by the migration chain. Development fixtures load
+one tenant with one legal entity, three users, two groups and a small copied Standard
+taxonomy. Test fixtures load two tenants and at least one row in every tenant-owned table,
+including both closed and open organisation memberships.
+
+The loaders execute tenant-root provisioning as `migration_role` and every tenant-owned
+insert as `app_role` under a transaction-local tenant context. They refuse development or
+test data in `NODE_ENV=production`. The only audit history they create is the genuine
+initial `configuration.changed` transition for each fixture tenant; no history is
+backfilled to make the fixtures look lived-in.
+
 ```bash
 pnpm db:verify
 ```
