@@ -20,7 +20,10 @@
     "test:audit-events": "vitest run --project unit tooling/audit-event-completeness.test.ts",
     "test:property": "vitest run --project property",
     "invariants": "tsx tooling/invariant-coverage.ts",
-    "db:verify": "pnpm --filter @policyoffice/db verify:fresh && pnpm --filter @policyoffice/db verify:upgrade && pnpm --filter @policyoffice/db verify:drift"
+    "db:verify": "pnpm --filter @policyoffice/db verify:fresh && pnpm --filter @policyoffice/db verify:upgrade && pnpm --filter @policyoffice/db verify:drift",
+    "db:seed:reference": "pnpm --filter @policyoffice/db seed:reference",
+    "db:seed:development": "pnpm --filter @policyoffice/db seed:development",
+    "db:seed:test": "pnpm --filter @policyoffice/db seed:test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -86,7 +86,6 @@ Format, parsed strictly:
 ## INV-CFG — Configuration
 
 - INV-CFG-001 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-CFG-002 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-CFG-005 — V1; no schema or domain code yet (Phase 2/3)
 
 ## INV-AUTH — Authorization

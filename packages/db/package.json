@@ -14,7 +14,10 @@
     "verify:fresh": "tsx src/verify-cli.ts fresh",
     "verify:upgrade": "tsx src/verify-cli.ts upgrade",
     "verify:drift": "tsx src/verify-cli.ts drift",
-    "dev:credentials": "tsx src/dev-credentials-cli.ts"
+    "dev:credentials": "tsx src/dev-credentials-cli.ts",
+    "seed:reference": "tsx src/seed-cli.ts reference",
+    "seed:development": "tsx src/seed-cli.ts development",
+    "seed:test": "tsx src/seed-cli.ts test"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
