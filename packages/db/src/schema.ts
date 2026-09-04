@@ -56,6 +56,13 @@ export const informationClassificationStatus = pgEnum("information_classificatio
   "ACTIVE",
   "RETIRED",
 ]);
+export const documentLifecycle = pgEnum("document_lifecycle", ["PLANNED", "ACTIVE", "RETIRED"]);
+export const variantType = pgEnum("variant_type", [
+  "BASELINE",
+  "REPLACEMENT",
+  "SUPPLEMENT",
+  "TRANSLATION",
+]);
 
 export const tenant = pgTable("tenant", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -616,6 +623,122 @@ export const informationClassification = pgTable(
   ],
 ).enableRLS();
 
+export const document = pgTable(
+  "document",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    documentCode: text("document_code").notNull(),
+    canonicalTitle: text("canonical_title").notNull(),
+    documentTypeId: uuid("document_type_id").notNull(),
+    ownerUserId: uuid("owner_user_id"),
+    owningOrgUnitId: uuid("owning_org_unit_id").notNull(),
+    spaceId: uuid("space_id"),
+    lifecycleStatus: documentLifecycle("lifecycle_status").default("PLANNED").notNull(),
+    isGoverningFramework: boolean("is_governing_framework").default(false).notNull(),
+    retiredAt: instant("retired_at"),
+    retirementReason: text("retirement_reason"),
+  },
+  (t) => [
+    primaryKey({ name: "document_pkey", columns: [t.tenantId, t.id] }),
+    unique("document_id_unique").on(t.id),
+    foreignKey({
+      name: "document_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    unique("document_tenant_code_unique").on(t.tenantId, t.documentCode),
+    foreignKey({
+      name: "document_type_fk",
+      columns: [t.tenantId, t.documentTypeId],
+      foreignColumns: [documentType.tenantId, documentType.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_owner_fk",
+      columns: [t.tenantId, t.ownerUserId],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_owning_org_unit_fk",
+      columns: [t.tenantId, t.owningOrgUnitId],
+      foreignColumns: [orgUnit.tenantId, orgUnit.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_space_fk",
+      columns: [t.tenantId, t.spaceId],
+      foreignColumns: [space.tenantId, space.id],
+    }).onDelete("restrict"),
+    check(
+      "document_retirement_instant_consistent",
+      sql`(${t.lifecycleStatus} = 'RETIRED') = (${t.retiredAt} is not null)`,
+    ),
+    check(
+      "document_retirement_reason_required",
+      sql`${t.lifecycleStatus} <> 'RETIRED' or nullif(btrim(${t.retirementReason}), '') is not null`,
+    ),
+    index("document_type_idx").on(t.tenantId, t.documentTypeId),
+    index("document_owner_idx").on(t.tenantId, t.ownerUserId),
+    index("document_unowned_idx")
+      .on(t.tenantId, t.ownerUserId)
+      .where(sql`${t.ownerUserId} is null`),
+    index("document_owning_org_unit_idx").on(t.tenantId, t.owningOrgUnitId),
+    index("document_space_idx").on(t.tenantId, t.spaceId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const documentVariant = pgTable(
+  "document_variant",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    documentId: uuid("document_id").notNull(),
+    variantType: variantType("variant_type").notNull(),
+    sourceVariantId: uuid("source_variant_id"),
+    locale: text("locale"),
+    status: text("status").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "document_variant_pkey", columns: [t.tenantId, t.id] }),
+    unique("document_variant_id_unique").on(t.id),
+    foreignKey({
+      name: "document_variant_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_variant_document_fk",
+      columns: [t.tenantId, t.documentId],
+      foreignColumns: [document.tenantId, document.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_variant_source_fk",
+      columns: [t.tenantId, t.sourceVariantId],
+      foreignColumns: [t.tenantId, t.id],
+    }).onDelete("restrict"),
+    check(
+      "document_variant_baseline_source",
+      sql`(${t.variantType} = 'BASELINE') = (${t.sourceVariantId} is null)`,
+    ),
+    check(
+      "document_variant_translation_locale",
+      sql`${t.variantType} <> 'TRANSLATION' or nullif(btrim(${t.locale}), '') is not null`,
+    ),
+    uniqueIndex("one_baseline_per_document")
+      .on(t.tenantId, t.documentId)
+      .where(sql`${t.variantType} = 'BASELINE'`),
+    index("document_variant_document_idx").on(t.tenantId, t.documentId),
+    index("document_variant_source_idx").on(t.tenantId, t.sourceVariantId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
 export const tenantEventSequence = pgTable(
   "tenant_event_sequence",
   {
@@ -679,6 +802,16 @@ export const auditEvent = pgTable(
       name: "audit_event_configuration_version_fk",
       columns: [t.tenantId, t.configurationVersionId],
       foreignColumns: [configurationVersion.tenantId, configurationVersion.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "audit_event_document_fk",
+      columns: [t.tenantId, t.documentId],
+      foreignColumns: [document.tenantId, document.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "audit_event_document_variant_fk",
+      columns: [t.tenantId, t.documentVariantId],
+      foreignColumns: [documentVariant.tenantId, documentVariant.id],
     }).onDelete("restrict"),
     unique("audit_event_dedupe_unique").on(t.tenantId, t.dedupeKey),
     check("audit_event_sequence_positive", sql`${t.sequence} >= 1`),

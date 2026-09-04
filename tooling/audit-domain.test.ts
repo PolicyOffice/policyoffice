@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  AUDIT_EVENT_SCHEMAS,
+  IMPLEMENTED_AUDIT_EVENT_TYPES,
   InvalidAuditEventError,
   emitAuditEvent,
   emitAuditEvents,
@@ -91,6 +93,118 @@ describe("the audit event envelope", () => {
         safeAfter: { ...configurationEvent.safeAfter, sequence: 2 },
       }),
     ).toThrow(/safeBefore is required/i);
+  });
+
+  it("INV-AUD-008: document.created publishes its required version-1 after-state", () => {
+    const created = event({
+      eventType: "document.created",
+      eventSchemaVersion: 1,
+      safeBefore: null,
+      safeAfter: {
+        documentCode: "POL-001",
+        documentTypeId: "10000000-0000-0000-0010-000000000001",
+        owningOrgUnitId: "10000000-0000-0000-0011-000000000001",
+        spaceId: null,
+        ownerUserId: null,
+        lifecycleStatus: "PLANNED",
+        baselineVariantId: "10000000-0000-0000-0012-000000000001",
+      },
+    });
+    expect(() => validateAuditEvent(created)).not.toThrow();
+    const incomplete = { ...created.safeAfter };
+    Reflect.deleteProperty(incomplete, "baselineVariantId");
+    expect(() => validateAuditEvent({ ...created, safeAfter: incomplete })).toThrow(
+      /baselineVariantId is required/i,
+    );
+  });
+
+  it("INV-AUD-008: document.metadata_changed requires the same changed keys on both sides", () => {
+    const changed = event({
+      eventType: "document.metadata_changed",
+      eventSchemaVersion: 1,
+      safeBefore: { canonicalTitle: "Old title" },
+      safeAfter: { canonicalTitle: "New title" },
+    });
+    expect(() => validateAuditEvent(changed)).not.toThrow();
+    expect(() => validateAuditEvent({ ...changed, safeBefore: null })).toThrow(
+      /safeBefore is required/i,
+    );
+  });
+
+  it("INV-AUD-008: document.owner_changed requires ownerUserId even when the value is null", () => {
+    const changed = event({
+      eventType: "document.owner_changed",
+      eventSchemaVersion: 1,
+      safeBefore: { ownerUserId: "10000000-0000-0000-0013-000000000001" },
+      safeAfter: { ownerUserId: null },
+    });
+    expect(() => validateAuditEvent(changed)).not.toThrow();
+    expect(() => validateAuditEvent({ ...changed, safeAfter: {} })).toThrow(
+      /ownerUserId is required/i,
+    );
+  });
+
+  it("INV-AUD-008: document.type_changed requires the authoritative type on both sides", () => {
+    const changed = event({
+      eventType: "document.type_changed",
+      eventSchemaVersion: 1,
+      safeBefore: { documentTypeId: "10000000-0000-0000-0014-000000000001" },
+      safeAfter: { documentTypeId: "10000000-0000-0000-0014-000000000002" },
+    });
+    expect(() => validateAuditEvent(changed)).not.toThrow();
+    expect(() => validateAuditEvent({ ...changed, safeBefore: {} })).toThrow(
+      /documentTypeId is required/i,
+    );
+  });
+
+  it("INV-AUD-008: document.retired requires the transition, instant and reason", () => {
+    const retired = event({
+      eventType: "document.retired",
+      eventSchemaVersion: 1,
+      safeBefore: { lifecycleStatus: "PLANNED" },
+      safeAfter: {
+        lifecycleStatus: "RETIRED",
+        retiredAt: "2027-01-15T09:42:17.231Z",
+        retirementReason: "Initiative cancelled",
+      },
+    });
+    expect(() => validateAuditEvent(retired)).not.toThrow();
+    expect(() =>
+      validateAuditEvent({
+        ...retired,
+        safeAfter: {
+          lifecycleStatus: "RETIRED",
+          retiredAt: "2027-01-15T09:42:17.231Z",
+        },
+      }),
+    ).toThrow(/retirementReason is required/i);
+  });
+
+  it("INV-AUD-008: only emitted document events replace their placeholder schema", () => {
+    const implemented = [
+      "document.created",
+      "document.metadata_changed",
+      "document.owner_changed",
+      "document.retired",
+      "document.type_changed",
+    ] as const;
+    for (const eventType of implemented) {
+      expect(IMPLEMENTED_AUDIT_EVENT_TYPES).toContain(eventType);
+      expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterRequired).toBe(true);
+      expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterKeys.length).toBeGreaterThan(0);
+    }
+    for (const eventType of [
+      "document.activated",
+      "document.restored",
+      "document.sensitive_viewed",
+    ] as const) {
+      expect(IMPLEMENTED_AUDIT_EVENT_TYPES).not.toContain(eventType);
+      expect(AUDIT_EVENT_SCHEMAS[eventType][1]).toMatchObject({
+        safeBeforeKeys: [],
+        safeAfterKeys: [],
+        safeAfterRequired: false,
+      });
+    }
   });
 });
 
