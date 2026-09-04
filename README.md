@@ -89,6 +89,27 @@ privileged connection fails outright.
 They **fail** rather than skip when no database is reachable. A skipped integration suite
 is a green build that tested nothing.
 
+**If the integration suite fails with `permission denied` on tables that plainly exist**,
+the local database has drifted: its tables are owned by `postgres` rather than
+`migration_role`, and the role grants are gone with them. This matters more than the error
+suggests — `force row level security` does not bind a superuser-owned table, so tenancy
+assertions made against a database in that state prove nothing even when they pass. Rebuild
+it through the migration chain:
+
+```bash
+docker exec -i policyoffice-postgres psql -U postgres -d policyoffice \
+  -c 'drop schema public cascade; create schema public;'
+pnpm --filter @policyoffice/db migrate
+pnpm --filter @policyoffice/db dev:credentials
+```
+
+Then confirm the owner is right before trusting a green suite:
+
+```sql
+select relname, pg_get_userbyid(relowner), relforcerowsecurity
+  from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r';
+```
+
 Migrations are forward-only, hand-written SQL, applied by our own runner:
 
 ```bash

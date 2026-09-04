@@ -55,6 +55,20 @@ Address the review comments on any PRs that have them.
 **Landing a pull request.** Usually nothing. Auto-merge is enabled: a pull request merges
 the moment its last required check goes green, and deletes its own branch.
 
+Two mechanical details, both learned the hard way and neither obvious:
+
+- **Auto-merge is per pull request, not ambient.** Codex does not enable it on its own, so
+  the reviewer does — *before* posting the review comment, because GitHub accepts `--auto`
+  only while something still blocks the pull request and the review comment is what clears
+  the last block. `.claude/commands/review.md` step 6 carries this.
+- **A stale branch stalls an approved pull request.** The ruleset requires branches to be up
+  to date, so when another pull request lands first, an approved one goes `BEHIND` and
+  auto-merge waits forever. Updating the branch changes its head sha, which invalidates the
+  `Reviewed-commit` comment and costs a re-review. **`allow_update_branch` is currently off
+  in repository settings; turning it on makes auto-merge update the branch itself.** That is
+  live configuration and therefore the founder's to apply, but it is worth applying — the
+  cost recurs every time a Claude-authored pull request waits while a Codex one lands.
+
 `independent review` is one of those checks, and it is set by a comment naming the exact
 head sha. For **Codex's** pull requests Claude posts it after reviewing, and the merge
 follows on its own — you do nothing.
@@ -69,6 +83,19 @@ gh pr comment <n> --body 'Reviewed-commit: <full 40-character sha>'
 That is the whole of it. The merge happens by itself afterwards. There is no
 `gh pr merge` step any more; if you find yourself typing one, something upstream is wrong
 and worth asking about rather than working around.
+
+**When an agent reports finishing but produced nothing.** This has happened twice. Check,
+in order: open pull requests, remote branches, the repository's recent events, and the
+agent's own worktree for uncommitted or unpushed work. If all four are empty, nothing was
+produced and re-running costs nothing.
+
+The likeliest cause is worth removing before re-running: **Codex's checkout parked on a
+merged, deleted feature branch instead of `main`.** Its worktree should sit on `main` between
+tickets, and a branch whose remote is gone is a confusing place to start selecting work from.
+
+```bash
+git -C PolicyManagement checkout main && git -C PolicyManagement pull --ff-only
+```
 
 **Answering a Decision Request.** An agent that cannot build a ticket as specified stops,
 opens a `[DECISION]` issue and releases its claim. Most are answerable in one line. Some

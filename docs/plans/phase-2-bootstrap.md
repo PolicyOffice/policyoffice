@@ -113,23 +113,29 @@ Both ADRs are amended and `data-model.md` is corrected.
 - [x] **Migration harness** — forward-only SQL with per-file checksums, the three roles,
       `btree_gist`, non-transactional migrations, session timeouts, and the fresh/upgrade/
       drift checks. No down-migration path exists
-- [ ] **First migrations** — tenancy and identity are done (POL-006, #34), on a chain that
-      can now be applied by its documented command (POL-010, #41). Remaining: the audit
-      ledger (POL-007, #35) and organisation (POL-008, #36)
+- [x] **First migrations** — tenancy and identity (POL-006, #34), on a chain applied by its
+      documented command (POL-010, #41); the audit ledger (POL-007, #35) and organisation
+      (POL-008, #36) both landed 2026-09-02
 - [ ] **The document spine** — **ticketed 2026-09-02**, once #34 had landed and shown how
       the conventions hold up. It wanted more than two tickets; it got eight, every one
-      Tier 2:
+      Tier 2. **One of the eight has landed; status as at 2026-09-04:**
 
-  | Ticket | What | Phase |
-  |---|---|---|
-  | POL-011 (#49) | `configuration_version`, `document_type`, `information_classification` — the three foreign keys `document_version` cannot be `not null` without | 2 |
-  | POL-012 (#50) | `document` and `document_variant`, and the one-baseline guarantee | 2 |
-  | POL-013 (#51) | `document_version`, the INV-EFF-002 exclusion constraint, the INV-VER-003/007 immutability triggers | 2 |
-  | POL-014 (#52) | `content_revision` and `content_attachment` | 2 |
-  | POL-015 (#53) | Canonicalisation and the content digest — pure, framework-free, **no dependencies** | 3 |
-  | POL-016 (#54) | The publication transaction, where INV-EFF-003's atomicity actually lives | 3 |
-  | POL-017 (#55) | The effective-instant transition, which only narrates what publication decided | 3 |
-  | POL-018 (#56) | `applicability_rule` and `alignment_obligation` — tables only; resolution is V1 | 2 |
+  | Ticket | What | Phase | Status |
+  |---|---|---|---|
+  | POL-011 (#49) | `configuration_version`, `document_type`, `information_classification` — the three foreign keys `document_version` cannot be `not null` without | 2 | **merged** #62 |
+  | POL-012 (#50) | `document` and `document_variant`, and the one-baseline guarantee | 2 | ready |
+  | POL-013 (#51) | `document_version`, the INV-EFF-002 exclusion constraint, the INV-VER-003/007 immutability triggers | 2 | blocked on #50 |
+  | POL-014 (#52) | `content_revision` and `content_attachment` | 2 | blocked on #51, #53 |
+  | POL-015 (#53) | Canonicalisation and the content digest — pure, framework-free, **no dependencies** | 3 | ready |
+  | POL-016 (#54) | The publication transaction, where INV-EFF-003's atomicity actually lives | 3 | blocked on #51, #52 |
+  | POL-017 (#55) | The effective-instant transition, which only narrates what publication decided | 3 | blocked on #54 |
+  | POL-018 (#56) | `applicability_rule` and `alignment_obligation` — tables only; resolution is V1 | 2 | blocked on #51 |
+
+  **The remaining seven are one chain plus one independent ticket.** POL-012 (#50) is the
+  bottleneck: #51 needs it, and #52, #54, #55 and #56 all need #51. POL-015 (#53) depends on
+  nothing and stays independent to the end, so **#50 and #53 are the only pair that can run
+  in parallel** — and they touch different packages, which is what makes a second worktree
+  worth the trouble if two Codex sessions are ever run at once.
 
   Three forward references are resolved across the chain rather than designed around, each
   recorded in both the ticket that creates the column and the ticket that adds the
@@ -145,7 +151,13 @@ Both ADRs are amended and `data-model.md` is corrected.
       exist, and the branch ruleset is **applied** (2026-08-31): thirteen required checks,
       squash-only, linear history, no force-push, no deletion. A direct push to `main` is
       rejected. Secret scanning, push protection and the dependency graph are enabled
-- [ ] **Seeds** — ticketed as POL-009 (#37)
+- [x] **Seeds** — POL-009 (#37), merged 2026-09-03. Reference values stay migration-owned
+      enum labels; development and test fixtures load through `app_role` under a
+      transaction-local tenant context, never as a superuser. The **second tenant** exists,
+      and a schema-discovered test fails when a tenant-owned table is added without a row for
+      both test tenants — so the guarantee cannot decay silently. The only audit history the
+      loaders create is one genuine `configuration.changed` per fixture tenant; nothing is
+      backfilled
 
 ## Exit criteria
 
