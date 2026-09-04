@@ -61,13 +61,18 @@ Two mechanical details, both learned the hard way and neither obvious:
   the reviewer does — *before* posting the review comment, because GitHub accepts `--auto`
   only while something still blocks the pull request and the review comment is what clears
   the last block. `.claude/commands/review.md` step 6 carries this.
-- **A stale branch stalls an approved pull request.** The ruleset requires branches to be up
-  to date, so when another pull request lands first, an approved one goes `BEHIND` and
-  auto-merge waits forever. Updating the branch changes its head sha, which invalidates the
-  `Reviewed-commit` comment and costs a re-review. **`allow_update_branch` is currently off
-  in repository settings; turning it on makes auto-merge update the branch itself.** That is
-  live configuration and therefore the founder's to apply, but it is worth applying — the
-  cost recurs every time a Claude-authored pull request waits while a Codex one lands.
+- **A stale branch stalls an approved pull request, and updating it still costs a
+  re-review.** The ruleset requires branches to be up to date, so when another pull request
+  lands first, an approved one goes `BEHIND`. `allow_update_branch` is **on** (applied
+  2026-09-04), so auto-merge updates the branch itself instead of waiting for someone to
+  notice it is stuck.
+
+  What that does *not* remove is the re-review, and the earlier note here claiming it would
+  was wrong. Updating a branch changes its head sha; `independent review` is pinned to the
+  exact sha it reviewed, so the check returns to pending reading *last review covered
+  `abc1234`, not this commit*. The update is now automatic, the fresh `Reviewed-commit`
+  comment is not. Expect one per pull request that waits behind another — and note that a
+  run of merges can charge it more than once for the same pull request.
 
 `independent review` is one of those checks, and it is set by a comment naming the exact
 head sha. For **Codex's** pull requests Claude posts it after reviewing, and the merge

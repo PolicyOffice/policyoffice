@@ -150,7 +150,9 @@ Both ADRs are amended and `data-model.md` is corrected.
 - [x] **Repository governance** — CODEOWNERS carries the Tier 2 paths, the issue templates
       exist, and the branch ruleset is **applied** (2026-08-31): thirteen required checks,
       squash-only, linear history, no force-push, no deletion. A direct push to `main` is
-      rejected. Secret scanning, push protection and the dependency graph are enabled
+      rejected. Secret scanning, push protection and the dependency graph are enabled.
+      `allow_update_branch` was enabled 2026-09-04: auto-merge now updates a stale branch
+      itself, though the head sha it produces still costs the pull request a re-review
 - [x] **Seeds** — POL-009 (#37), merged 2026-09-03. Reference values stay migration-owned
       enum labels; development and test fixtures load through `app_role` under a
       transaction-local tenant context, never as a superuser. The **second tenant** exists,
