@@ -248,6 +248,23 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-AUD-008 | Event types are a versioned contract: an event type's meaning and required fields never change in place; a changed shape gets a new schema version, and older events remain interpretable under theirs | Renaming or repurposing an event silently reinterprets years of history | U, I | MVP |
 | INV-AUD-009 | Events carry a deterministic total order within a tenant | Regenerating an evidence pack must yield the same chronology, and timestamps alone collide | I, P | MVP |
 
+**When a schema version becomes published.** INV-AUD-008 protects *recorded* events, so a
+version is published the moment an event type can actually be emitted — in practice, when
+that type first appears in `IMPLEMENTED_AUDIT_EVENT_TYPES`. Until then its registry entry is
+a placeholder, and **the ticket that first emits the type defines version 1** rather than
+adding a version 2 beside an entry nothing was ever written under.
+
+This matters because the audit registry carries a placeholder for every catalogued name from
+the day the ledger was built. Treating those as published would give all ~110 event types a
+vestigial version 1 next to their real one, and each of those dead versions is a shape an
+event could legitimately be emitted under while satisfying less than its invariant requires.
+An unemitted placeholder has no history to keep interpretable, which is the whole purpose of
+the rule.
+
+Settled 2026-09-02 while reviewing POL-011 (#62), where a `configuration.changed` at the
+placeholder version was accepted carrying neither before- nor after-state — which
+INV-CFG-004 requires.
+
 ## INV-EVD — Evidence
 
 | ID | Invariant | Why it matters | Test | Phase |
