@@ -1,0 +1,40 @@
+{
+  "name": "canonical manifest schema v1",
+  "input": {
+    "contentRevisionId": "revision-Café\r\n2027",
+    "contentParts": [
+      {
+        "partId": "annex",
+        "mediaType": "text/plain\r\ncharset=utf-8",
+        "digest": "sha-256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      {
+        "partId": "body",
+        "mediaType": "application/pdf",
+        "digest": "sha-256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "attachments": [
+      {
+        "filename": "appendix.pdf",
+        "mediaType": "application/pdf",
+        "byteSize": 2048,
+        "digest": "sha-256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      {
+        "filename": "appendix.pdf",
+        "mediaType": "application/pdf",
+        "byteSize": 1024,
+        "digest": "sha-256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "filename": "Café.txt",
+        "mediaType": "text/plain",
+        "byteSize": 12,
+        "digest": "sha-256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    ]
+  },
+  "canonicalJson": "{\"attachments\":[{\"byteSize\":12,\"digest\":\"sha-256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"filename\":\"Café.txt\",\"mediaType\":\"text/plain\"},{\"byteSize\":1024,\"digest\":\"sha-256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"filename\":\"appendix.pdf\",\"mediaType\":\"application/pdf\"},{\"byteSize\":2048,\"digest\":\"sha-256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"filename\":\"appendix.pdf\",\"mediaType\":\"application/pdf\"}],\"canonicalisationSchemaVersion\":1,\"contentParts\":[{\"digest\":\"sha-256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"mediaType\":\"text/plain\\ncharset=utf-8\",\"partId\":\"annex\"},{\"digest\":\"sha-256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"mediaType\":\"application/pdf\",\"partId\":\"body\"}],\"contentRevisionId\":\"revision-Café\\n2027\"}",
+  "contentDigest": "sha-256:06a9a80d78b0a4f8072b5ed6515c4f08c71a7cb119a25ebc5c137d03c52800da"
+}

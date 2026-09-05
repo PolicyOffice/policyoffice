@@ -38,7 +38,11 @@ const DOMAIN_SRC = join(REPO_ROOT, "packages/domain/src");
  * When the content model lands it will want a hashing primitive (INV-VER-009). Add
  * `node:crypto` then, in the pull request that needs it, with the reason in the ticket.
  */
-const ALLOWED_BARE_IMPORTS: ReadonlySet<string> = new Set<string>([]);
+const ALLOWED_BARE_IMPORTS: ReadonlySet<string> = new Set<string>([
+  // POL-015: the canonical content digest is pure computation over bytes. Node's built-in
+  // primitive adds no framework, request context, I/O service or runtime dependency.
+  "node:crypto",
+]);
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];

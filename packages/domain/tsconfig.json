@@ -3,6 +3,7 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
+    "types": ["node"],
     // Referenced by apps/worker via a TypeScript project reference, which requires this.
     "composite": true,
     // The incremental cache lives INSIDE the output directory, deliberately.

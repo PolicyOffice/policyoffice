@@ -42,11 +42,9 @@ Format, parsed strictly:
 - INV-VER-006 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-007 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-008 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-009 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-010 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-011 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-012 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-013 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-014 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-015 — MVP; no schema or domain code yet (Phase 2/3)
 
