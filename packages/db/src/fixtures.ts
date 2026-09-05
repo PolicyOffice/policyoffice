@@ -13,6 +13,7 @@ export type FixtureKind = "development" | "test";
 export const REFERENCE_ENUM_VALUES = Object.freeze({
   app_user_status: Object.freeze(["INVITED", "ACTIVE", "DEACTIVATED"]),
   credential_kind: Object.freeze(["PASSWORD", "OIDC", "SAML"]),
+  document_lifecycle: Object.freeze(["PLANNED", "ACTIVE", "RETIRED"]),
   document_type_status: Object.freeze(["ACTIVE", "RETIRED"]),
   governance_body_status: Object.freeze(["ACTIVE", "DISSOLVED"]),
   governance_seat_role: Object.freeze(["CHAIR", "SECRETARY", "MEMBER"]),
@@ -25,6 +26,7 @@ export const REFERENCE_ENUM_VALUES = Object.freeze({
   tenant_status: Object.freeze(["ACTIVE", "SUSPENDED", "CLOSED"]),
   user_group_source: Object.freeze(["LOCAL", "SCIM"]),
   user_group_status: Object.freeze(["ACTIVE", "RETIRED"]),
+  variant_type: Object.freeze(["BASELINE", "REPLACEMENT", "SUPPLEMENT", "TRANSLATION"]),
 });
 
 const CREATED_AT = "2026-01-01T00:00:00.000Z";
@@ -91,6 +93,16 @@ interface ClassificationFixture {
   externallyDisclosable: boolean;
 }
 
+interface DocumentFixture {
+  id: string;
+  baselineVariantId: string;
+  documentCode: string;
+  canonicalTitle: string;
+  documentTypeId: string;
+  ownerUserId: string | null;
+  isGoverningFramework: boolean;
+}
+
 export interface TenantFixture {
   tenant: Readonly<{
     id: string;
@@ -117,6 +129,7 @@ export interface TenantFixture {
   }>;
   documentTypes: readonly DocumentTypeFixture[];
   classifications: readonly ClassificationFixture[];
+  documents: readonly DocumentFixture[];
 }
 
 export interface FixtureSet {
@@ -210,6 +223,17 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
         rank: 10,
         handlingInstructions: "For internal use unless separately authorised.",
         externallyDisclosable: false,
+      },
+    ],
+    documents: [
+      {
+        id: fixtureId(prefix, 18, 1),
+        baselineVariantId: fixtureId(prefix, 19, 1),
+        documentCode: "POL-001",
+        canonicalTitle: `${name} Policy Framework`,
+        documentTypeId: fixtureId(prefix, 14, 1),
+        ownerUserId: null,
+        isGoverningFramework: false,
       },
     ],
   };
@@ -361,6 +385,17 @@ function developmentTenant(): TenantFixture {
         rank: 30,
         handlingInstructions: "Handle only under an explicit access grant.",
         externallyDisclosable: false,
+      },
+    ],
+    documents: [
+      {
+        id: fixtureId(prefix, 18, 1),
+        baselineVariantId: fixtureId(prefix, 19, 1),
+        documentCode: "POL-001",
+        canonicalTitle: "Policy Management Policy",
+        documentTypeId: fixtureId(prefix, 14, 1),
+        ownerUserId: users[1]?.id ?? null,
+        isGoverningFramework: false,
       },
     ],
   };
@@ -678,6 +713,43 @@ async function insertConfiguration(sql: Client, item: TenantFixture): Promise<vo
   }
 }
 
+async function insertDocuments(
+  sql: Client,
+  fixture: FixtureSet,
+  item: TenantFixture,
+): Promise<void> {
+  for (const document of item.documents) {
+    await sql.query(
+      `insert into document (
+         tenant_id, id, created_at, updated_at, row_version, document_code,
+         canonical_title, document_type_id, owner_user_id, owning_org_unit_id,
+         space_id, lifecycle_status, is_governing_framework
+       ) values ($1, $2, $3, $3, 1, $4, $5, $6, $7, $8, $9, 'PLANNED', $10)
+       on conflict (tenant_id, id) do nothing`,
+      [
+        item.tenant.id,
+        document.id,
+        fixture.createdAt,
+        document.documentCode,
+        document.canonicalTitle,
+        document.documentTypeId,
+        document.ownerUserId,
+        item.orgUnit.id,
+        item.space.id,
+        document.isGoverningFramework,
+      ],
+    );
+    await sql.query(
+      `insert into document_variant (
+         tenant_id, id, created_at, updated_at, row_version, document_id,
+         variant_type, source_variant_id, locale, status
+       ) values ($1, $2, $3, $3, 1, $4, 'BASELINE', null, null, 'ACTIVE')
+       on conflict (tenant_id, id) do nothing`,
+      [item.tenant.id, document.baselineVariantId, fixture.createdAt, document.id],
+    );
+  }
+}
+
 async function insertTenantOwnedRows(
   sql: Client,
   fixture: FixtureSet,
@@ -687,6 +759,7 @@ async function insertTenantOwnedRows(
     await insertIdentity(sql, fixture, item);
     await insertOrganization(sql, fixture, item);
     await insertConfiguration(sql, item);
+    await insertDocuments(sql, fixture, item);
   });
 }
 
@@ -748,6 +821,8 @@ export async function loadFixtureSet(
 const DELETE_ORDER = [
   "audit_event",
   "tenant_event_sequence",
+  "document_variant",
+  "document",
   "body_membership",
   "governance_body",
   "space",

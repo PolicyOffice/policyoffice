@@ -123,13 +123,21 @@ export const AUDIT_EVENT_TYPES = [
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
 /** Production transitions that currently emit through the sole write path. */
-export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = ["configuration.changed"];
+export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
+  "configuration.changed",
+  "document.created",
+  "document.metadata_changed",
+  "document.owner_changed",
+  "document.retired",
+  "document.type_changed",
+];
 
 export interface AuditEventSchema {
   readonly safeBeforeKeys: readonly string[];
   readonly safeAfterKeys: readonly string[];
   readonly requiredSafeBeforeKeys: readonly string[];
   readonly requiredSafeAfterKeys: readonly string[];
+  readonly safeBeforeRequired: boolean;
   readonly safeAfterRequired: boolean;
 }
 
@@ -138,6 +146,7 @@ const ENVELOPE_ONLY_SCHEMA: AuditEventSchema = Object.freeze({
   safeAfterKeys: Object.freeze([]),
   requiredSafeBeforeKeys: Object.freeze([]),
   requiredSafeAfterKeys: Object.freeze([]),
+  safeBeforeRequired: false,
   safeAfterRequired: false,
 });
 
@@ -154,6 +163,79 @@ const CONFIGURATION_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeAfterKeys: CONFIGURATION_SNAPSHOT_KEYS,
   requiredSafeBeforeKeys: CONFIGURATION_SNAPSHOT_KEYS,
   requiredSafeAfterKeys: CONFIGURATION_SNAPSHOT_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
+const DOCUMENT_CREATED_AFTER_KEYS = Object.freeze([
+  "documentCode",
+  "documentTypeId",
+  "owningOrgUnitId",
+  "spaceId",
+  "ownerUserId",
+  "lifecycleStatus",
+  "baselineVariantId",
+]);
+const DOCUMENT_METADATA_KEYS = Object.freeze([
+  "documentCode",
+  "canonicalTitle",
+  "owningOrgUnitId",
+  "spaceId",
+  "isGoverningFramework",
+]);
+const DOCUMENT_OWNER_KEYS = Object.freeze(["ownerUserId"]);
+const DOCUMENT_TYPE_KEYS = Object.freeze(["documentTypeId"]);
+const DOCUMENT_RETIRED_BEFORE_KEYS = Object.freeze(["lifecycleStatus"]);
+const DOCUMENT_RETIRED_AFTER_KEYS = Object.freeze([
+  "lifecycleStatus",
+  "retiredAt",
+  "retirementReason",
+]);
+
+const DOCUMENT_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([]),
+  safeAfterKeys: DOCUMENT_CREATED_AFTER_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: DOCUMENT_CREATED_AFTER_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
+const DOCUMENT_METADATA_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: DOCUMENT_METADATA_KEYS,
+  safeAfterKeys: DOCUMENT_METADATA_KEYS,
+  // The changed-key set is dynamic and is validated below: it must be non-empty and
+  // identical on both sides, and every represented value must actually differ.
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: Object.freeze([]),
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const DOCUMENT_OWNER_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: DOCUMENT_OWNER_KEYS,
+  safeAfterKeys: DOCUMENT_OWNER_KEYS,
+  requiredSafeBeforeKeys: DOCUMENT_OWNER_KEYS,
+  requiredSafeAfterKeys: DOCUMENT_OWNER_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const DOCUMENT_TYPE_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: DOCUMENT_TYPE_KEYS,
+  safeAfterKeys: DOCUMENT_TYPE_KEYS,
+  requiredSafeBeforeKeys: DOCUMENT_TYPE_KEYS,
+  requiredSafeAfterKeys: DOCUMENT_TYPE_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const DOCUMENT_RETIRED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: DOCUMENT_RETIRED_BEFORE_KEYS,
+  safeAfterKeys: DOCUMENT_RETIRED_AFTER_KEYS,
+  requiredSafeBeforeKeys: DOCUMENT_RETIRED_BEFORE_KEYS,
+  requiredSafeAfterKeys: DOCUMENT_RETIRED_AFTER_KEYS,
+  safeBeforeRequired: true,
   safeAfterRequired: true,
 });
 
@@ -168,6 +250,17 @@ const auditEventSchemas = Object.fromEntries(
 auditEventSchemas["configuration.changed"] = Object.freeze({
   1: CONFIGURATION_CHANGED_SCHEMA_V1,
 });
+auditEventSchemas["document.created"] = Object.freeze({ 1: DOCUMENT_CREATED_SCHEMA_V1 });
+auditEventSchemas["document.metadata_changed"] = Object.freeze({
+  1: DOCUMENT_METADATA_CHANGED_SCHEMA_V1,
+});
+auditEventSchemas["document.owner_changed"] = Object.freeze({
+  1: DOCUMENT_OWNER_CHANGED_SCHEMA_V1,
+});
+auditEventSchemas["document.type_changed"] = Object.freeze({
+  1: DOCUMENT_TYPE_CHANGED_SCHEMA_V1,
+});
+auditEventSchemas["document.retired"] = Object.freeze({ 1: DOCUMENT_RETIRED_SCHEMA_V1 });
 
 export const AUDIT_EVENT_SCHEMAS = Object.freeze(auditEventSchemas);
 
@@ -326,6 +419,106 @@ function validateConfigurationChangedSnapshots(input: Record<string, unknown>): 
   }
 }
 
+function requireNullableUuid(value: unknown, field: string): void {
+  if (value !== null) requiredUuid(value, field);
+}
+
+function validateDocumentMetadataValue(key: string, value: unknown, field: string): void {
+  switch (key) {
+    case "documentCode":
+    case "canonicalTitle":
+      requiredString(value, field);
+      return;
+    case "owningOrgUnitId":
+      requiredUuid(value, field);
+      return;
+    case "spaceId":
+      requireNullableUuid(value, field);
+      return;
+    case "isGoverningFramework":
+      if (typeof value !== "boolean") {
+        throw new InvalidAuditEventError(`${field} must be a boolean`);
+      }
+  }
+}
+
+function validateDocumentAuditSnapshots(input: Record<string, unknown>): void {
+  const before = record(input.safeBefore) ? input.safeBefore : null;
+  const after = record(input.safeAfter) ? input.safeAfter : null;
+
+  switch (input.eventType) {
+    case "document.created":
+      if (input.safeBefore !== undefined && input.safeBefore !== null) {
+        throw new InvalidAuditEventError("safeBefore must be null when a document is created");
+      }
+      if (!after) return;
+      requiredString(after.documentCode, "safeAfter.documentCode");
+      requiredUuid(after.documentTypeId, "safeAfter.documentTypeId");
+      requiredUuid(after.owningOrgUnitId, "safeAfter.owningOrgUnitId");
+      requireNullableUuid(after.spaceId, "safeAfter.spaceId");
+      requireNullableUuid(after.ownerUserId, "safeAfter.ownerUserId");
+      requiredUuid(after.baselineVariantId, "safeAfter.baselineVariantId");
+      if (after.lifecycleStatus !== "PLANNED") {
+        throw new InvalidAuditEventError("safeAfter.lifecycleStatus must be PLANNED");
+      }
+      return;
+    case "document.metadata_changed": {
+      if (!before || !after) return;
+      const beforeKeys = Object.keys(before).sort();
+      const afterKeys = Object.keys(after).sort();
+      if (beforeKeys.length === 0) {
+        throw new InvalidAuditEventError("document.metadata_changed must record a changed key");
+      }
+      if (
+        beforeKeys.length !== afterKeys.length ||
+        beforeKeys.some((key, index) => key !== afterKeys[index])
+      ) {
+        throw new InvalidAuditEventError(
+          "document.metadata_changed must record the same keys before and after",
+        );
+      }
+      for (const key of beforeKeys) {
+        validateDocumentMetadataValue(key, before[key], `safeBefore.${key}`);
+        validateDocumentMetadataValue(key, after[key], `safeAfter.${key}`);
+        if (before[key] === after[key]) {
+          throw new InvalidAuditEventError(
+            `document.metadata_changed ${key} must differ before and after`,
+          );
+        }
+      }
+      return;
+    }
+    case "document.owner_changed":
+      if (!before || !after) return;
+      requireNullableUuid(before.ownerUserId, "safeBefore.ownerUserId");
+      requireNullableUuid(after.ownerUserId, "safeAfter.ownerUserId");
+      if (before.ownerUserId === after.ownerUserId) {
+        throw new InvalidAuditEventError("document.owner_changed must change ownerUserId");
+      }
+      return;
+    case "document.type_changed":
+      if (!before || !after) return;
+      requiredUuid(before.documentTypeId, "safeBefore.documentTypeId");
+      requiredUuid(after.documentTypeId, "safeAfter.documentTypeId");
+      if (before.documentTypeId === after.documentTypeId) {
+        throw new InvalidAuditEventError("document.type_changed must change documentTypeId");
+      }
+      return;
+    case "document.retired":
+      if (!before || !after) return;
+      if (before.lifecycleStatus !== "PLANNED" || after.lifecycleStatus !== "RETIRED") {
+        throw new InvalidAuditEventError(
+          "document.retired must record the PLANNED to RETIRED transition",
+        );
+      }
+      requiredString(after.retiredAt, "safeAfter.retiredAt");
+      if (Number.isNaN(Date.parse(after.retiredAt))) {
+        throw new InvalidAuditEventError("safeAfter.retiredAt must be an instant");
+      }
+      requiredString(after.retirementReason, "safeAfter.retirementReason");
+  }
+}
+
 /** Validate at the domain boundary, before PostgreSQL repeats the level-1 checks. */
 export function validateAuditEvent(input: unknown): asserts input is AuditEventInput {
   if (!record(input)) throw new InvalidAuditEventError("audit event must be an object");
@@ -387,7 +580,7 @@ export function validateAuditEvent(input: unknown): asserts input is AuditEventI
     "safeBefore",
     schema.safeBeforeKeys,
     schema.requiredSafeBeforeKeys,
-    false,
+    schema.safeBeforeRequired,
   );
   snapshot(
     input.safeAfter,
@@ -397,6 +590,7 @@ export function validateAuditEvent(input: unknown): asserts input is AuditEventI
     schema.safeAfterRequired,
   );
   validateConfigurationChangedSnapshots(input);
+  validateDocumentAuditSnapshots(input);
 }
 
 interface StoredAuditEventRow extends Record<string, unknown> {
