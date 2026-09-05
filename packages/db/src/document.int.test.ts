@@ -621,7 +621,7 @@ describe("document and variant identity", () => {
       reason: null,
       constraint: "document_retirement_reason_required",
     },
-  ])("INV-DOC-002: refuses $name", async ({ retiredAt, reason, constraint }) => {
+  ])("refuses $name", async ({ retiredAt, reason, constraint }) => {
     await withTenant(TENANT, async (sql) => {
       await expect(
         sql.query(
@@ -647,7 +647,7 @@ describe("document and variant identity", () => {
     });
   });
 
-  it("INV-DOC-002: enforces document_code uniqueness within, but not across, tenants", async () => {
+  it("INV-TEN-003: enforces document_code uniqueness within, but not across, tenants", async () => {
     await withTenant(TENANT, async (sql) => {
       const own = await sql.query<{ count: number }>(
         "select count(*)::int as count from document where document_code = 'SHARED-CODE'",
@@ -734,8 +734,6 @@ describe("document and variant identity", () => {
       "document_owner_fk",
       "document_owning_org_unit_fk",
       "document_pkey",
-      "document_retirement_instant_consistent",
-      "document_retirement_reason_required",
       "document_space_fk",
       "document_tenant_code_unique",
       "document_tenant_fk",

@@ -125,7 +125,7 @@ comment on constraint document_id_unique on document is
 comment on constraint document_tenant_fk on document is
   'INV-TEN-003: every document is anchored to its tenant';
 comment on constraint document_tenant_code_unique on document is
-  'INV-DOC-002: a tenant document has one stable register code';
+  'INV-TEN-003: register-code uniqueness is scoped to one tenant';
 comment on constraint document_type_fk on document is
   'INV-TEN-003, INV-DOC-005: the authoritative document type is tenant-contained and retained';
 comment on constraint document_owner_fk on document is
@@ -135,9 +135,9 @@ comment on constraint document_owning_org_unit_fk on document is
 comment on constraint document_space_fk on document is
   'INV-TEN-003, INV-APL-010: filing space is tenant-contained and never applicability';
 comment on constraint document_retirement_instant_consistent on document is
-  'INV-DOC-002: only a RETIRED document records a retirement instant';
+  'Only a RETIRED document records a retirement instant';
 comment on constraint document_retirement_reason_required on document is
-  'INV-DOC-002: retirement is an explicit transition with a non-empty reason';
+  'Retirement is an explicit transition with a non-empty reason';
 
 comment on constraint document_variant_pkey on document_variant is
   'INV-TEN-003, INV-APL-011: composite identity for a tenant document variant';
