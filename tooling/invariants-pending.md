@@ -21,12 +21,7 @@ Format, parsed strictly:
 
 ## INV-DOC — Document identity and lifecycle
 
-- INV-DOC-001 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-DOC-002 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-DOC-004 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-DOC-006 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-DOC-007 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-008 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-009 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-010 — MVP; no schema or domain code yet (Phase 2/3)
@@ -103,7 +98,6 @@ Format, parsed strictly:
 - INV-AUTH-012 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-013 — V1; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-016 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUTH-017 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-018 — V1; no schema or domain code yet (Phase 2/3)
 
 ## INV-APL — Applicability and variants
@@ -117,7 +111,6 @@ Format, parsed strictly:
 - INV-APL-007 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-008 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-009 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-011 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APL-012 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-013 — V1; no schema or domain code yet (Phase 2/3)
 
