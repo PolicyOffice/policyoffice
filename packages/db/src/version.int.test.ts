@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  DIRECT_VERSION_LIFECYCLE_TRANSITIONS,
   DOCUMENT_VERSION_COLUMN_CLASSIFICATION,
   DocumentVersionNotFoundError,
+  VERSION_LIFECYCLE_STATES,
   changeVersionMateriality,
   changeVersionMetadata,
   createDocumentVersion,
@@ -233,7 +235,80 @@ async function seedTenant(seed: Seed): Promise<void> {
   });
 }
 
-async function insertVersion(sql: Sql, input: InsertVersion): Promise<void> {
+function lifecyclePath(from: VersionLifecycle, to: VersionLifecycle): VersionLifecycle[] {
+  if (from === to) return [];
+  const queue: Array<{ state: VersionLifecycle; path: VersionLifecycle[] }> = [
+    { state: from, path: [] },
+  ];
+  const visited = new Set<VersionLifecycle>([from]);
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) break;
+    for (const transition of DIRECT_VERSION_LIFECYCLE_TRANSITIONS) {
+      if (transition.from !== current.state) continue;
+      const next = transition.to as VersionLifecycle;
+      const path = [...current.path, next];
+      if (next === to) return path;
+      if (!visited.has(next)) {
+        visited.add(next);
+        queue.push({ state: next, path });
+      }
+    }
+  }
+  throw new Error(`no permitted test fixture path from ${from} to ${to}`);
+}
+
+async function transitionVersion(
+  sql: Sql,
+  id: string,
+  to: VersionLifecycle,
+  options: {
+    withdrawnAt?: string | null | undefined;
+    withdrawalReason?: string | null | undefined;
+  } = {},
+): Promise<number> {
+  const { rows } = await sql.query<{ row_version: number }>(
+    `update document_version
+        set lifecycle_state = $2::version_lifecycle,
+            withdrawn_at = case
+              when $2::version_lifecycle = 'WITHDRAWN'
+                then coalesce($3::timestamptz, withdrawn_at, statement_timestamp())
+              else withdrawn_at
+            end,
+            withdrawal_reason = case
+              when $2::version_lifecycle = 'WITHDRAWN'
+                then coalesce(nullif(btrim($4::text), ''), withdrawal_reason,
+                              'Withdrawn in lifecycle test')
+              else withdrawal_reason
+            end,
+            row_version = row_version + 1
+      where id = $1
+      returning row_version`,
+    [id, to, options.withdrawnAt ?? null, options.withdrawalReason ?? null],
+  );
+  const row = rows[0];
+  if (!row) throw new Error(`test fixture version ${id} was not found`);
+  return row.row_version;
+}
+
+async function walkVersionLifecycle(
+  sql: Sql,
+  id: string,
+  from: VersionLifecycle,
+  to: VersionLifecycle,
+  options: {
+    withdrawnAt?: string | null | undefined;
+    withdrawalReason?: string | null | undefined;
+  } = {},
+): Promise<number> {
+  let rowVersion = 1;
+  for (const next of lifecyclePath(from, to)) {
+    rowVersion = await transitionVersion(sql, id, next, options);
+  }
+  return rowVersion;
+}
+
+async function insertVersion(sql: Sql, input: InsertVersion): Promise<number> {
   const lifecycle = input.lifecycle ?? "PUBLISHED";
   await sql.query(
     `insert into document_version (
@@ -245,7 +320,7 @@ async function insertVersion(sql: Sql, input: InsertVersion): Promise<void> {
      ) values (
        $1, $2, $3, $4, $5, $6::version_lifecycle, $7,
        'Version test policy', $8, $9, $10, $11::materiality, $12,
-       $13, $14, $15, $16, $17
+       $13, $14, null, null, $15
      )`,
     [
       TENANT,
@@ -253,7 +328,7 @@ async function insertVersion(sql: Sql, input: InsertVersion): Promise<void> {
       input.variantId ?? BASELINE,
       input.sequence ?? 1,
       input.displayLabel ?? "1.0",
-      lifecycle,
+      "DRAFT",
       input.documentTypeId ?? DOCUMENT_TYPE,
       input.classificationId ?? CLASSIFICATION,
       input.approvedRevisionId ?? null,
@@ -262,12 +337,24 @@ async function insertVersion(sql: Sql, input: InsertVersion): Promise<void> {
       input.changeSummary ?? "Version test change",
       input.effectiveFrom ?? null,
       input.effectiveUntil ?? null,
-      input.withdrawnAt ?? null,
-      input.withdrawalReason ?? (lifecycle === "WITHDRAWN" ? "Withdrawn in test" : null),
       input.configurationId === undefined ? CONFIGURATION : input.configurationId,
     ],
   );
+  return walkVersionLifecycle(sql, input.id, "DRAFT", lifecycle, {
+    withdrawnAt: input.withdrawnAt,
+    withdrawalReason: input.withdrawalReason,
+  });
 }
+
+const PERMITTED_VERSION_LIFECYCLE_PAIRS = DIRECT_VERSION_LIFECYCLE_TRANSITIONS.map(
+  ({ from, to }) => [from, to] as const,
+);
+const permittedVersionLifecycleKeys = new Set(
+  PERMITTED_VERSION_LIFECYCLE_PAIRS.map(([from, to]) => `${from}->${to}`),
+);
+const FORBIDDEN_VERSION_LIFECYCLE_PAIRS = VERSION_LIFECYCLE_STATES.flatMap((from) =>
+  VERSION_LIFECYCLE_STATES.map((to) => [from, to] as const),
+).filter(([from, to]) => !permittedVersionLifecycleKeys.has(`${from}->${to}`));
 
 async function installFixtures(): Promise<void> {
   await withMigrationRole__PRIVILEGED(async (sql) => {
@@ -416,6 +503,149 @@ describe("document version effectivity and immutability", () => {
     ]);
   });
 
+  it.each(VERSION_LIFECYCLE_STATES.filter((state) => state !== "DRAFT"))(
+    "refuses creating a document version directly as %s",
+    async (state) => {
+      await withTenant(TENANT, async (sql) => {
+        await expect(
+          sql.query(
+            `insert into document_version (
+               tenant_id, id, document_variant_id, version_sequence, lifecycle_state,
+               document_type_id, title, classification_id, configuration_version_id
+             ) values ($1, $2, $3, 1, $4::version_lifecycle, $5,
+                       'Invalid initial lifecycle', $6, $7)`,
+            [TENANT, VERSION, BASELINE, state, DOCUMENT_TYPE, CLASSIFICATION, CONFIGURATION],
+          ),
+        ).rejects.toMatchObject({
+          code: "23514",
+          constraint: "document_version_lifecycle_transition",
+        });
+      });
+    },
+  );
+
+  it.each(PERMITTED_VERSION_LIFECYCLE_PAIRS)(
+    "permits the specified document version transition %s → %s",
+    async (from, to) => {
+      await withTenant(TENANT, async (sql) => {
+        await insertVersion(sql, { id: VERSION, lifecycle: from });
+        await transitionVersion(sql, VERSION, to);
+        const { rows } = await sql.query<{ lifecycle_state: VersionLifecycle }>(
+          "select lifecycle_state from document_version where id = $1",
+          [VERSION],
+        );
+        expect(rows).toEqual([{ lifecycle_state: to }]);
+      });
+    },
+  );
+
+  it.each(FORBIDDEN_VERSION_LIFECYCLE_PAIRS)(
+    "refuses unspecified document version transition %s → %s",
+    async (from, to) => {
+      await withTenant(TENANT, async (sql) => {
+        await insertVersion(sql, { id: VERSION, lifecycle: from });
+        await expect(transitionVersion(sql, VERSION, to)).rejects.toMatchObject({
+          code: "23514",
+        });
+      });
+    },
+  );
+
+  it("INV-EFF-001: refuses APPROVED → EFFECTIVE because publication is a distinct step", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertVersion(sql, { id: VERSION, lifecycle: "APPROVED" });
+      await expect(transitionVersion(sql, VERSION, "EFFECTIVE")).rejects.toMatchObject({
+        code: "23514",
+        constraint: "document_version_lifecycle_transition",
+      });
+    });
+  });
+
+  it("INV-VER-003: refuses EFFECTIVE → DRAFT so released content cannot be thawed", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertVersion(sql, { id: VERSION, lifecycle: "EFFECTIVE" });
+      await expect(transitionVersion(sql, VERSION, "DRAFT")).rejects.toMatchObject({
+        code: "23514",
+      });
+    });
+  });
+
+  it.each(["SUPERSEDED", "WITHDRAWN"] as const)(
+    "INV-EFF-004: refuses %s → EFFECTIVE so historical versions cannot be resurrected",
+    async (from) => {
+      await withTenant(TENANT, async (sql) => {
+        await insertVersion(sql, { id: VERSION, lifecycle: from });
+        await expect(transitionVersion(sql, VERSION, "EFFECTIVE")).rejects.toMatchObject({
+          code: "23514",
+          constraint: "document_version_lifecycle_transition",
+        });
+      });
+    },
+  );
+
+  it("refuses IN_REVIEW → DRAFT without a recorded changes-requested decision", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertVersion(sql, { id: VERSION, lifecycle: "IN_REVIEW" });
+      await expect(transitionVersion(sql, VERSION, "DRAFT")).rejects.toMatchObject({
+        code: "23514",
+        constraint: "document_version_lifecycle_transition",
+      });
+    });
+  });
+
+  it.each(VERSION_LIFECYCLE_STATES)(
+    "allows an update that does not touch lifecycle_state while the version is %s",
+    async (state) => {
+      await withTenant(TENANT, async (sql) => {
+        await insertVersion(sql, { id: VERSION, lifecycle: state });
+        const { rows } = await sql.query<{ display_label: string; lifecycle_state: string }>(
+          `update document_version
+              set display_label = $2, row_version = row_version + 1
+            where id = $1
+            returning display_label, lifecycle_state`,
+          [VERSION, `updated-${state.toLowerCase()}`],
+        );
+        expect(rows).toEqual([
+          {
+            display_label: `updated-${state.toLowerCase()}`,
+            lifecycle_state: state,
+          },
+        ]);
+      });
+    },
+  );
+
+  it("INV-VER-003 / INV-EFF-001 / INV-EFF-004 / INV-TEN-001: documents an invoker-rights lifecycle trigger", async () => {
+    const { rows } = await withAppRole((sql) =>
+      sql.query<{
+        function_comment: string | null;
+        trigger_comment: string | null;
+        trigger_definition: string;
+        security_definer: boolean;
+      }>(`
+        select obj_description(p.oid, 'pg_proc')::text as function_comment,
+               obj_description(t.oid, 'pg_trigger')::text as trigger_comment,
+               pg_get_triggerdef(t.oid)::text as trigger_definition,
+               p.prosecdef as security_definer
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+          join pg_trigger t on t.tgfoid = p.oid
+         where n.nspname = 'public'
+           and p.proname = 'assert_version_lifecycle_transition'
+           and t.tgname = 'document_version_lifecycle_transition'
+      `),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ security_definer: false });
+    expect(rows[0]?.function_comment).toMatch(/INV-VER-003/);
+    expect(rows[0]?.function_comment).toMatch(/INV-EFF-001/);
+    expect(rows[0]?.function_comment).toMatch(/INV-EFF-004/);
+    expect(rows[0]?.trigger_comment).toMatch(/INV-VER-003/);
+    expect(rows[0]?.trigger_comment).toMatch(/INV-EFF-001/);
+    expect(rows[0]?.trigger_comment).toMatch(/INV-EFF-004/);
+    expect(rows[0]?.trigger_definition).toMatch(/BEFORE INSERT OR UPDATE OF lifecycle_state/i);
+  });
+
   it("INV-EFF-002: stores effective_range as a generated STORED column", async () => {
     const { rows } = await withAppRole((sql) =>
       sql.query<{ attgenerated: string; expression: string }>(`
@@ -517,12 +747,7 @@ describe("document version effectivity and immutability", () => {
       ).rejects.toMatchObject({ constraint: "one_pre_release_version_per_variant" });
       await sql.query("rollback to savepoint duplicate_candidate");
       await sql.query("release savepoint duplicate_candidate");
-      await sql.query(
-        `update document_version
-            set lifecycle_state = 'PUBLISHED', row_version = row_version + 1
-          where id = $1`,
-        [VERSION],
-      );
+      await walkVersionLifecycle(sql, VERSION, "DRAFT", "PUBLISHED");
       await insertVersion(sql, {
         id: "93000000-0000-0000-0009-000000000002",
         lifecycle: "DRAFT",
@@ -586,13 +811,17 @@ describe("document version effectivity and immutability", () => {
 
   it("INV-VER-008: changes an approved display label and emits version.metadata_changed", async () => {
     await withTenant(TENANT, async (sql) => {
-      await insertVersion(sql, { id: VERSION, lifecycle: "APPROVED", displayLabel: "1.0" });
+      const rowVersion = await insertVersion(sql, {
+        id: VERSION,
+        lifecycle: "APPROVED",
+        displayLabel: "1.0",
+      });
       const changed = await changeVersionMetadata(transaction(sql), {
         ...createInput(),
-        expectedRowVersion: 1,
+        expectedRowVersion: rowVersion,
         displayLabel: "2027.01",
       });
-      expect(changed).toMatchObject({ id: VERSION, rowVersion: 2 });
+      expect(changed).toMatchObject({ id: VERSION, rowVersion: rowVersion + 1 });
       const { rows } = await sql.query<{
         event_type: string;
         subject_type: string;
@@ -937,7 +1166,7 @@ describe("document version effectivity and immutability", () => {
 
   it("INV-VER-007: lets migration-owned publication assign unset effectivity timestamps once", async () => {
     await withMigrationTenant(async (sql) => {
-      await insertVersion(sql, { id: VERSION, lifecycle: "APPROVED" });
+      const rowVersion = await insertVersion(sql, { id: VERSION, lifecycle: "APPROVED" });
       await sql.query(
         `update document_version
             set effective_from = '2028-01-01T00:00:00Z',
@@ -965,7 +1194,7 @@ describe("document version effectivity and immutability", () => {
         {
           effective_from: new Date("2028-01-01T00:00:00Z"),
           effective_until: new Date("2029-01-01T00:00:00Z"),
-          row_version: 3,
+          row_version: rowVersion + 2,
         },
       ]);
     });
