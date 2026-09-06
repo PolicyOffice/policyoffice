@@ -80,6 +80,31 @@ export {
 } from "./content-digest.js";
 
 export {
+  CONTENT_REVISION_REQUIRED_CAPABILITIES,
+  ContentAttachmentNotFoundError,
+  ContentRevisionConcurrencyError,
+  ContentRevisionLifecycleError,
+  ContentRevisionNotFoundError,
+  ContentRevisionSubmittedError,
+  addContentAttachment,
+  createContentRevision,
+  inspectContentMediaType,
+  removeContentAttachment,
+  replaceContentAttachment,
+  submitContentRevision,
+  type AddContentAttachmentInput,
+  type ChangedContentAttachment,
+  type ChangedContentRevision,
+  type CreateContentRevisionInput,
+  type CreatedContentRevision,
+  type GovernedAttachment,
+  type RemoveContentAttachmentInput,
+  type ReplaceContentAttachmentInput,
+  type SubmitContentRevisionInput,
+  type SubmittedContentRevision,
+} from "./content-revision.js";
+
+export {
   DIRECT_DOCUMENT_LIFECYCLE_TRANSITIONS,
   DOCUMENT_LIFECYCLE_STATES,
   DOCUMENT_REQUIRED_CAPABILITIES,

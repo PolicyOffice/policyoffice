@@ -850,6 +850,112 @@ export const documentVersion = pgTable(
   ],
 ).enableRLS();
 
+export const contentRevision = pgTable(
+  "content_revision",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    documentVersionId: uuid("document_version_id").notNull(),
+    revisionSequence: integer("revision_sequence").notNull(),
+    contentRef: text("content_ref"),
+    canonicalManifest: jsonb("canonical_manifest").$type<string>().notNull(),
+    canonicalisationSchemaVersion: integer("canonicalisation_schema_version").notNull(),
+    contentDigest: text("content_digest").notNull(),
+    createdBy: uuid("created_by").notNull(),
+    submittedAt: instant("submitted_at"),
+  },
+  (t) => [
+    primaryKey({ name: "content_revision_pkey", columns: [t.tenantId, t.id] }),
+    unique("content_revision_id_unique").on(t.id),
+    foreignKey({
+      name: "content_revision_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "content_revision_version_fk",
+      columns: [t.tenantId, t.documentVersionId],
+      foreignColumns: [documentVersion.tenantId, documentVersion.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "content_revision_created_by_fk",
+      columns: [t.tenantId, t.createdBy],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    unique("content_revision_version_sequence_unique").on(
+      t.tenantId,
+      t.documentVersionId,
+      t.revisionSequence,
+    ),
+    check("content_revision_sequence_positive", sql`${t.revisionSequence} >= 1`),
+    check(
+      "content_revision_manifest_is_canonical_text",
+      sql`jsonb_typeof(${t.canonicalManifest}) = 'string'
+          and octet_length(${t.canonicalManifest} #>> '{}') > 0`,
+    ),
+    check("content_revision_schema_version_v1", sql`${t.canonicalisationSchemaVersion} = 1`),
+    check("content_revision_digest_format", sql`${t.contentDigest} ~ '^sha-256:[0-9a-f]{64}$'`),
+    check(
+      "content_revision_content_ref_tenant_partitioned",
+      sql`${t.contentRef} is null
+          or ${t.contentRef} ~ ('^t/' || ${t.tenantId}::text || '/blob/[0-9a-f]{64}$')`,
+    ),
+    index("content_revision_version_idx").on(t.tenantId, t.documentVersionId),
+    index("content_revision_created_by_idx").on(t.tenantId, t.createdBy),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const contentAttachment = pgTable(
+  "content_attachment",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    contentRevisionId: uuid("content_revision_id").notNull(),
+    filename: text("filename").notNull(),
+    mediaType: text("media_type").notNull(),
+    byteSize: bigint("byte_size", { mode: "number" }).notNull(),
+    storageRef: text("storage_ref").notNull(),
+    digest: text("digest").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "content_attachment_pkey", columns: [t.tenantId, t.id] }),
+    unique("content_attachment_id_unique").on(t.id),
+    foreignKey({
+      name: "content_attachment_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "content_attachment_revision_fk",
+      columns: [t.tenantId, t.contentRevisionId],
+      foreignColumns: [contentRevision.tenantId, contentRevision.id],
+    }).onDelete("restrict"),
+    check(
+      "content_attachment_filename_not_blank",
+      sql`nullif(btrim(${t.filename}), '') is not null`,
+    ),
+    check(
+      "content_attachment_media_type_not_blank",
+      sql`nullif(btrim(${t.mediaType}), '') is not null`,
+    ),
+    check("content_attachment_byte_size_nonnegative", sql`${t.byteSize} >= 0`),
+    check("content_attachment_digest_format", sql`${t.digest} ~ '^sha-256:[0-9a-f]{64}$'`),
+    check(
+      "content_attachment_storage_ref_tenant_partitioned",
+      sql`${t.storageRef} ~ ('^t/' || ${t.tenantId}::text || '/blob/[0-9a-f]{64}$')`,
+    ),
+    index("content_attachment_revision_idx").on(t.tenantId, t.contentRevisionId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
 export const tenantEventSequence = pgTable(
   "tenant_event_sequence",
   {

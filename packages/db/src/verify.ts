@@ -421,6 +421,13 @@ export async function verifyDrift(): Promise<{ drifted: boolean; diff: string }>
         references document_version (tenant_id, id)
         on delete restrict
     `);
+    await sql.query(`
+      alter table document_version
+        add constraint document_version_approved_revision_fk
+        foreign key (tenant_id, approved_revision_id)
+        references content_revision (tenant_id, id)
+        on delete restrict
+    `);
 
     // Drizzle can render ENABLE ROW LEVEL SECURITY and policies, but it has no schema
     // primitive for FORCE. The convention is universal and schema-discoverable, so apply

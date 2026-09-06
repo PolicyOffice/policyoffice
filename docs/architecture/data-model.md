@@ -115,7 +115,7 @@ mechanism, or the drop is recorded.
 | INV-DOC-008 no retirement while effective | 2 | Trigger on `document.lifecycle_status` |
 | INV-DOC-009 type recorded on the version | **1** | `document_version.document_type_id` `not null`, immutable by trigger |
 | INV-DOC-010 title and classification recorded on the version | **1** | `document_version.title` and `classification_id` `not null`, immutable by the same trigger |
-| INV-VER-002 submission freezes one revision | 2 | Partial unique index on submitted revisions per version |
+| INV-VER-002 submission freezes one revision | 2 | Submission atomically sets `submitted_at` with the server-computed manifest and digest; the immutability trigger freezes that row from that instant |
 | INV-VER-003 released content immutable | 2 | Trigger refusing `update` of governed columns past `approved` |
 | INV-VER-006 labels are not identity | **1** | `version_sequence integer`; `display_label` has no unique or ordering role |
 | INV-VER-007 approver-relied-upon fields immutable | 2 | The same trigger, column by column |
@@ -466,11 +466,6 @@ create table content_revision (
   foreign key (tenant_id, document_version_id)
     references document_version (tenant_id, id) on delete restrict
 );
-
--- INV-VER-002: submission freezes exactly one revision per version.
-create unique index one_submitted_revision_per_version
-  on content_revision (tenant_id, document_version_id)
-  where submitted_at is not null;
 
 -- INV-VER-010: a submitted revision is immutable; editing creates revision n+1.
 create trigger content_revision_immutable_after_submission

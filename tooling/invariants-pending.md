@@ -26,10 +26,6 @@ Format, parsed strictly:
 
 ## INV-VER — Versioning and immutability
 
-- INV-VER-001 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-004 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-010 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-014 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-015 — MVP; no schema or domain code yet (Phase 2/3)
 
