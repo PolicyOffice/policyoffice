@@ -14,7 +14,10 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIT_EVENT_SCHEMAS,
   AUDIT_EVENT_TYPES,
+  ENVELOPE_ONLY_BY_DESIGN,
+  ENVELOPE_ONLY_SCHEMA,
   IMPLEMENTED_AUDIT_EVENT_TYPES,
+  type AuditEventSchema,
 } from "../packages/domain/src/audit.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -99,6 +102,35 @@ function auditWritePathProblems(sources: readonly ProductionSource[]): string[] 
   return problems.sort();
 }
 
+interface ImplementedSchemaGateInput<EventType extends string> {
+  implementedEventTypes: readonly EventType[];
+  schemas: Readonly<Partial<Record<EventType, Readonly<Record<number, AuditEventSchema>>>>>;
+  envelopeOnlyByDesign: readonly EventType[];
+  envelopeOnlySchema: AuditEventSchema;
+}
+
+/**
+ * Identity is the contract here. A separately declared schema with empty key arrays is a
+ * deliberate decision; inheriting the shared placeholder is the unconsidered default.
+ */
+function implementedSchemaProblems<EventType extends string>({
+  implementedEventTypes,
+  schemas,
+  envelopeOnlyByDesign,
+  envelopeOnlySchema,
+}: ImplementedSchemaGateInput<EventType>): string[] {
+  const permitted = new Set(envelopeOnlyByDesign);
+  const problems: string[] = [];
+  for (const eventType of implementedEventTypes) {
+    const registeredSchemas = Object.values(schemas[eventType] ?? {});
+    const usesPlaceholder = registeredSchemas.some((schema) => schema === envelopeOnlySchema);
+    if (usesPlaceholder && !permitted.has(eventType)) {
+      problems.push(`${eventType}: implemented event still uses ENVELOPE_ONLY_SCHEMA`);
+    }
+  }
+  return problems.sort();
+}
+
 describe("audit-event completeness", () => {
   it("INV-AUD-008: every catalogued event has a typed, gapless version registry", () => {
     const documented = documentedEventTypes();
@@ -132,6 +164,66 @@ describe("audit-event completeness", () => {
     expect([...IMPLEMENTED_AUDIT_EVENT_TYPES].sort()).toEqual(
       [...new Set(productionReferences)].sort(),
     );
+  });
+
+  it("INV-AUD-008: implemented events replace the placeholder or declare an exception", () => {
+    expect(
+      implementedSchemaProblems({
+        implementedEventTypes: IMPLEMENTED_AUDIT_EVENT_TYPES,
+        schemas: AUDIT_EVENT_SCHEMAS,
+        envelopeOnlyByDesign: ENVELOPE_ONLY_BY_DESIGN,
+        envelopeOnlySchema: ENVELOPE_ONLY_SCHEMA,
+      }),
+    ).toEqual([]);
+  });
+
+  it("INV-AUD-008: the placeholder gate distinguishes defaults, exceptions, and deliberate empty schemas", () => {
+    const eventType = "access.denied" as const;
+    const placeholderSchemas = Object.freeze({
+      [eventType]: Object.freeze({ 1: ENVELOPE_ONLY_SCHEMA }),
+    });
+    const fixture = {
+      implementedEventTypes: [eventType],
+      schemas: placeholderSchemas,
+      envelopeOnlyByDesign: [],
+      envelopeOnlySchema: ENVELOPE_ONLY_SCHEMA,
+    } as const;
+
+    expect(implementedSchemaProblems(fixture)).toEqual([
+      "access.denied: implemented event still uses ENVELOPE_ONLY_SCHEMA",
+    ]);
+    expect(implementedSchemaProblems({ ...fixture, envelopeOnlyByDesign: [eventType] })).toEqual(
+      [],
+    );
+
+    const deliberateEmptySchema: AuditEventSchema = Object.freeze({
+      safeBeforeKeys: Object.freeze([]),
+      safeAfterKeys: Object.freeze([]),
+      requiredSafeBeforeKeys: Object.freeze([]),
+      requiredSafeAfterKeys: Object.freeze([]),
+      safeBeforeRequired: false,
+      safeAfterRequired: false,
+    });
+    expect(deliberateEmptySchema).not.toBe(ENVELOPE_ONLY_SCHEMA);
+    expect(
+      implementedSchemaProblems({
+        ...fixture,
+        schemas: Object.freeze({
+          [eventType]: Object.freeze({ 1: deliberateEmptySchema }),
+        }),
+      }),
+    ).toEqual([]);
+    expect(
+      implementedSchemaProblems({
+        ...fixture,
+        schemas: Object.freeze({
+          [eventType]: Object.freeze({
+            1: deliberateEmptySchema,
+            2: ENVELOPE_ONLY_SCHEMA,
+          }),
+        }),
+      }),
+    ).toEqual(["access.denied: implemented event still uses ENVELOPE_ONLY_SCHEMA"]);
   });
 
   it("INV-AUD-001 / INV-AUD-004 / INV-AUD-007: audit.ts is the only production ledger insertion path", () => {

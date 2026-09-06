@@ -136,6 +136,13 @@ export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "version.metadata_changed",
 ];
 
+/**
+ * Implemented events deliberately carrying no safe-before or safe-after snapshot.
+ * Every future entry must have an inline, event-specific reason; an implemented type
+ * absent from this list must replace the shared ENVELOPE_ONLY_SCHEMA placeholder.
+ */
+export const ENVELOPE_ONLY_BY_DESIGN: readonly AuditEventType[] = Object.freeze([]);
+
 export interface AuditEventSchema {
   readonly safeBeforeKeys: readonly string[];
   readonly safeAfterKeys: readonly string[];
@@ -145,7 +152,7 @@ export interface AuditEventSchema {
   readonly safeAfterRequired: boolean;
 }
 
-const ENVELOPE_ONLY_SCHEMA: AuditEventSchema = Object.freeze({
+export const ENVELOPE_ONLY_SCHEMA: AuditEventSchema = Object.freeze({
   safeBeforeKeys: Object.freeze([]),
   safeAfterKeys: Object.freeze([]),
   requiredSafeBeforeKeys: Object.freeze([]),

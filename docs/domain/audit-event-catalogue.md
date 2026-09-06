@@ -112,6 +112,10 @@ Two more, added with this catalogue:
 > required fields never change in place; a changed shape gets a new
 > `event_schema_version`, and older events remain interpretable under theirs.**
 
+An implemented event may retain the shared envelope-only placeholder only when it is listed
+in `ENVELOPE_ONLY_BY_DESIGN` with an event-specific reason; otherwise the audit completeness
+gate requires a deliberately defined schema, even when that schema has no snapshot keys.
+
 > **INV-AUD-009 — Events carry a deterministic total order within a tenant, so a
 > reconstructed chronology is stable across regenerations.**
 
