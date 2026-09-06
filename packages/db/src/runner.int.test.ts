@@ -403,12 +403,12 @@ describe("what the chain actually builds", () => {
         tenant_id uuid not null,
         variant_id uuid not null,
         effective_range tstzrange,
-        constraint one_effective_version_per_variant
+        constraint runner_test_one_effective_version_per_variant
           exclude using gist (tenant_id with =, variant_id with =, effective_range with &&)
           where (effective_range is not null)
       )`);
       await sql.query(
-        `comment on constraint one_effective_version_per_variant on effectivity is
+        `comment on constraint runner_test_one_effective_version_per_variant on effectivity is
            'INV-EFF-002: at most one version of a variant claims any instant'`,
       );
 
@@ -416,7 +416,8 @@ describe("what the chain actually builds", () => {
       // "spec -> INV -> enforcement" link checkable rather than a convention.
       const { rows } = await sql.query<{ comment: string }>(
         `select obj_description(con.oid, 'pg_constraint') as comment
-           from pg_constraint con where con.conname = 'one_effective_version_per_variant'`,
+           from pg_constraint con
+          where con.conname = 'runner_test_one_effective_version_per_variant'`,
       );
       expect(rows[0]?.comment).toContain("INV-EFF-002");
     });

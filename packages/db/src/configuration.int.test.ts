@@ -313,7 +313,7 @@ describe("the configuration schema", () => {
     ]);
   });
 
-  it("INV-DOC-005: keeps the document-version forward reference nullable and unconstrained", async () => {
+  it("INV-DOC-005: keeps the document-version forward reference nullable and constrained", async () => {
     const { rows } = await withAppRole((sql) =>
       sql.query<{ is_nullable: string; comment: string; foreign_keys: number }>(
         `select cols.is_nullable,
@@ -333,7 +333,7 @@ describe("the configuration schema", () => {
       ),
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ is_nullable: "YES", foreign_keys: 0 });
+    expect(rows[0]).toMatchObject({ is_nullable: "YES", foreign_keys: 1 });
     expect(rows[0]?.comment).toContain("POL-013 (#51)");
   });
 

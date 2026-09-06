@@ -180,6 +180,80 @@ describe("the audit event envelope", () => {
     ).toThrow(/retirementReason is required/i);
   });
 
+  it("INV-AUD-008 / INV-DOC-009 / INV-DOC-010: version.created publishes its governed v1 snapshot", () => {
+    const created = event({
+      eventType: "version.created",
+      eventSchemaVersion: 1,
+      safeBefore: null,
+      safeAfter: {
+        documentVariantId: "10000000-0000-0000-0015-000000000001",
+        versionSequence: 3,
+        lifecycleState: "DRAFT",
+        documentTypeId: "10000000-0000-0000-0016-000000000001",
+        title: "Information Security Policy",
+        classificationId: "10000000-0000-0000-0017-000000000001",
+        materiality: "MATERIAL",
+        configurationVersionId: "10000000-0000-0000-0004-000000000001",
+      },
+    });
+    expect(() => validateAuditEvent(created)).not.toThrow();
+    const incomplete = { ...created.safeAfter };
+    Reflect.deleteProperty(incomplete, "documentTypeId");
+    expect(() => validateAuditEvent({ ...created, safeAfter: incomplete })).toThrow(
+      /documentTypeId is required/i,
+    );
+  });
+
+  it("INV-AUD-008: version.materiality_changed requires both materiality values", () => {
+    const changed = event({
+      eventType: "version.materiality_changed",
+      eventSchemaVersion: 1,
+      safeBefore: { materiality: "NON_MATERIAL" },
+      safeAfter: { materiality: "MATERIAL" },
+    });
+    expect(() => validateAuditEvent(changed)).not.toThrow();
+    expect(() => validateAuditEvent({ ...changed, safeBefore: {} })).toThrow(
+      /materiality is required/i,
+    );
+  });
+
+  it("INV-AUD-008 / INV-VER-008: version.metadata_changed requires identical changed keys", () => {
+    const changed = event({
+      eventType: "version.metadata_changed",
+      eventSchemaVersion: 1,
+      safeBefore: { displayLabel: "2.0" },
+      safeAfter: { displayLabel: "2027.02" },
+    });
+    expect(() => validateAuditEvent(changed)).not.toThrow();
+    expect(() => validateAuditEvent({ ...changed, safeAfter: {} })).toThrow(
+      /same keys before and after/i,
+    );
+  });
+
+  it("INV-AUD-008: all implemented version events replace their placeholder v1 schema", () => {
+    for (const eventType of [
+      "version.created",
+      "version.materiality_changed",
+      "version.metadata_changed",
+    ] as const) {
+      expect(IMPLEMENTED_AUDIT_EVENT_TYPES).toContain(eventType);
+      expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterRequired).toBe(true);
+      expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterKeys.length).toBeGreaterThan(0);
+    }
+    for (const eventType of [
+      "version.approved",
+      "version.published",
+      "version.withdrawn",
+    ] as const) {
+      expect(IMPLEMENTED_AUDIT_EVENT_TYPES).not.toContain(eventType);
+      expect(AUDIT_EVENT_SCHEMAS[eventType][1]).toMatchObject({
+        safeBeforeKeys: [],
+        safeAfterKeys: [],
+        safeAfterRequired: false,
+      });
+    }
+  });
+
   it("INV-AUD-008: only emitted document events replace their placeholder schema", () => {
     const implemented = [
       "document.created",
