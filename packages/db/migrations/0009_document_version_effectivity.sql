@@ -137,8 +137,9 @@ comment on column document_version.effective_range is
 
 -- INV-VER-003/007: a released or terminal row cannot be thawed, and every field
 -- an approver relied upon remains frozen. Effectivity timestamps are the sole exception:
--- only migration-owned execution may write them, allowing POL-016 to expose one narrow,
--- audited SECURITY DEFINER publication function without granting app_role a bypass.
+-- only migration-owned execution may assign each null timestamp once, allowing POL-016
+-- to expose one narrow, audited SECURITY DEFINER publication function without granting
+-- app_role a bypass or permitting the publication path to rewrite history.
 create function assert_governed_columns_unchanged() returns trigger
 language plpgsql
 as $$
@@ -151,6 +152,9 @@ declare
     'APPROVED', 'PUBLISHED', 'EFFECTIVE', 'SUPERSEDED',
     'WITHDRAWN', 'REJECTED', 'CANCELLED'
   );
+  effectivity_changed boolean :=
+    new.effective_from is distinct from old.effective_from
+    or new.effective_until is distinct from old.effective_until;
 begin
   if not frozen_state then
     return new;
@@ -173,13 +177,22 @@ begin
       message = 'approved document version governed columns are immutable';
   end if;
 
-  if (new.effective_from is distinct from old.effective_from
-      or new.effective_until is distinct from old.effective_until)
-     and current_user <> 'migration_role' then
+  if effectivity_changed
+     and (
+       current_user <> 'migration_role'
+       or (
+         new.effective_from is distinct from old.effective_from
+         and old.effective_from is not null
+       )
+       or (
+         new.effective_until is distinct from old.effective_until
+         and old.effective_until is not null
+       )
+     ) then
     raise exception using
       errcode = '23514',
       constraint = 'document_version_governed_columns_immutable',
-      message = 'effectivity timestamps may be written only by the controlled publication path';
+      message = 'effectivity timestamps may be assigned once only by the controlled publication path';
   end if;
 
   return new;
@@ -187,7 +200,7 @@ end
 $$;
 
 comment on function assert_governed_columns_unchanged() is
-  'INV-VER-003, INV-VER-007: freezes approver-relied-upon fields and reserves effectivity writes for migration-owned publication';
+  'INV-VER-003, INV-VER-007: freezes approver-relied-upon fields and makes migration-owned effectivity writes single-assignment';
 
 create trigger document_version_governed_columns_immutable
   before update on document_version

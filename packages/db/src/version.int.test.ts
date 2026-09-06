@@ -122,6 +122,18 @@ async function inCommittedTenant<T>(tenantId: string, fn: (sql: Sql) => Promise<
   });
 }
 
+async function withMigrationTenant<T>(fn: (sql: Sql) => Promise<T>): Promise<T> {
+  return withMigrationRole__PRIVILEGED(async (sql) => {
+    await sql.query("begin");
+    try {
+      await sql.query("select set_config('app.tenant_id', $1, true)", [TENANT]);
+      return await fn(sql);
+    } finally {
+      await sql.query("rollback");
+    }
+  });
+}
+
 async function clearTenant(sql: Sql, tenantId: string): Promise<void> {
   await sql.query("begin");
   try {
@@ -922,6 +934,72 @@ describe("document version effectivity and immutability", () => {
       });
     });
   });
+
+  it("INV-VER-007: lets migration-owned publication assign unset effectivity timestamps once", async () => {
+    await withMigrationTenant(async (sql) => {
+      await insertVersion(sql, { id: VERSION, lifecycle: "APPROVED" });
+      await sql.query(
+        `update document_version
+            set effective_from = '2028-01-01T00:00:00Z',
+                row_version = row_version + 1
+          where id = $1`,
+        [VERSION],
+      );
+      await sql.query(
+        `update document_version
+            set effective_until = '2029-01-01T00:00:00Z',
+                row_version = row_version + 1
+          where id = $1`,
+        [VERSION],
+      );
+      const { rows } = await sql.query<{
+        effective_from: Date;
+        effective_until: Date;
+        row_version: number;
+      }>(
+        `select effective_from, effective_until, row_version
+           from document_version where id = $1`,
+        [VERSION],
+      );
+      expect(rows).toEqual([
+        {
+          effective_from: new Date("2028-01-01T00:00:00Z"),
+          effective_until: new Date("2029-01-01T00:00:00Z"),
+          row_version: 3,
+        },
+      ]);
+    });
+  });
+
+  it.each([
+    ["move", "effective_from", "2020-01-01T00:00:00Z"],
+    ["clear", "effective_from", null],
+    ["move", "effective_until", "2030-01-01T00:00:00Z"],
+    ["clear", "effective_until", null],
+  ] as const)(
+    "INV-VER-007: refuses migration-owned %s of assigned %s",
+    async (_change, column, replacement) => {
+      await withMigrationTenant(async (sql) => {
+        await insertVersion(sql, {
+          id: VERSION,
+          lifecycle: "APPROVED",
+          effectiveFrom: "2028-01-01T00:00:00Z",
+          effectiveUntil: "2029-01-01T00:00:00Z",
+        });
+        await expect(
+          sql.query(
+            `update document_version
+                set ${column} = $2, row_version = row_version + 1
+              where id = $1`,
+            [VERSION, replacement],
+          ),
+        ).rejects.toMatchObject({
+          code: "23514",
+          constraint: "document_version_governed_columns_immutable",
+        });
+      });
+    },
+  );
 
   it("INV-VER-011 / INV-VER-012 / INV-EFF-002: comments every invariant-bearing version constraint without inventing coverage", async () => {
     const invariantConstraints = [
