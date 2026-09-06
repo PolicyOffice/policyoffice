@@ -91,7 +91,15 @@ is a green build that tested nothing.
 
 **If the integration suite fails with `permission denied` on tables that plainly exist**,
 the local database has drifted: its tables are owned by `postgres` rather than
-`migration_role`, and the role grants are gone with them. This matters more than the error
+`migration_role`, and the role grants are gone with them.
+
+**`./verification/run.sh` is what usually causes it.** The platform checks reassign every
+table in `public` to `postgres` and strip `app_role`'s grants, and they do not put them back.
+So the sequence `./verification/run.sh` then `pnpm check` fails on a database the first
+command drifted, and the failure names the tests rather than its cause. Run the platform
+checks last, or rebuild afterwards using the commands below. This was found on 2026-09-07
+while reviewing POL-014 (#79), where it read at first as a defect in the change under
+review. This matters more than the error
 suggests — `force row level security` does not bind a superuser-owned table, so tenancy
 assertions made against a database in that state prove nothing even when they pass. Rebuild
 it through the migration chain:
