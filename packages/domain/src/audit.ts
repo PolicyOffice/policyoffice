@@ -125,6 +125,7 @@ export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
 /** Production transitions that currently emit through the sole write path. */
 export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
+  "content_revision.created",
   "configuration.changed",
   "document.created",
   "document.metadata_changed",
@@ -134,6 +135,7 @@ export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "version.created",
   "version.materiality_changed",
   "version.metadata_changed",
+  "version.submitted",
 ];
 
 /**
@@ -167,6 +169,12 @@ const CONFIGURATION_SNAPSHOT_KEYS = Object.freeze([
   "payloadDigest",
   "sequence",
   "weakening",
+]);
+const CONTENT_REVISION_CREATED_AFTER_KEYS = Object.freeze([
+  "documentVersionId",
+  "revisionSequence",
+  "canonicalisationSchemaVersion",
+  "contentDigest",
 ]);
 
 const CONFIGURATION_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
@@ -214,6 +222,22 @@ const VERSION_CREATED_AFTER_KEYS = Object.freeze([
 ]);
 const VERSION_MATERIALITY_KEYS = Object.freeze(["materiality"]);
 const VERSION_METADATA_KEYS = Object.freeze(["displayLabel"]);
+const VERSION_SUBMITTED_BEFORE_KEYS = Object.freeze(["lifecycleState"]);
+const VERSION_SUBMITTED_AFTER_KEYS = Object.freeze([
+  "lifecycleState",
+  "contentRevisionId",
+  "canonicalisationSchemaVersion",
+  "contentDigest",
+]);
+
+const CONTENT_REVISION_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([]),
+  safeAfterKeys: CONTENT_REVISION_CREATED_AFTER_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: CONTENT_REVISION_CREATED_AFTER_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
 
 const DOCUMENT_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeBeforeKeys: Object.freeze([]),
@@ -289,6 +313,15 @@ const VERSION_METADATA_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeAfterRequired: true,
 });
 
+const VERSION_SUBMITTED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: VERSION_SUBMITTED_BEFORE_KEYS,
+  safeAfterKeys: VERSION_SUBMITTED_AFTER_KEYS,
+  requiredSafeBeforeKeys: VERSION_SUBMITTED_BEFORE_KEYS,
+  requiredSafeAfterKeys: VERSION_SUBMITTED_AFTER_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
 /**
  * INV-AUD-008: placeholder schemas are finalized when an event type first becomes
  * implemented. From that point onward its shape is published and any change adds a new
@@ -297,6 +330,9 @@ const VERSION_METADATA_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
 const auditEventSchemas = Object.fromEntries(
   AUDIT_EVENT_TYPES.map((eventType) => [eventType, Object.freeze({ 1: ENVELOPE_ONLY_SCHEMA })]),
 ) as unknown as Record<AuditEventType, Readonly<Record<number, AuditEventSchema>>>;
+auditEventSchemas["content_revision.created"] = Object.freeze({
+  1: CONTENT_REVISION_CREATED_SCHEMA_V1,
+});
 auditEventSchemas["configuration.changed"] = Object.freeze({
   1: CONFIGURATION_CHANGED_SCHEMA_V1,
 });
@@ -318,6 +354,7 @@ auditEventSchemas["version.materiality_changed"] = Object.freeze({
 auditEventSchemas["version.metadata_changed"] = Object.freeze({
   1: VERSION_METADATA_CHANGED_SCHEMA_V1,
 });
+auditEventSchemas["version.submitted"] = Object.freeze({ 1: VERSION_SUBMITTED_SCHEMA_V1 });
 
 export const AUDIT_EVENT_SCHEMAS = Object.freeze(auditEventSchemas);
 
@@ -386,6 +423,7 @@ const actorTypes = new Set<string>(AUDIT_ACTOR_TYPES);
 const outcomes = new Set<string>(AUDIT_OUTCOMES);
 const sourceChannels = new Set<string>(AUDIT_SOURCE_CHANNELS);
 const materialities = new Set<string>(["EDITORIAL", "NON_MATERIAL", "MATERIAL", "EMERGENCY"]);
+const sha256Digest = /^sha-256:[0-9a-f]{64}$/;
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -648,7 +686,47 @@ function validateVersionAuditSnapshots(input: Record<string, unknown>): void {
           );
         }
       }
+      return;
     }
+    case "version.submitted":
+      if (!before || !after) return;
+      if (before.lifecycleState !== "DRAFT" || after.lifecycleState !== "IN_REVIEW") {
+        throw new InvalidAuditEventError(
+          "version.submitted must record the DRAFT to IN_REVIEW transition",
+        );
+      }
+      requiredUuid(after.contentRevisionId, "safeAfter.contentRevisionId");
+      if (after.canonicalisationSchemaVersion !== 1) {
+        throw new InvalidAuditEventError("safeAfter.canonicalisationSchemaVersion must be 1");
+      }
+      if (typeof after.contentDigest !== "string" || !sha256Digest.test(after.contentDigest)) {
+        throw new InvalidAuditEventError("safeAfter.contentDigest must be a sha-256 digest");
+      }
+      return;
+  }
+}
+
+function validateContentRevisionAuditSnapshots(input: Record<string, unknown>): void {
+  if (input.eventType !== "content_revision.created") return;
+  if (input.safeBefore !== undefined && input.safeBefore !== null) {
+    throw new InvalidAuditEventError("safeBefore must be null when a content revision is created");
+  }
+  if (!record(input.safeAfter)) return;
+  requiredUuid(input.safeAfter.documentVersionId, "safeAfter.documentVersionId");
+  if (
+    !Number.isInteger(input.safeAfter.revisionSequence) ||
+    Number(input.safeAfter.revisionSequence) < 1
+  ) {
+    throw new InvalidAuditEventError("safeAfter.revisionSequence must be a positive integer");
+  }
+  if (input.safeAfter.canonicalisationSchemaVersion !== 1) {
+    throw new InvalidAuditEventError("safeAfter.canonicalisationSchemaVersion must be 1");
+  }
+  if (
+    typeof input.safeAfter.contentDigest !== "string" ||
+    !sha256Digest.test(input.safeAfter.contentDigest)
+  ) {
+    throw new InvalidAuditEventError("safeAfter.contentDigest must be a sha-256 digest");
   }
 }
 
@@ -723,6 +801,7 @@ export function validateAuditEvent(input: unknown): asserts input is AuditEventI
     schema.safeAfterRequired,
   );
   validateConfigurationChangedSnapshots(input);
+  validateContentRevisionAuditSnapshots(input);
   validateDocumentAuditSnapshots(input);
   validateVersionAuditSnapshots(input);
 }

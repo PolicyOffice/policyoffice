@@ -1,5 +1,12 @@
 import { Client } from "pg";
-import { recordConfigurationChange, type AuditTransaction } from "../../domain/src/index.js";
+import {
+  buildCanonicalManifest,
+  digestCanonicalManifest,
+  recordConfigurationChange,
+  serializeCanonicalManifest,
+  sha256Digest,
+  type AuditTransaction,
+} from "../../domain/src/index.js";
 import { migrationDatabaseUrl } from "./migration-connection.js";
 import { applyMigrations } from "./runner.js";
 
@@ -110,6 +117,8 @@ interface DocumentFixture {
   id: string;
   baselineVariantId: string;
   draftVersionId: string;
+  contentRevisionId: string;
+  contentAttachmentId: string;
   documentCode: string;
   canonicalTitle: string;
   documentTypeId: string;
@@ -244,6 +253,8 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
         id: fixtureId(prefix, 18, 1),
         baselineVariantId: fixtureId(prefix, 19, 1),
         draftVersionId: fixtureId(prefix, 20, 1),
+        contentRevisionId: fixtureId(prefix, 21, 1),
+        contentAttachmentId: fixtureId(prefix, 22, 1),
         documentCode: "POL-001",
         canonicalTitle: `${name} Policy Framework`,
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -407,6 +418,8 @@ function developmentTenant(): TenantFixture {
         id: fixtureId(prefix, 18, 1),
         baselineVariantId: fixtureId(prefix, 19, 1),
         draftVersionId: fixtureId(prefix, 20, 1),
+        contentRevisionId: fixtureId(prefix, 21, 1),
+        contentAttachmentId: fixtureId(prefix, 22, 1),
         documentCode: "POL-001",
         canonicalTitle: "Policy Management Policy",
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -786,6 +799,61 @@ async function insertDocuments(
         item.configuration.id,
       ],
     );
+    const bodyBytes = new TextEncoder().encode(`${document.canonicalTitle}\n\nInitial draft.`);
+    const attachmentBytes = new TextEncoder().encode("Fixture approval matrix.\n");
+    const bodyDigest = sha256Digest(bodyBytes);
+    const attachmentDigest = sha256Digest(attachmentBytes);
+    const manifest = buildCanonicalManifest({
+      contentRevisionId: document.contentRevisionId,
+      contentParts: [{ partId: "body", mediaType: "text/plain", digest: bodyDigest }],
+      attachments: [
+        {
+          filename: "approval-matrix.txt",
+          mediaType: "text/plain",
+          byteSize: attachmentBytes.byteLength,
+          digest: attachmentDigest,
+        },
+      ],
+    });
+    const canonicalManifest = serializeCanonicalManifest(manifest);
+    const revisionDigest = digestCanonicalManifest(manifest);
+    const objectReference = (digest: string) =>
+      `t/${item.tenant.id}/blob/${digest.slice("sha-256:".length)}`;
+    await sql.query(
+      `insert into content_revision (
+         tenant_id, id, created_at, updated_at, row_version, document_version_id,
+         revision_sequence, content_ref, canonical_manifest,
+         canonicalisation_schema_version, content_digest, created_by, submitted_at
+       ) values ($1, $2, $3, $3, 1, $4, 1, $5, $6::jsonb, 1, $7, $8, null)
+       on conflict (tenant_id, id) do nothing`,
+      [
+        item.tenant.id,
+        document.contentRevisionId,
+        fixture.createdAt,
+        document.draftVersionId,
+        objectReference(bodyDigest),
+        JSON.stringify(canonicalManifest),
+        revisionDigest,
+        item.users[0]?.id,
+      ],
+    );
+    await sql.query(
+      `insert into content_attachment (
+         tenant_id, id, created_at, updated_at, row_version, content_revision_id,
+         filename, media_type, byte_size, storage_ref, digest
+       ) values ($1, $2, $3, $3, 1, $4, 'approval-matrix.txt', 'text/plain',
+                 $5::bigint, $6, $7)
+       on conflict (tenant_id, id) do nothing`,
+      [
+        item.tenant.id,
+        document.contentAttachmentId,
+        fixture.createdAt,
+        document.contentRevisionId,
+        attachmentBytes.byteLength,
+        objectReference(attachmentDigest),
+        attachmentDigest,
+      ],
+    );
   }
 }
 
@@ -860,6 +928,8 @@ export async function loadFixtureSet(
 const DELETE_ORDER = [
   "audit_event",
   "tenant_event_sequence",
+  "content_attachment",
+  "content_revision",
   "document_version",
   "document_variant",
   "document",
