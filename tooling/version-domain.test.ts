@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  DIRECT_VERSION_LIFECYCLE_TRANSITIONS,
   DOCUMENT_VERSION_COLUMN_CLASSIFICATION,
   MATERIALITY_CLASSES,
   VERSION_LIFECYCLE_STATES,
@@ -26,6 +27,25 @@ describe("document version contracts", () => {
     ]);
     expect(VERSION_LIFECYCLE_STATES).not.toContain("SCHEDULED");
     expect(VERSION_LIFECYCLE_STATES).not.toContain("ARCHIVED");
+  });
+
+  it("INV-VER-003 / INV-EFF-001 / INV-EFF-004: exposes exactly the specified lifecycle transitions", () => {
+    expect(DIRECT_VERSION_LIFECYCLE_TRANSITIONS).toEqual([
+      { from: "DRAFT", to: "IN_REVIEW" },
+      { from: "IN_REVIEW", to: "CHANGES_REQUESTED" },
+      { from: "CHANGES_REQUESTED", to: "DRAFT" },
+      { from: "IN_REVIEW", to: "APPROVED" },
+      { from: "IN_REVIEW", to: "REJECTED" },
+      { from: "DRAFT", to: "CANCELLED" },
+      { from: "IN_REVIEW", to: "CANCELLED" },
+      { from: "CHANGES_REQUESTED", to: "CANCELLED" },
+      { from: "APPROVED", to: "CANCELLED" },
+      { from: "APPROVED", to: "PUBLISHED" },
+      { from: "PUBLISHED", to: "EFFECTIVE" },
+      { from: "PUBLISHED", to: "WITHDRAWN" },
+      { from: "EFFECTIVE", to: "SUPERSEDED" },
+      { from: "EFFECTIVE", to: "WITHDRAWN" },
+    ]);
   });
 
   it("records the four human-decided materiality classes", () => {

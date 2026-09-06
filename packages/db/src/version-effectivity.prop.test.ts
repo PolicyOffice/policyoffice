@@ -134,7 +134,7 @@ async function insertInterval(sql: Sql, index: number, start: number, end: numbe
        tenant_id, id, document_variant_id, version_sequence, lifecycle_state,
        document_type_id, title, classification_id, materiality,
        effective_from, effective_until, configuration_version_id
-     ) values ($1, $2, $3, $4, 'PUBLISHED', $5, 'Property policy', $6,
+     ) values ($1, $2, $3, $4, 'DRAFT', $5, 'Property policy', $6,
                'MATERIAL', $7, $8, $9)`,
     [
       TENANT,
@@ -148,6 +148,15 @@ async function insertInterval(sql: Sql, index: number, start: number, end: numbe
       CONFIGURATION,
     ],
   );
+  for (const lifecycle of ["IN_REVIEW", "APPROVED", "PUBLISHED", "EFFECTIVE"] as const) {
+    await sql.query(
+      `update document_version
+          set lifecycle_state = $2::version_lifecycle,
+              row_version = row_version + 1
+        where id = $1`,
+      [versionId(index), lifecycle],
+    );
+  }
 }
 
 describe("document version effectivity properties", () => {

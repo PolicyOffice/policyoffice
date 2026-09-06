@@ -20,6 +20,24 @@ export const VERSION_LIFECYCLE_STATES = [
 ] as const;
 export type VersionLifecycle = (typeof VERSION_LIFECYCLE_STATES)[number];
 
+/** The structural state-machine edges specified by document-lifecycle.md. */
+export const DIRECT_VERSION_LIFECYCLE_TRANSITIONS = Object.freeze([
+  Object.freeze({ from: "DRAFT", to: "IN_REVIEW" }),
+  Object.freeze({ from: "IN_REVIEW", to: "CHANGES_REQUESTED" }),
+  Object.freeze({ from: "CHANGES_REQUESTED", to: "DRAFT" }),
+  Object.freeze({ from: "IN_REVIEW", to: "APPROVED" }),
+  Object.freeze({ from: "IN_REVIEW", to: "REJECTED" }),
+  Object.freeze({ from: "DRAFT", to: "CANCELLED" }),
+  Object.freeze({ from: "IN_REVIEW", to: "CANCELLED" }),
+  Object.freeze({ from: "CHANGES_REQUESTED", to: "CANCELLED" }),
+  Object.freeze({ from: "APPROVED", to: "CANCELLED" }),
+  Object.freeze({ from: "APPROVED", to: "PUBLISHED" }),
+  Object.freeze({ from: "PUBLISHED", to: "EFFECTIVE" }),
+  Object.freeze({ from: "PUBLISHED", to: "WITHDRAWN" }),
+  Object.freeze({ from: "EFFECTIVE", to: "SUPERSEDED" }),
+  Object.freeze({ from: "EFFECTIVE", to: "WITHDRAWN" }),
+] as const);
+
 export const MATERIALITY_CLASSES = ["EDITORIAL", "NON_MATERIAL", "MATERIAL", "EMERGENCY"] as const;
 export type Materiality = (typeof MATERIALITY_CLASSES)[number];
 
