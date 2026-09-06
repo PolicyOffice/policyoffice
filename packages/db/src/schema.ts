@@ -63,6 +63,24 @@ export const variantType = pgEnum("variant_type", [
   "SUPPLEMENT",
   "TRANSLATION",
 ]);
+export const versionLifecycle = pgEnum("version_lifecycle", [
+  "DRAFT",
+  "IN_REVIEW",
+  "CHANGES_REQUESTED",
+  "APPROVED",
+  "PUBLISHED",
+  "EFFECTIVE",
+  "SUPERSEDED",
+  "WITHDRAWN",
+  "REJECTED",
+  "CANCELLED",
+]);
+export const materiality = pgEnum("materiality", [
+  "EDITORIAL",
+  "NON_MATERIAL",
+  "MATERIAL",
+  "EMERGENCY",
+]);
 
 export const tenant = pgTable("tenant", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -739,6 +757,99 @@ export const documentVariant = pgTable(
   ],
 ).enableRLS();
 
+export const documentVersion = pgTable(
+  "document_version",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    documentVariantId: uuid("document_variant_id").notNull(),
+    versionSequence: integer("version_sequence").notNull(),
+    displayLabel: text("display_label"),
+    lifecycleState: versionLifecycle("lifecycle_state").default("DRAFT").notNull(),
+    documentTypeId: uuid("document_type_id").notNull(),
+    title: text("title").notNull(),
+    classificationId: uuid("classification_id").notNull(),
+    approvedRevisionId: uuid("approved_revision_id"),
+    contentDigest: text("content_digest"),
+    materiality: materiality("materiality"),
+    changeSummary: text("change_summary"),
+    approvedAt: instant("approved_at"),
+    publishedAt: instant("published_at"),
+    effectiveFrom: instant("effective_from"),
+    effectiveUntil: instant("effective_until"),
+    supersededByVersionId: uuid("superseded_by_version_id"),
+    withdrawnAt: instant("withdrawn_at"),
+    withdrawalReason: text("withdrawal_reason"),
+    configurationVersionId: uuid("configuration_version_id"),
+    effectiveRange: tstzrange("effective_range").generatedAlwaysAs(
+      sql`case
+            when "effective_from" is null then null
+            else tstzrange("effective_from", "effective_until", '[)')
+          end`,
+    ),
+  },
+  (t) => [
+    primaryKey({ name: "document_version_pkey", columns: [t.tenantId, t.id] }),
+    unique("document_version_id_unique").on(t.id),
+    foreignKey({
+      name: "document_version_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_version_variant_fk",
+      columns: [t.tenantId, t.documentVariantId],
+      foreignColumns: [documentVariant.tenantId, documentVariant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_version_type_fk",
+      columns: [t.tenantId, t.documentTypeId],
+      foreignColumns: [documentType.tenantId, documentType.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_version_classification_fk",
+      columns: [t.tenantId, t.classificationId],
+      foreignColumns: [informationClassification.tenantId, informationClassification.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_version_configuration_fk",
+      columns: [t.tenantId, t.configurationVersionId],
+      foreignColumns: [configurationVersion.tenantId, configurationVersion.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_version_successor_fk",
+      columns: [t.tenantId, t.supersededByVersionId],
+      foreignColumns: [t.tenantId, t.id],
+    }).onDelete("restrict"),
+    unique("document_version_variant_sequence_unique").on(
+      t.tenantId,
+      t.documentVariantId,
+      t.versionSequence,
+    ),
+    check(
+      "document_version_withdrawal_reason_required",
+      sql`${t.lifecycleState} <> 'WITHDRAWN'
+          or nullif(btrim(${t.withdrawalReason}), '') is not null`,
+    ),
+    check(
+      "document_version_effective_interval_start_required",
+      sql`${t.effectiveUntil} is null or ${t.effectiveFrom} is not null`,
+    ),
+    uniqueIndex("one_pre_release_version_per_variant")
+      .on(t.tenantId, t.documentVariantId)
+      .where(sql`${t.lifecycleState} in ('DRAFT', 'IN_REVIEW', 'CHANGES_REQUESTED', 'APPROVED')`),
+    index("document_version_variant_idx").on(t.tenantId, t.documentVariantId),
+    index("document_version_type_idx").on(t.tenantId, t.documentTypeId),
+    index("document_version_classification_idx").on(t.tenantId, t.classificationId),
+    index("document_version_configuration_idx").on(t.tenantId, t.configurationVersionId),
+    index("document_version_successor_idx").on(t.tenantId, t.supersededByVersionId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
 export const tenantEventSequence = pgTable(
   "tenant_event_sequence",
   {
@@ -812,6 +923,11 @@ export const auditEvent = pgTable(
       name: "audit_event_document_variant_fk",
       columns: [t.tenantId, t.documentVariantId],
       foreignColumns: [documentVariant.tenantId, documentVariant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "audit_event_document_version_fk",
+      columns: [t.tenantId, t.documentVersionId],
+      foreignColumns: [documentVersion.tenantId, documentVersion.id],
     }).onDelete("restrict"),
     unique("audit_event_dedupe_unique").on(t.tenantId, t.dedupeKey),
     check("audit_event_sequence_positive", sql`${t.sequence} >= 1`),

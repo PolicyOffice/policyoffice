@@ -187,6 +187,7 @@ tenant has marked sensitive is a security signal worth keeping.
 | `version.superseded` | A successor closed this version's interval | `DOCUMENT_VERSION` | MVP |
 | `version.withdrawn` | Removed from effect, with a reason | `DOCUMENT_VERSION` | MVP |
 | `version.materiality_changed` | Classification raised or lowered before approval | `DOCUMENT_VERSION` | MVP |
+| `version.metadata_changed` | Administrative metadata that alters no obligation changes | `DOCUMENT_VERSION` | MVP |
 | `alignment.raised`, `alignment.resolved` | A derived variant or document type became stale, or was brought back into line | `ALIGNMENT_OBLIGATION` | V1 |
 
 ### Governance alerts

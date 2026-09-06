@@ -110,6 +110,7 @@ async function clearTenant(sql: Sql, tenantId: string): Promise<void> {
     for (const table of [
       "audit_event",
       "tenant_event_sequence",
+      "document_version",
       "document_variant",
       "document",
       "space",

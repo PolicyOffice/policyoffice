@@ -22,35 +22,21 @@ Format, parsed strictly:
 ## INV-DOC — Document identity and lifecycle
 
 - INV-DOC-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-DOC-008 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-DOC-009 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-DOC-010 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-DOC-030 — V1; no schema or domain code yet (Phase 2/3)
 
 ## INV-VER — Versioning and immutability
 
 - INV-VER-001 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-003 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-004 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-005 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-006 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-007 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-008 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-010 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-011 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-012 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-014 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-VER-015 — MVP; no schema or domain code yet (Phase 2/3)
 
 ## INV-EFF — Effectivity and supersession
 
-- INV-EFF-001 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-EFF-002 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-EFF-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-EFF-004 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-EFF-005 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-EFF-006 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-EFF-008 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-EFF-009 — V1; no schema or domain code yet (Phase 2/3)
 

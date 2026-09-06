@@ -21,12 +21,25 @@ export const REFERENCE_ENUM_VALUES = Object.freeze({
   jurisdiction_level: Object.freeze(["SUPRANATIONAL", "NATIONAL", "REGIONAL", "SECTORAL"]),
   jurisdiction_status: Object.freeze(["ACTIVE", "RETIRED"]),
   legal_entity_status: Object.freeze(["ACTIVE", "DORMANT", "CLOSED"]),
+  materiality: Object.freeze(["EDITORIAL", "NON_MATERIAL", "MATERIAL", "EMERGENCY"]),
   org_unit_status: Object.freeze(["ACTIVE", "INACTIVE"]),
   space_status: Object.freeze(["ACTIVE", "ARCHIVED"]),
   tenant_status: Object.freeze(["ACTIVE", "SUSPENDED", "CLOSED"]),
   user_group_source: Object.freeze(["LOCAL", "SCIM"]),
   user_group_status: Object.freeze(["ACTIVE", "RETIRED"]),
   variant_type: Object.freeze(["BASELINE", "REPLACEMENT", "SUPPLEMENT", "TRANSLATION"]),
+  version_lifecycle: Object.freeze([
+    "DRAFT",
+    "IN_REVIEW",
+    "CHANGES_REQUESTED",
+    "APPROVED",
+    "PUBLISHED",
+    "EFFECTIVE",
+    "SUPERSEDED",
+    "WITHDRAWN",
+    "REJECTED",
+    "CANCELLED",
+  ]),
 });
 
 const CREATED_AT = "2026-01-01T00:00:00.000Z";
@@ -96,6 +109,7 @@ interface ClassificationFixture {
 interface DocumentFixture {
   id: string;
   baselineVariantId: string;
+  draftVersionId: string;
   documentCode: string;
   canonicalTitle: string;
   documentTypeId: string;
@@ -229,6 +243,7 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
       {
         id: fixtureId(prefix, 18, 1),
         baselineVariantId: fixtureId(prefix, 19, 1),
+        draftVersionId: fixtureId(prefix, 20, 1),
         documentCode: "POL-001",
         canonicalTitle: `${name} Policy Framework`,
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -391,6 +406,7 @@ function developmentTenant(): TenantFixture {
       {
         id: fixtureId(prefix, 18, 1),
         baselineVariantId: fixtureId(prefix, 19, 1),
+        draftVersionId: fixtureId(prefix, 20, 1),
         documentCode: "POL-001",
         canonicalTitle: "Policy Management Policy",
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -747,6 +763,29 @@ async function insertDocuments(
        on conflict (tenant_id, id) do nothing`,
       [item.tenant.id, document.baselineVariantId, fixture.createdAt, document.id],
     );
+    const classification = item.classifications[0];
+    if (!classification) {
+      throw new Error(`fixture tenant ${item.tenant.id} has no information classification`);
+    }
+    await sql.query(
+      `insert into document_version (
+         tenant_id, id, created_at, updated_at, row_version, document_variant_id,
+         version_sequence, display_label, lifecycle_state, document_type_id, title,
+         classification_id, materiality, change_summary, configuration_version_id
+       ) values ($1, $2, $3, $3, 1, $4, 1, '1.0', 'DRAFT', $5, $6, $7,
+                 'MATERIAL', 'Initial fixture draft', $8)
+       on conflict (tenant_id, id) do nothing`,
+      [
+        item.tenant.id,
+        document.draftVersionId,
+        fixture.createdAt,
+        document.baselineVariantId,
+        document.documentTypeId,
+        document.canonicalTitle,
+        classification.id,
+        item.configuration.id,
+      ],
+    );
   }
 }
 
@@ -821,6 +860,7 @@ export async function loadFixtureSet(
 const DELETE_ORDER = [
   "audit_event",
   "tenant_event_sequence",
+  "document_version",
   "document_variant",
   "document",
   "body_membership",

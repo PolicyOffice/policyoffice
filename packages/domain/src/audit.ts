@@ -107,6 +107,7 @@ export const AUDIT_EVENT_TYPES = [
   "version.created",
   "version.effective",
   "version.materiality_changed",
+  "version.metadata_changed",
   "version.published",
   "version.rejected",
   "version.submitted",
@@ -130,6 +131,9 @@ export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "document.owner_changed",
   "document.retired",
   "document.type_changed",
+  "version.created",
+  "version.materiality_changed",
+  "version.metadata_changed",
 ];
 
 /**
@@ -198,6 +202,18 @@ const DOCUMENT_RETIRED_AFTER_KEYS = Object.freeze([
   "retiredAt",
   "retirementReason",
 ]);
+const VERSION_CREATED_AFTER_KEYS = Object.freeze([
+  "documentVariantId",
+  "versionSequence",
+  "lifecycleState",
+  "documentTypeId",
+  "title",
+  "classificationId",
+  "materiality",
+  "configurationVersionId",
+]);
+const VERSION_MATERIALITY_KEYS = Object.freeze(["materiality"]);
+const VERSION_METADATA_KEYS = Object.freeze(["displayLabel"]);
 
 const DOCUMENT_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeBeforeKeys: Object.freeze([]),
@@ -246,6 +262,33 @@ const DOCUMENT_RETIRED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeAfterRequired: true,
 });
 
+const VERSION_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([]),
+  safeAfterKeys: VERSION_CREATED_AFTER_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: VERSION_CREATED_AFTER_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
+const VERSION_MATERIALITY_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: VERSION_MATERIALITY_KEYS,
+  safeAfterKeys: VERSION_MATERIALITY_KEYS,
+  requiredSafeBeforeKeys: VERSION_MATERIALITY_KEYS,
+  requiredSafeAfterKeys: VERSION_MATERIALITY_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const VERSION_METADATA_CHANGED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: VERSION_METADATA_KEYS,
+  safeAfterKeys: VERSION_METADATA_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: Object.freeze([]),
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
 /**
  * INV-AUD-008: placeholder schemas are finalized when an event type first becomes
  * implemented. From that point onward its shape is published and any change adds a new
@@ -268,6 +311,13 @@ auditEventSchemas["document.type_changed"] = Object.freeze({
   1: DOCUMENT_TYPE_CHANGED_SCHEMA_V1,
 });
 auditEventSchemas["document.retired"] = Object.freeze({ 1: DOCUMENT_RETIRED_SCHEMA_V1 });
+auditEventSchemas["version.created"] = Object.freeze({ 1: VERSION_CREATED_SCHEMA_V1 });
+auditEventSchemas["version.materiality_changed"] = Object.freeze({
+  1: VERSION_MATERIALITY_CHANGED_SCHEMA_V1,
+});
+auditEventSchemas["version.metadata_changed"] = Object.freeze({
+  1: VERSION_METADATA_CHANGED_SCHEMA_V1,
+});
 
 export const AUDIT_EVENT_SCHEMAS = Object.freeze(auditEventSchemas);
 
@@ -335,6 +385,7 @@ const eventTypes = new Set<string>(AUDIT_EVENT_TYPES);
 const actorTypes = new Set<string>(AUDIT_ACTOR_TYPES);
 const outcomes = new Set<string>(AUDIT_OUTCOMES);
 const sourceChannels = new Set<string>(AUDIT_SOURCE_CHANNELS);
+const materialities = new Set<string>(["EDITORIAL", "NON_MATERIAL", "MATERIAL", "EMERGENCY"]);
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -526,6 +577,81 @@ function validateDocumentAuditSnapshots(input: Record<string, unknown>): void {
   }
 }
 
+function validateMateriality(value: unknown, field: string): void {
+  if (value !== null && (typeof value !== "string" || !materialities.has(value))) {
+    throw new InvalidAuditEventError(`${field} must be null or a materiality value`);
+  }
+}
+
+function validateVersionAuditSnapshots(input: Record<string, unknown>): void {
+  const before = record(input.safeBefore) ? input.safeBefore : null;
+  const after = record(input.safeAfter) ? input.safeAfter : null;
+
+  switch (input.eventType) {
+    case "version.created":
+      if (input.safeBefore !== undefined && input.safeBefore !== null) {
+        throw new InvalidAuditEventError("safeBefore must be null when a version is created");
+      }
+      if (!after) return;
+      requiredUuid(after.documentVariantId, "safeAfter.documentVariantId");
+      if (!Number.isInteger(after.versionSequence) || Number(after.versionSequence) < 1) {
+        throw new InvalidAuditEventError("safeAfter.versionSequence must be a positive integer");
+      }
+      if (after.lifecycleState !== "DRAFT") {
+        throw new InvalidAuditEventError("safeAfter.lifecycleState must be DRAFT");
+      }
+      requiredUuid(after.documentTypeId, "safeAfter.documentTypeId");
+      requiredString(after.title, "safeAfter.title");
+      requiredUuid(after.classificationId, "safeAfter.classificationId");
+      validateMateriality(after.materiality, "safeAfter.materiality");
+      requiredUuid(after.configurationVersionId, "safeAfter.configurationVersionId");
+      return;
+    case "version.materiality_changed":
+      if (!before || !after) return;
+      validateMateriality(before.materiality, "safeBefore.materiality");
+      validateMateriality(after.materiality, "safeAfter.materiality");
+      if (before.materiality === after.materiality) {
+        throw new InvalidAuditEventError("version.materiality_changed must change materiality");
+      }
+      return;
+    case "version.metadata_changed": {
+      if (!before || !after) return;
+      const beforeKeys = Object.keys(before).sort();
+      const afterKeys = Object.keys(after).sort();
+      if (beforeKeys.length === 0) {
+        throw new InvalidAuditEventError("version.metadata_changed must record a changed key");
+      }
+      if (
+        beforeKeys.length !== afterKeys.length ||
+        beforeKeys.some((key, index) => key !== afterKeys[index])
+      ) {
+        throw new InvalidAuditEventError(
+          "version.metadata_changed must record the same keys before and after",
+        );
+      }
+      for (const key of beforeKeys) {
+        const beforeValue = before[key];
+        const afterValue = after[key];
+        if (
+          (beforeValue !== null &&
+            (typeof beforeValue !== "string" || beforeValue.trim().length === 0)) ||
+          (afterValue !== null &&
+            (typeof afterValue !== "string" || afterValue.trim().length === 0))
+        ) {
+          throw new InvalidAuditEventError(
+            `version.metadata_changed ${key} must be null or non-empty text`,
+          );
+        }
+        if (beforeValue === afterValue) {
+          throw new InvalidAuditEventError(
+            `version.metadata_changed ${key} must differ before and after`,
+          );
+        }
+      }
+    }
+  }
+}
+
 /** Validate at the domain boundary, before PostgreSQL repeats the level-1 checks. */
 export function validateAuditEvent(input: unknown): asserts input is AuditEventInput {
   if (!record(input)) throw new InvalidAuditEventError("audit event must be an object");
@@ -598,6 +724,7 @@ export function validateAuditEvent(input: unknown): asserts input is AuditEventI
   );
   validateConfigurationChangedSnapshots(input);
   validateDocumentAuditSnapshots(input);
+  validateVersionAuditSnapshots(input);
 }
 
 interface StoredAuditEventRow extends Record<string, unknown> {

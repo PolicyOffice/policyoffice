@@ -105,3 +105,24 @@ export {
   type RetireDocumentInput,
   type VariantType,
 } from "./document.js";
+
+export {
+  DOCUMENT_VERSION_COLUMN_CLASSIFICATION,
+  MATERIALITY_CLASSES,
+  VERSION_LIFECYCLE_STATES,
+  VERSION_REQUIRED_CAPABILITIES,
+  DocumentVersionConcurrencyError,
+  DocumentVersionLifecycleError,
+  DocumentVersionNoChangeError,
+  DocumentVersionNotFoundError,
+  changeVersionMateriality,
+  changeVersionMetadata,
+  createDocumentVersion,
+  type ChangeVersionMaterialityInput,
+  type ChangeVersionMetadataInput,
+  type ChangedDocumentVersion,
+  type CreateDocumentVersionInput,
+  type CreatedDocumentVersion,
+  type Materiality,
+  type VersionLifecycle,
+} from "./version.js";

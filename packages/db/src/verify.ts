@@ -227,6 +227,73 @@ export async function verifyUpgrade(): Promise<void> {
       `);
     }
 
+    const documentVariantTable = await sql.query<{ present: boolean }>(
+      "select to_regclass('public.document_variant') is not null as present",
+    );
+    if (documentVariantTable.rows[0]?.present) {
+      await sql.query(`
+        insert into legal_entity
+          (tenant_id, id, legal_name, country_of_registration, status)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0004-000000000003',
+           'Upgrade OÜ', 'EE', 'ACTIVE');
+
+        insert into org_unit
+          (tenant_id, id, name, code, legal_entity_id, status)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0005-000000000003',
+           'Upgrade compliance', 'UPGRADE_COMPLIANCE',
+           '30000000-0000-0000-0004-000000000003', 'ACTIVE');
+
+        insert into configuration_version
+          (tenant_id, id, sequence, effective_from, changed_by, change_reason,
+           weakening, payload_digest)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0006-000000000003', 1,
+           '2026-01-01T00:00:00Z',
+           '30000000-0000-0000-0001-000000000003',
+           'Upgrade fixture', false, 'sha256:upgrade');
+
+        insert into document_type
+          (tenant_id, id, code, name, rank, mandated_authority,
+           default_review_rule, requires_attestation_by_default, status)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0007-000000000003',
+           'UPGRADE_POLICY', 'Upgrade policy', 1, '{}'::jsonb,
+           '{}'::jsonb, false, 'ACTIVE');
+
+        insert into information_classification
+          (tenant_id, id, code, name, rank, handling_instructions,
+           externally_disclosable, status)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0008-000000000003',
+           'UPGRADE_INTERNAL', 'Upgrade internal', 1,
+           'Upgrade fixture', false, 'ACTIVE');
+
+        insert into document
+          (tenant_id, id, document_code, canonical_title, document_type_id,
+           owning_org_unit_id, lifecycle_status, is_governing_framework)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0009-000000000003',
+           'UPGRADE-001', 'Upgrade document',
+           '30000000-0000-0000-0007-000000000003',
+           '30000000-0000-0000-0005-000000000003', 'PLANNED', false);
+
+        insert into document_variant
+          (tenant_id, id, document_id, variant_type, status)
+        values
+          ('30000000-0000-0000-0000-000000000003',
+           '30000000-0000-0000-0010-000000000003',
+           '30000000-0000-0000-0009-000000000003', 'BASELINE', 'ACTIVE');
+      `);
+    }
+
     const eventSequenceBeforeUpgrade = await sql.query<{ present: boolean }>(
       "select to_regclass('public.tenant_event_sequence') is not null as present",
     );
@@ -254,6 +321,15 @@ export async function verifyUpgrade(): Promise<void> {
       );
       if (membership.rows[0]?.count !== 1) {
         throw new Error("membership data present before the upgrade did not survive it");
+      }
+    }
+    if (documentVariantTable.rows[0]?.present) {
+      const variant = await sql.query<{ count: number }>(
+        `select count(*)::int as count from document_variant
+          where id = '30000000-0000-0000-0010-000000000003'`,
+      );
+      if (variant.rows[0]?.count !== 1) {
+        throw new Error("document data present before the upgrade did not survive it");
       }
     }
     const eventSequenceAfterUpgrade = await sql.query<{ present: boolean }>(
@@ -324,6 +400,26 @@ export async function verifyDrift(): Promise<{ drifted: boolean; diff: string }>
           org_unit_id with =,
           validity with &&
         )
+    `);
+    await sql.query(`
+      alter table document_version
+        add constraint one_effective_version_per_variant exclude using gist (
+          tenant_id with =,
+          document_variant_id with =,
+          effective_range with &&
+        ) where (effective_range is not null)
+    `);
+
+    // This composite FK closes a circular schema edge: document_version snapshots its
+    // document type, while a governing type may cite the version that mandated it.
+    // Drizzle's inferred table types recurse across that cycle, so keep the SQL fragment
+    // explicit while still comparing the resulting constraint in the drift snapshot.
+    await sql.query(`
+      alter table document_type
+        add constraint document_type_mandated_by_version_fk
+        foreign key (tenant_id, mandated_by_document_version_id)
+        references document_version (tenant_id, id)
+        on delete restrict
     `);
 
     // Drizzle can render ENABLE ROW LEVEL SECURITY and policies, but it has no schema
