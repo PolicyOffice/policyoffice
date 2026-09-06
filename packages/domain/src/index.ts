@@ -57,6 +57,28 @@ export {
 } from "./configuration.js";
 
 export {
+  CANONICALISATION_SCHEMA_VERSION,
+  InvalidCanonicalManifestError,
+  buildCanonicalManifest,
+  digestCanonicalManifest,
+  serializeCanonicalManifest,
+  sha256Digest,
+  verifyStoredCanonicalManifest,
+  type CanonicalAttachment,
+  type CanonicalContentPart,
+  type CanonicalHashFunction,
+  type CanonicalManifest,
+  type CanonicalManifestInput,
+  type ManifestDigestMismatch,
+  type ManifestVerificationResult,
+  type ObservedAttachmentDigest,
+  type ObservedContentPartDigest,
+  type ObservedManifestDigests,
+  type Sha256Digest,
+  type StoredManifestVerificationInput,
+} from "./content-digest.js";
+
+export {
   DIRECT_DOCUMENT_LIFECYCLE_TRANSITIONS,
   DOCUMENT_LIFECYCLE_STATES,
   DOCUMENT_REQUIRED_CAPABILITIES,
