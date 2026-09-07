@@ -1,5 +1,12 @@
+import { randomUUID } from "node:crypto";
 import fc from "fast-check";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  publishDocumentVersion,
+  resolveEffectiveVersion,
+  withdrawDocumentVersion,
+  type AuditTransaction,
+} from "../../domain/src/index.js";
 import { withMigrationRole__PRIVILEGED, withTenant, type Sql } from "@policyoffice/testing";
 
 const TENANT = "95000000-0000-0000-0000-000000000001";
@@ -20,6 +27,15 @@ function versionId(index: number): string {
 
 function instant(offsetHours: number): string {
   return new Date(ORIGIN + offsetHours * HOUR).toISOString();
+}
+
+function transaction(sql: Sql): AuditTransaction {
+  return {
+    async query<Row extends Record<string, unknown>>(text: string, values?: unknown[]) {
+      const result = await sql.query(text, values);
+      return { rows: result.rows as Row[] };
+    },
+  };
 }
 
 async function clearTenant(sql: Sql): Promise<void> {
@@ -159,7 +175,123 @@ async function insertInterval(sql: Sql, index: number, start: number, end: numbe
   }
 }
 
+async function insertApprovedCandidate(sql: Sql, index: number): Promise<number> {
+  await sql.query(
+    `insert into document_version (
+       tenant_id, id, document_variant_id, version_sequence, lifecycle_state,
+       document_type_id, title, classification_id, materiality, configuration_version_id
+     ) values ($1, $2, $3, $4, 'DRAFT', $5, 'Property policy', $6,
+               'MATERIAL', $7)`,
+    [TENANT, versionId(index), VARIANT, index + 1, DOCUMENT_TYPE, CLASSIFICATION, CONFIGURATION],
+  );
+  for (const lifecycle of ["IN_REVIEW", "APPROVED"] as const) {
+    await sql.query(
+      `update document_version
+          set lifecycle_state = $2::version_lifecycle,
+              row_version = row_version + 1
+        where tenant_id = $1 and id = $3`,
+      [TENANT, lifecycle, versionId(index)],
+    );
+  }
+  return 3;
+}
+
 describe("document version effectivity properties", () => {
+  it("INV-EFF-002 / INV-EFF-003 / INV-EFF-004: arbitrary publications and withdrawals keep the schedule coherent", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            durationHours: fc.integer({ min: 1, max: 12 }),
+            withdraw: fc.boolean(),
+          }),
+          { minLength: 1, maxLength: 12 },
+        ),
+        async (operations) => {
+          await withTenant(TENANT, async (sql) => {
+            let offset = 24;
+            let openVersion: { id: string; effectiveFrom: Date } | null = null;
+            const publicationTime = new Date(ORIGIN - 24 * HOUR);
+
+            for (const [index, operation] of operations.entries()) {
+              const id = versionId(index);
+              const rowVersion = await insertApprovedCandidate(sql, index);
+              const effectiveFrom = new Date(ORIGIN + offset * HOUR);
+              const published = await publishDocumentVersion(transaction(sql), {
+                tenantId: TENANT,
+                versionId: id,
+                expectedRowVersion: rowVersion,
+                effectiveFrom,
+                actor: { type: "USER", id: USER },
+                configurationVersionId: CONFIGURATION,
+                occurredAt: publicationTime,
+                requestId: randomUUID(),
+                correlationId: randomUUID(),
+                sourceChannel: "API",
+              });
+
+              if (openVersion !== null) {
+                const predecessor = await sql.query<{ effective_until: Date | null }>(
+                  "select effective_until from document_version where id = $1",
+                  [openVersion.id],
+                );
+                expect(predecessor.rows).toEqual([{ effective_until: effectiveFrom }]);
+              }
+              openVersion = { id, effectiveFrom };
+
+              if (operation.withdraw) {
+                const withdrawn = await withdrawDocumentVersion(transaction(sql), {
+                  tenantId: TENANT,
+                  versionId: id,
+                  expectedRowVersion: published.rowVersion,
+                  withdrawalReason: "Property-generated withdrawal",
+                  actor: { type: "USER", id: USER },
+                  configurationVersionId: CONFIGURATION,
+                  occurredAt: publicationTime,
+                  requestId: randomUUID(),
+                  correlationId: randomUUID(),
+                  sourceChannel: "API",
+                });
+                expect(withdrawn.effectiveUntil).toEqual(effectiveFrom);
+                openVersion = null;
+              }
+              offset += operation.durationHours;
+            }
+
+            const overlaps = await sql.query<{ count: number }>(`
+              select count(*)::int as count
+                from document_version left_version
+                join document_version right_version
+                  on right_version.tenant_id = left_version.tenant_id
+                 and right_version.document_variant_id = left_version.document_variant_id
+                 and right_version.id > left_version.id
+                 and right_version.effective_range && left_version.effective_range
+            `);
+            expect(overlaps.rows).toEqual([{ count: 0 }]);
+
+            for (let point = 0; point <= offset + 1; point += 1) {
+              const at = new Date(ORIGIN + point * HOUR);
+              const stored = await sql.query<{ count: number }>(
+                `select count(*)::int as count from document_version
+                  where effective_range @> $1::timestamptz
+                    and lifecycle_state not in ('WITHDRAWN', 'CANCELLED')`,
+                [at],
+              );
+              expect(stored.rows[0]?.count).toBeLessThanOrEqual(1);
+              const resolved = await resolveEffectiveVersion(transaction(sql), {
+                tenantId: TENANT,
+                documentVariantId: VARIANT,
+                at,
+              });
+              expect(resolved === null ? 0 : 1).toBe(stored.rows[0]?.count);
+            }
+          });
+        },
+      ),
+      { numRuns: 30 },
+    );
+  });
+
   it("INV-EFF-002: arbitrary interval attempts leave at most one version claiming any instant", async () => {
     await fc.assert(
       fc.asyncProperty(

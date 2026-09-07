@@ -31,7 +31,7 @@ function transaction(sql: Sql): AuditTransaction {
 function event(key: string): AuditEventInput {
   return {
     tenantId: TENANT_ID,
-    eventType: "version.effective",
+    eventType: "access.denied",
     eventSchemaVersion: 1,
     occurredAt: new Date("2027-01-15T09:42:17.231Z"),
     actor: { type: "SYSTEM", id: null },

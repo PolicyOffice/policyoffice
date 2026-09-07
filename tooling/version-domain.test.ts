@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -8,6 +8,10 @@ import {
   VERSION_LIFECYCLE_STATES,
   VERSION_REQUIRED_CAPABILITIES,
 } from "../packages/domain/src/version.js";
+import {
+  PUBLICATION_LIFECYCLE_TRANSITIONS,
+  PUBLICATION_REQUIRED_CAPABILITIES,
+} from "../packages/domain/src/publication.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -137,5 +141,48 @@ describe("document version contracts", () => {
       changeMetadata: "document.manage",
       cancel: "document.cancel_version",
     });
+  });
+
+  it("INV-EFF-001 / INV-EFF-004: exposes only transitions 8, 9, 10 and 12 through publication operations", () => {
+    expect(PUBLICATION_LIFECYCLE_TRANSITIONS).toEqual({
+      publish: { from: "APPROVED", to: "PUBLISHED" },
+      immediateEffect: { from: "PUBLISHED", to: "EFFECTIVE" },
+      withdraw: [
+        { from: "PUBLISHED", to: "WITHDRAWN" },
+        { from: "EFFECTIVE", to: "WITHDRAWN" },
+      ],
+    });
+    expect(Object.values(PUBLICATION_LIFECYCLE_TRANSITIONS).flat()).not.toContainEqual({
+      from: "APPROVED",
+      to: "EFFECTIVE",
+    });
+    expect(Object.values(PUBLICATION_LIFECYCLE_TRANSITIONS).flat()).not.toContainEqual({
+      from: "SUPERSEDED",
+      to: "EFFECTIVE",
+    });
+  });
+
+  it("records publication entry-point capabilities without inventing an evaluator", () => {
+    expect(PUBLICATION_REQUIRED_CAPABILITIES).toEqual({
+      publish: "document.publish",
+      withdraw: "document.withdraw",
+    });
+  });
+
+  it("INV-VER-007: keeps publication as the only production path that assigns effective_from", () => {
+    const migrationDirectory = `${ROOT}/packages/db/migrations`;
+    const writers = readdirSync(migrationDirectory)
+      .filter((path) => path.endsWith(".sql"))
+      .filter((path) =>
+        /set[\s\S]{0,300}\beffective_from\s*=/i.test(
+          readFileSync(`${migrationDirectory}/${path}`, "utf8"),
+        ),
+      );
+    expect(writers).toEqual(["0012_publication_and_supersession.sql"]);
+
+    const domainPath = `${ROOT}/packages/domain/src/publication.ts`;
+    const domainSource = readFileSync(domainPath, "utf8");
+    expect(domainSource).toContain("from publish_document_version(");
+    expect(domainSource).not.toMatch(/update\s+(?:public\.)?document_version/i);
   });
 });
