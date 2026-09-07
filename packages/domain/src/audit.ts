@@ -127,15 +127,20 @@ export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "content_revision.created",
   "configuration.changed",
+  "document.activated",
   "document.created",
   "document.metadata_changed",
   "document.owner_changed",
   "document.retired",
   "document.type_changed",
   "version.created",
+  "version.effective",
   "version.materiality_changed",
   "version.metadata_changed",
+  "version.published",
   "version.submitted",
+  "version.superseded",
+  "version.withdrawn",
 ];
 
 /**
@@ -210,6 +215,8 @@ const DOCUMENT_RETIRED_AFTER_KEYS = Object.freeze([
   "retiredAt",
   "retirementReason",
 ]);
+const DOCUMENT_ACTIVATED_BEFORE_KEYS = Object.freeze(["lifecycleStatus"]);
+const DOCUMENT_ACTIVATED_AFTER_KEYS = Object.freeze(["lifecycleStatus", "effectiveVersionId"]);
 const VERSION_CREATED_AFTER_KEYS = Object.freeze([
   "documentVariantId",
   "versionSequence",
@@ -228,6 +235,33 @@ const VERSION_SUBMITTED_AFTER_KEYS = Object.freeze([
   "contentRevisionId",
   "canonicalisationSchemaVersion",
   "contentDigest",
+]);
+const VERSION_PUBLISHED_BEFORE_KEYS = Object.freeze(["lifecycleState"]);
+const VERSION_PUBLISHED_AFTER_KEYS = Object.freeze([
+  "lifecycleState",
+  "publishedAt",
+  "effectiveFrom",
+  "effectiveUntil",
+  "predecessorVersionId",
+]);
+const VERSION_EFFECTIVE_BEFORE_KEYS = Object.freeze(["lifecycleState"]);
+const VERSION_EFFECTIVE_AFTER_KEYS = Object.freeze([
+  "lifecycleState",
+  "effectiveFrom",
+  "effectiveUntil",
+]);
+const VERSION_SUPERSEDED_BEFORE_KEYS = Object.freeze(["lifecycleState", "effectiveUntil"]);
+const VERSION_SUPERSEDED_AFTER_KEYS = Object.freeze([
+  "lifecycleState",
+  "effectiveUntil",
+  "supersededByVersionId",
+]);
+const VERSION_WITHDRAWN_BEFORE_KEYS = Object.freeze(["lifecycleState", "effectiveUntil"]);
+const VERSION_WITHDRAWN_AFTER_KEYS = Object.freeze([
+  "lifecycleState",
+  "effectiveUntil",
+  "withdrawnAt",
+  "withdrawalReason",
 ]);
 
 const CONTENT_REVISION_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
@@ -286,6 +320,15 @@ const DOCUMENT_RETIRED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeAfterRequired: true,
 });
 
+const DOCUMENT_ACTIVATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: DOCUMENT_ACTIVATED_BEFORE_KEYS,
+  safeAfterKeys: DOCUMENT_ACTIVATED_AFTER_KEYS,
+  requiredSafeBeforeKeys: DOCUMENT_ACTIVATED_BEFORE_KEYS,
+  requiredSafeAfterKeys: DOCUMENT_ACTIVATED_AFTER_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
 const VERSION_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeBeforeKeys: Object.freeze([]),
   safeAfterKeys: VERSION_CREATED_AFTER_KEYS,
@@ -322,6 +365,42 @@ const VERSION_SUBMITTED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeAfterRequired: true,
 });
 
+const VERSION_PUBLISHED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: VERSION_PUBLISHED_BEFORE_KEYS,
+  safeAfterKeys: VERSION_PUBLISHED_AFTER_KEYS,
+  requiredSafeBeforeKeys: VERSION_PUBLISHED_BEFORE_KEYS,
+  requiredSafeAfterKeys: VERSION_PUBLISHED_AFTER_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const VERSION_EFFECTIVE_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: VERSION_EFFECTIVE_BEFORE_KEYS,
+  safeAfterKeys: VERSION_EFFECTIVE_AFTER_KEYS,
+  requiredSafeBeforeKeys: VERSION_EFFECTIVE_BEFORE_KEYS,
+  requiredSafeAfterKeys: VERSION_EFFECTIVE_AFTER_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const VERSION_SUPERSEDED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: VERSION_SUPERSEDED_BEFORE_KEYS,
+  safeAfterKeys: VERSION_SUPERSEDED_AFTER_KEYS,
+  requiredSafeBeforeKeys: VERSION_SUPERSEDED_BEFORE_KEYS,
+  requiredSafeAfterKeys: VERSION_SUPERSEDED_AFTER_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const VERSION_WITHDRAWN_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: VERSION_WITHDRAWN_BEFORE_KEYS,
+  safeAfterKeys: VERSION_WITHDRAWN_AFTER_KEYS,
+  requiredSafeBeforeKeys: VERSION_WITHDRAWN_BEFORE_KEYS,
+  requiredSafeAfterKeys: VERSION_WITHDRAWN_AFTER_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
 /**
  * INV-AUD-008: placeholder schemas are finalized when an event type first becomes
  * implemented. From that point onward its shape is published and any change adds a new
@@ -337,6 +416,7 @@ auditEventSchemas["configuration.changed"] = Object.freeze({
   1: CONFIGURATION_CHANGED_SCHEMA_V1,
 });
 auditEventSchemas["document.created"] = Object.freeze({ 1: DOCUMENT_CREATED_SCHEMA_V1 });
+auditEventSchemas["document.activated"] = Object.freeze({ 1: DOCUMENT_ACTIVATED_SCHEMA_V1 });
 auditEventSchemas["document.metadata_changed"] = Object.freeze({
   1: DOCUMENT_METADATA_CHANGED_SCHEMA_V1,
 });
@@ -348,13 +428,17 @@ auditEventSchemas["document.type_changed"] = Object.freeze({
 });
 auditEventSchemas["document.retired"] = Object.freeze({ 1: DOCUMENT_RETIRED_SCHEMA_V1 });
 auditEventSchemas["version.created"] = Object.freeze({ 1: VERSION_CREATED_SCHEMA_V1 });
+auditEventSchemas["version.effective"] = Object.freeze({ 1: VERSION_EFFECTIVE_SCHEMA_V1 });
 auditEventSchemas["version.materiality_changed"] = Object.freeze({
   1: VERSION_MATERIALITY_CHANGED_SCHEMA_V1,
 });
 auditEventSchemas["version.metadata_changed"] = Object.freeze({
   1: VERSION_METADATA_CHANGED_SCHEMA_V1,
 });
+auditEventSchemas["version.published"] = Object.freeze({ 1: VERSION_PUBLISHED_SCHEMA_V1 });
 auditEventSchemas["version.submitted"] = Object.freeze({ 1: VERSION_SUBMITTED_SCHEMA_V1 });
+auditEventSchemas["version.superseded"] = Object.freeze({ 1: VERSION_SUPERSEDED_SCHEMA_V1 });
+auditEventSchemas["version.withdrawn"] = Object.freeze({ 1: VERSION_WITHDRAWN_SCHEMA_V1 });
 
 export const AUDIT_EVENT_SCHEMAS = Object.freeze(auditEventSchemas);
 
@@ -519,6 +603,17 @@ function requireNullableUuid(value: unknown, field: string): void {
   if (value !== null) requiredUuid(value, field);
 }
 
+function requireInstant(value: unknown, field: string): void {
+  requiredString(value, field);
+  if (Number.isNaN(Date.parse(value))) {
+    throw new InvalidAuditEventError(`${field} must be an instant`);
+  }
+}
+
+function requireNullableInstant(value: unknown, field: string): void {
+  if (value !== null) requireInstant(value, field);
+}
+
 function validateDocumentMetadataValue(key: string, value: unknown, field: string): void {
   switch (key) {
     case "documentCode":
@@ -543,6 +638,15 @@ function validateDocumentAuditSnapshots(input: Record<string, unknown>): void {
   const after = record(input.safeAfter) ? input.safeAfter : null;
 
   switch (input.eventType) {
+    case "document.activated":
+      if (!before || !after) return;
+      if (before.lifecycleStatus !== "PLANNED" || after.lifecycleStatus !== "ACTIVE") {
+        throw new InvalidAuditEventError(
+          "document.activated must record the PLANNED to ACTIVE transition",
+        );
+      }
+      requiredUuid(after.effectiveVersionId, "safeAfter.effectiveVersionId");
+      return;
     case "document.created":
       if (input.safeBefore !== undefined && input.safeBefore !== null) {
         throw new InvalidAuditEventError("safeBefore must be null when a document is created");
@@ -688,6 +792,54 @@ function validateVersionAuditSnapshots(input: Record<string, unknown>): void {
       }
       return;
     }
+    case "version.published":
+      if (!before || !after) return;
+      if (before.lifecycleState !== "APPROVED" || after.lifecycleState !== "PUBLISHED") {
+        throw new InvalidAuditEventError(
+          "version.published must record the APPROVED to PUBLISHED transition",
+        );
+      }
+      requireInstant(after.publishedAt, "safeAfter.publishedAt");
+      requireInstant(after.effectiveFrom, "safeAfter.effectiveFrom");
+      requireNullableInstant(after.effectiveUntil, "safeAfter.effectiveUntil");
+      requireNullableUuid(after.predecessorVersionId, "safeAfter.predecessorVersionId");
+      return;
+    case "version.effective":
+      if (!before || !after) return;
+      if (before.lifecycleState !== "PUBLISHED" || after.lifecycleState !== "EFFECTIVE") {
+        throw new InvalidAuditEventError(
+          "version.effective must record the PUBLISHED to EFFECTIVE transition",
+        );
+      }
+      requireInstant(after.effectiveFrom, "safeAfter.effectiveFrom");
+      requireNullableInstant(after.effectiveUntil, "safeAfter.effectiveUntil");
+      return;
+    case "version.superseded":
+      if (!before || !after) return;
+      if (before.lifecycleState !== "EFFECTIVE" || after.lifecycleState !== "SUPERSEDED") {
+        throw new InvalidAuditEventError(
+          "version.superseded must record the EFFECTIVE to SUPERSEDED transition",
+        );
+      }
+      requireNullableInstant(before.effectiveUntil, "safeBefore.effectiveUntil");
+      requireInstant(after.effectiveUntil, "safeAfter.effectiveUntil");
+      requiredUuid(after.supersededByVersionId, "safeAfter.supersededByVersionId");
+      return;
+    case "version.withdrawn":
+      if (!before || !after) return;
+      if (
+        !["PUBLISHED", "EFFECTIVE"].includes(String(before.lifecycleState)) ||
+        after.lifecycleState !== "WITHDRAWN"
+      ) {
+        throw new InvalidAuditEventError(
+          "version.withdrawn must record a released state to WITHDRAWN transition",
+        );
+      }
+      requireNullableInstant(before.effectiveUntil, "safeBefore.effectiveUntil");
+      requireInstant(after.effectiveUntil, "safeAfter.effectiveUntil");
+      requireInstant(after.withdrawnAt, "safeAfter.withdrawnAt");
+      requiredString(after.withdrawalReason, "safeAfter.withdrawalReason");
+      return;
     case "version.submitted":
       if (!before || !after) return;
       if (before.lifecycleState !== "DRAFT" || after.lifecycleState !== "IN_REVIEW") {

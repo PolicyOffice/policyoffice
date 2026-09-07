@@ -112,6 +112,13 @@ immutable, and a system in which forgetting is not sufficient to cause harm.
 | INV-VER-014 | Materiality is recorded by a human and confirmed at approval; it is never derived from diff size or by an automated classifier | Three characters can create an obligation for everyone; a reformatted annexe creates none | U, I, E | MVP |
 | INV-VER-015 | Materiality may be raised only by resubmitting under the workflow the higher class requires; lowering it requires elevated capability and a recorded reason | Reclassifying downward is the cheapest available way to avoid re-attesting a workforce | I, E | MVP |
 
+**Withdrawal-bound exception, 2026-09-07.** Decision Request #81 clarified INV-VER-007:
+withdrawal may shorten an `effective_until` bound that was set prospectively, but it may
+never move `effective_from` or rewrite elapsed governed time. A Published version is closed
+to an empty interval at `effective_from`; an Effective version is closed at the database
+transaction instant. The narrow withdrawal transition is the exception, not a general
+right to edit effectivity.
+
 ## INV-EFF — Effectivity and supersession
 
 | ID | Invariant | Why it matters | Test | Phase |

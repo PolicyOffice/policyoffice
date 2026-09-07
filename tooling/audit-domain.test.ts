@@ -16,7 +16,7 @@ const OTHER_TENANT = "20000000-0000-0000-0000-000000000002";
 function event(overrides: Partial<AuditEventInput> = {}): AuditEventInput {
   return {
     tenantId: TENANT,
-    eventType: "version.effective",
+    eventType: "access.denied",
     eventSchemaVersion: 1,
     occurredAt: new Date("2027-01-15T09:42:17.231Z"),
     actor: { type: "SYSTEM", id: null },
@@ -233,18 +233,18 @@ describe("the audit event envelope", () => {
   it("INV-AUD-008: all implemented version events replace their placeholder v1 schema", () => {
     for (const eventType of [
       "version.created",
+      "version.effective",
       "version.materiality_changed",
       "version.metadata_changed",
+      "version.published",
+      "version.superseded",
+      "version.withdrawn",
     ] as const) {
       expect(IMPLEMENTED_AUDIT_EVENT_TYPES).toContain(eventType);
       expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterRequired).toBe(true);
       expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterKeys.length).toBeGreaterThan(0);
     }
-    for (const eventType of [
-      "version.approved",
-      "version.published",
-      "version.withdrawn",
-    ] as const) {
+    for (const eventType of ["version.approved", "version.rejected"] as const) {
       expect(IMPLEMENTED_AUDIT_EVENT_TYPES).not.toContain(eventType);
       expect(AUDIT_EVENT_SCHEMAS[eventType][1]).toMatchObject({
         safeBeforeKeys: [],
@@ -256,6 +256,7 @@ describe("the audit event envelope", () => {
 
   it("INV-AUD-008: only emitted document events replace their placeholder schema", () => {
     const implemented = [
+      "document.activated",
       "document.created",
       "document.metadata_changed",
       "document.owner_changed",
@@ -267,11 +268,7 @@ describe("the audit event envelope", () => {
       expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterRequired).toBe(true);
       expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterKeys.length).toBeGreaterThan(0);
     }
-    for (const eventType of [
-      "document.activated",
-      "document.restored",
-      "document.sensitive_viewed",
-    ] as const) {
+    for (const eventType of ["document.restored", "document.sensitive_viewed"] as const) {
       expect(IMPLEMENTED_AUDIT_EVENT_TYPES).not.toContain(eventType);
       expect(AUDIT_EVENT_SCHEMAS[eventType][1]).toMatchObject({
         safeBeforeKeys: [],
@@ -279,6 +276,43 @@ describe("the audit event envelope", () => {
         safeAfterRequired: false,
       });
     }
+  });
+
+  it("INV-AUD-004 / INV-EFF-001 / INV-EFF-004: validates publication lifecycle snapshots", () => {
+    const published = event({
+      eventType: "version.published",
+      safeBefore: { lifecycleState: "APPROVED" },
+      safeAfter: {
+        lifecycleState: "PUBLISHED",
+        publishedAt: "2027-01-15T09:42:17.231Z",
+        effectiveFrom: "2027-02-01T00:00:00.000Z",
+        effectiveUntil: null,
+        predecessorVersionId: null,
+      },
+    });
+    expect(() => validateAuditEvent(published)).not.toThrow();
+    expect(() =>
+      validateAuditEvent({
+        ...published,
+        safeBefore: { lifecycleState: "APPROVED" },
+        safeAfter: { ...published.safeAfter, lifecycleState: "EFFECTIVE" },
+      }),
+    ).toThrow(/APPROVED to PUBLISHED/i);
+
+    expect(() =>
+      validateAuditEvent(
+        event({
+          eventType: "version.withdrawn",
+          safeBefore: { lifecycleState: "PUBLISHED", effectiveUntil: null },
+          safeAfter: {
+            lifecycleState: "WITHDRAWN",
+            effectiveUntil: "2027-02-01T00:00:00.000Z",
+            withdrawnAt: "2027-01-15T09:42:17.231Z",
+            withdrawalReason: "Published in error",
+          },
+        }),
+      ),
+    ).not.toThrow();
   });
 });
 

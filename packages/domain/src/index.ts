@@ -132,6 +132,21 @@ export {
 } from "./document.js";
 
 export {
+  PUBLICATION_LIFECYCLE_TRANSITIONS,
+  PUBLICATION_REQUIRED_CAPABILITIES,
+  DocumentVersionPublicationDateError,
+  DocumentVersionScheduleConflictError,
+  publishDocumentVersion,
+  resolveEffectiveVersion,
+  withdrawDocumentVersion,
+  type EffectiveDocumentVersion,
+  type PublishDocumentVersionInput,
+  type PublishedDocumentVersion,
+  type WithdrawDocumentVersionInput,
+  type WithdrawnDocumentVersion,
+} from "./publication.js";
+
+export {
   DIRECT_VERSION_LIFECYCLE_TRANSITIONS,
   DOCUMENT_VERSION_COLUMN_CLASSIFICATION,
   MATERIALITY_CLASSES,
