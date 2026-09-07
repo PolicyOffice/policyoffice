@@ -116,36 +116,37 @@ Both ADRs are amended and `data-model.md` is corrected.
 - [x] **First migrations** — tenancy and identity (POL-006, #34), on a chain applied by its
       documented command (POL-010, #41); the audit ledger (POL-007, #35) and organisation
       (POL-008, #36) both landed 2026-09-02
-- [ ] **The document spine** — **ticketed 2026-09-02**, once #34 had landed and shown how
+- [x] **The document spine** — **ticketed 2026-09-02**, once #34 had landed and shown how
       the conventions hold up. It wanted more than two tickets; it got eight, every one
-      Tier 2. **One of the eight has landed; status as at 2026-09-04:**
+      Tier 2. **Seven of the eight have landed; status as at 2026-09-07:**
 
-  | Ticket | What | Phase | Status |
-  |---|---|---|---|
-  | POL-011 (#49) | `configuration_version`, `document_type`, `information_classification` — the three foreign keys `document_version` cannot be `not null` without | 2 | **merged** #62 |
-  | POL-012 (#50) | `document` and `document_variant`, and the one-baseline guarantee | 2 | ready |
-  | POL-013 (#51) | `document_version`, the INV-EFF-002 exclusion constraint, the INV-VER-003/007 immutability triggers | 2 | blocked on #50 |
-  | POL-014 (#52) | `content_revision` and `content_attachment` | 2 | blocked on #51, #53 |
-  | POL-015 (#53) | Canonicalisation and the content digest — pure, framework-free, **no dependencies** | 3 | ready |
-  | POL-016 (#54) | The publication transaction, where INV-EFF-003's atomicity actually lives | 3 | blocked on #51, #52 |
-  | POL-017 (#55) | The effective-instant transition, which only narrates what publication decided | 3 | blocked on #54 |
-  | POL-018 (#56) | `applicability_rule` and `alignment_obligation` — tables only; resolution is V1 | 2 | blocked on #51 |
+  | Ticket | What | Status |
+  |---|---|---|
+  | POL-011 (#49) | `configuration_version`, `document_type`, `information_classification` | **merged** #62 |
+  | POL-012 (#50) | `document` and `document_variant`, and the one-baseline guarantee | **merged** #69 |
+  | POL-013 (#51) | `document_version`, the INV-EFF-002 exclusion constraint, the INV-VER-003/007 immutability triggers | **merged** #73 |
+  | POL-014 (#52) | `content_revision` and `content_attachment` | **merged** #79 |
+  | POL-015 (#53) | Canonicalisation and the content digest | **merged** #71 |
+  | POL-016 (#54) | The publication transaction, where INV-EFF-003's atomicity actually lives | ready |
+  | POL-017 (#55) | The effective-instant transition, which only narrates what publication decided | blocked on #54 |
+  | POL-018 (#56) | `applicability_rule` and `alignment_obligation` — tables only; resolution is V1 | ready |
 
-  **The remaining seven are one chain plus one independent ticket.** POL-012 (#50) is the
-  bottleneck: #51 needs it, and #52, #54, #55 and #56 all need #51. POL-015 (#53) depends on
-  nothing and stays independent to the end, so **#50 and #53 are the only pair that can run
-  in parallel** — and they touch different packages, which is what makes a second worktree
-  worth the trouble if two Codex sessions are ever run at once.
+  All three forward references are **resolved**: `document_type.mandated_by_document_version_id`
+  (POL-011 → POL-013), `document_version.approved_revision_id` (POL-013 → POL-014, created
+  nullable and still unbound until the approval ticket), and INV-DOC-008's retirement trigger
+  (POL-012 → POL-013).
 
-  Three forward references are resolved across the chain rather than designed around, each
-  recorded in both the ticket that creates the column and the ticket that adds the
-  constraint: `document_type.mandated_by_document_version_id` (POL-011 → POL-013),
-  `document_version.approved_revision_id` (POL-013 → POL-014), and INV-DOC-008's
-  retirement trigger (POL-012 → POL-013).
+  **Four tickets the plan did not anticipate came out of building it**, which is the honest
+  measure of how good the original decomposition was — the spine was right, the enforcement
+  around it was not:
 
-  POL-015 is the only one of the eight with no dependency, and it is deliberately separated
-  from the tables that store its output: a pure function over values earns property-based
-  tests that are far harder to write against a database.
+  | Ticket | Why it exists |
+  |---|---|
+  | POL-019 (#68) | **merged** #74. An implemented audit event left on the shared `ENVELOPE_ONLY_SCHEMA` placeholder passed every check while carrying no state. Caught by hand in POL-011's review, nearly repeated in POL-012, now a build failure |
+  | POL-020 (#70) | ready. `body_membership` was deletable while `org_membership` was not, and INV-ORG-002's rationale needs the seat history. Decision Request #66 |
+  | POL-021 (#75) | **merged** #77. `document_version.lifecycle_state` had no transition guard at all: any state to any state, and a row insertable straight into `EFFECTIVE` |
+  | — | Five Decision Requests (#72, #76, #78, #81, and #66) settled rules the specification implied but never stated. Four were defects in tickets rather than in the specification |
+
 - [ ] **Playwright** — booted in the runner, no deployed environment
 - [x] **Repository governance** — CODEOWNERS carries the Tier 2 paths, the issue templates
       exist, and the branch ruleset is **applied** (2026-08-31): thirteen required checks,
@@ -167,10 +168,18 @@ Both ADRs are amended and `data-model.md` is corrected.
       Request — **one outstanding**: Neon restore timing, which needs a Neon API key
 - [x] `docker compose up -d && ./verification/run.sh` passes from a clean clone — verified
       2026-08-25 from a destroyed volume, having never actually held before
-- [ ] The migration chain builds the schema in `data-model.md` on a fresh database, and as
-      an upgrade
+- [x] The migration chain builds the schema in `data-model.md` on a fresh database, and as
+      an upgrade — `pnpm db:verify` covers fresh, upgrade-with-data and Drizzle drift, and has
+      passed on every migration through `0011`
 - [ ] Every level-1 and level-2 constraint carries its invariant ID in a
-      `comment on constraint`
+      `comment on constraint`. **Partially met, and the gap is in the checking rather than the
+      comments.** The convention is settled — since POL-012's review a constraint enforcing
+      **no** registered invariant deliberately carries none, rather than the nearest-looking ID
+      — but only `document.int.test.ts` and `version.int.test.ts` assert it, each against an
+      explicit allowlist. So a constraint added without a comment is caught in neither
+      `content_revision`, `configuration` nor `organization`, and even where it is checked, the
+      allowlist has to be extended by hand. A schema-discovered check, in the style of the
+      seeds' tenant-coverage test, would close it
 - [ ] CI blocks a pull request that breaks a tenant-isolation or authorization test — the
       tenant-isolation gate is live; the authorization matrix remains pending
 - [x] A cross-tenant negative test exists and **fails** when RLS is removed — proving the
