@@ -12,6 +12,7 @@ import {
   DocumentVersionNotFoundError,
   type VersionLifecycle,
 } from "./version.js";
+import { transitionDocumentVersionEffective } from "./effectivity.js";
 
 export const PUBLICATION_REQUIRED_CAPABILITIES = Object.freeze({
   publish: "document.publish",
@@ -78,6 +79,7 @@ export interface WithdrawnDocumentVersion {
   withdrawalReason: string;
   rowVersion: number;
   emittedEvent: EmittedAuditEvent;
+  policyGapEvent: EmittedAuditEvent | null;
 }
 
 export interface EffectiveDocumentVersion {
@@ -424,6 +426,19 @@ export async function withdrawDocumentVersion(
   ]);
   if (!emittedEvent) throw new Error("withdrawal audit insert returned no event");
 
+  let policyGapEvent: EmittedAuditEvent | null = null;
+  if (row.previous_lifecycle_state === "EFFECTIVE") {
+    const transition = await transitionDocumentVersionEffective(transaction, {
+      tenantId: input.tenantId,
+      versionId: row.version_id,
+      instant: row.withdrawn_at,
+      requestId: input.requestId,
+      correlationId: input.correlationId,
+      sourceChannel: input.sourceChannel,
+    });
+    [policyGapEvent = null] = transition.emittedEvents;
+  }
+
   return {
     id: row.version_id,
     documentId: row.document_id,
@@ -437,6 +452,7 @@ export async function withdrawDocumentVersion(
     withdrawalReason: row.withdrawal_reason,
     rowVersion: row.row_version,
     emittedEvent,
+    policyGapEvent,
   };
 }
 

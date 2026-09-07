@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   publishDocumentVersion,
   resolveEffectiveVersion,
+  transitionDocumentVersionEffective,
   withdrawDocumentVersion,
   type AuditTransaction,
 } from "../../domain/src/index.js";
@@ -197,6 +198,111 @@ async function insertApprovedCandidate(sql: Sql, index: number): Promise<number>
 }
 
 describe("document version effectivity properties", () => {
+  it("INV-EFF-005 / INV-EFF-007 / INV-EFF-008: arbitrary publication, transition and withdrawal interleavings narrate each effect once", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.constantFrom("PUBLISH", "TRANSITION", "WITHDRAW"), {
+          minLength: 1,
+          maxLength: 20,
+        }),
+        async (commands) => {
+          await withTenant(TENANT, async (sql) => {
+            const id = versionId(99);
+            const rowVersion = await insertApprovedCandidate(sql, 99);
+            const publishedAt = new Date(Date.now() - 120_000);
+            const effectiveFrom = new Date(Date.now() - 60_000);
+            let currentRowVersion = rowVersion;
+            let published = false;
+            let withdrawn = false;
+            let becameEffective = false;
+
+            for (const command of commands) {
+              if (command === "PUBLISH" && !published) {
+                const result = await publishDocumentVersion(transaction(sql), {
+                  tenantId: TENANT,
+                  versionId: id,
+                  expectedRowVersion: currentRowVersion,
+                  effectiveFrom,
+                  actor: { type: "USER", id: USER },
+                  configurationVersionId: CONFIGURATION,
+                  occurredAt: publishedAt,
+                  requestId: randomUUID(),
+                  correlationId: randomUUID(),
+                  sourceChannel: "API",
+                });
+                currentRowVersion = result.rowVersion;
+                published = true;
+              } else if (command === "TRANSITION") {
+                const result = await transitionDocumentVersionEffective(transaction(sql), {
+                  tenantId: TENANT,
+                  versionId: id,
+                  instant: effectiveFrom,
+                  requestId: randomUUID(),
+                  correlationId: randomUUID(),
+                  sourceChannel: "JOB",
+                });
+                currentRowVersion = result.rowVersion;
+                if (!withdrawn && result.outcome === "TRANSITIONED") becameEffective = true;
+              } else if (command === "WITHDRAW" && published && !withdrawn) {
+                const result = await withdrawDocumentVersion(transaction(sql), {
+                  tenantId: TENANT,
+                  versionId: id,
+                  expectedRowVersion: currentRowVersion,
+                  withdrawalReason: "Property-generated interleaving",
+                  actor: { type: "USER", id: USER },
+                  configurationVersionId: CONFIGURATION,
+                  occurredAt: new Date(),
+                  requestId: randomUUID(),
+                  correlationId: randomUUID(),
+                  sourceChannel: "API",
+                });
+                currentRowVersion = result.rowVersion;
+                withdrawn = true;
+              }
+            }
+
+            if (withdrawn) {
+              await transitionDocumentVersionEffective(transaction(sql), {
+                tenantId: TENANT,
+                versionId: id,
+                instant: effectiveFrom,
+                requestId: randomUUID(),
+                correlationId: randomUUID(),
+                sourceChannel: "JOB",
+              });
+            }
+
+            const events = await sql.query<{ event_type: string; count: number }>(
+              `select event_type, count(*)::int as count
+                 from audit_event
+                where document_version_id = $1
+                  and event_type in ('version.effective', 'governance.policy_gap')
+                group by event_type`,
+              [id],
+            );
+            const counts = new Map(events.rows.map((row) => [row.event_type, row.count]));
+            expect(counts.get("version.effective") ?? 0).toBe(becameEffective ? 1 : 0);
+            expect(counts.get("governance.policy_gap") ?? 0).toBe(withdrawn ? 1 : 0);
+            const state = await sql.query<{ lifecycle_state: string }>(
+              "select lifecycle_state from document_version where tenant_id = $1 and id = $2",
+              [TENANT, id],
+            );
+            expect(state.rows[0]?.lifecycle_state).toBe(
+              withdrawn
+                ? "WITHDRAWN"
+                : becameEffective
+                  ? "EFFECTIVE"
+                  : published
+                    ? "PUBLISHED"
+                    : "APPROVED",
+            );
+          });
+        },
+      ),
+      { numRuns: 30 },
+    );
+  });
+
   it("INV-EFF-002 / INV-EFF-003 / INV-EFF-004: arbitrary publications and withdrawals keep the schedule coherent", async () => {
     await fc.assert(
       fc.asyncProperty(

@@ -7,9 +7,11 @@ import {
   DocumentVersionScheduleConflictError,
   publishDocumentVersion,
   resolveEffectiveVersion,
+  transitionDocumentVersionEffective,
   withdrawDocumentVersion,
   type AuditTransaction,
   type PublishDocumentVersionInput,
+  type TransitionDocumentVersionEffectiveInput,
 } from "../../domain/src/index.js";
 import {
   withAppRole,
@@ -190,6 +192,26 @@ async function addVariant(sql: Sql, variantId: string): Promise<void> {
        (tenant_id, id, document_id, variant_type, source_variant_id, status)
      values ($1, $2, $3, 'SUPPLEMENT', $4, 'ACTIVE')`,
     [TENANT, variantId, DOCUMENT, BASELINE],
+  );
+}
+
+async function addPlannedDocument(
+  sql: Sql,
+  documentId: string,
+  baselineVariantId: string,
+): Promise<void> {
+  await sql.query(
+    `insert into document (
+       tenant_id, id, document_code, canonical_title, document_type_id,
+       owning_org_unit_id, lifecycle_status, is_governing_framework
+     ) values ($1, $2, $3, 'Scheduled activation policy', $4, $5, 'PLANNED', false)`,
+    [TENANT, documentId, `EFF-${documentId.slice(-8)}`, DOCUMENT_TYPE, ORG],
+  );
+  await sql.query(
+    `insert into document_variant
+       (tenant_id, id, document_id, variant_type, status)
+     values ($1, $2, $3, 'BASELINE', 'ACTIVE')`,
+    [TENANT, baselineVariantId, documentId],
   );
 }
 
@@ -575,6 +597,7 @@ describe("publication, supersession, withdrawal and resolution", () => {
       expect(withdrawn.previousEffectiveUntil).toEqual(futureAt);
       expect(withdrawn.effectiveUntil).toEqual(withdrawn.withdrawnAt);
       expect(withdrawn.effectiveUntil.valueOf()).toBeLessThan(futureAt.valueOf());
+      expect(withdrawn.policyGapEvent).not.toBeNull();
       expect(
         await resolveEffectiveVersion(transaction(sql), {
           tenantId: TENANT,
@@ -587,6 +610,12 @@ describe("publication, supersession, withdrawal and resolution", () => {
         [predecessorId],
       );
       expect(predecessor.rows).toEqual([{ lifecycle_state: "SUPERSEDED" }]);
+      const gaps = await sql.query<{ count: number }>(
+        `select count(*)::int as count from audit_event
+          where event_type = 'governance.policy_gap' and document_version_id = $1`,
+        [currentId],
+      );
+      expect(gaps.rows).toEqual([{ count: 1 }]);
       expect(current.lifecycleState).toBe("EFFECTIVE");
     });
   });
@@ -960,6 +989,532 @@ describe("publication transaction concurrency", () => {
       const events = await sql.query<{ count: number }>(
         "select count(*)::int as count from audit_event where document_version_id = $1",
         [successorId],
+      );
+      expect(events.rows).toEqual([{ count: 0 }]);
+    });
+  });
+});
+
+function effectivityInput(
+  versionId: string,
+  instant: Date,
+  overrides: Partial<TransitionDocumentVersionEffectiveInput> = {},
+): TransitionDocumentVersionEffectiveInput {
+  return {
+    tenantId: TENANT,
+    versionId,
+    instant,
+    requestId: randomUUID(),
+    correlationId: randomUUID(),
+    sourceChannel: "JOB",
+    ...overrides,
+  };
+}
+
+async function addCommittedScheduledVersion(
+  variantId: string,
+  versionId: string,
+): Promise<{ effectiveFrom: Date; rowVersion: number }> {
+  return committedTenant(TENANT, async (sql) => {
+    await addVariant(sql, variantId);
+    const rowVersion = await addApprovedVersion(sql, versionId, variantId);
+    const publishedAt = new Date(Date.now() - 120_000);
+    const effectiveFrom = new Date(Date.now() - 60_000);
+    const published = await publishDocumentVersion(
+      transaction(sql),
+      publicationInput(versionId, rowVersion, publishedAt, effectiveFrom),
+    );
+    return { effectiveFrom, rowVersion: published.rowVersion };
+  });
+}
+
+describe("effective-instant lifecycle narration", () => {
+  it("INV-DOC-007 / INV-EFF-007 / INV-AUD-001 / INV-AUD-004: makes the first scheduled version effective and activates its document exactly once", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const documentId = randomUUID();
+      const variantId = randomUUID();
+      const versionId = randomUUID();
+      await addPlannedDocument(sql, documentId, variantId);
+      const rowVersion = await addApprovedVersion(sql, versionId, variantId);
+      const publishedAt = new Date(Date.now() - 120_000);
+      const effectiveFrom = new Date(Date.now() - 60_000);
+      const published = await publishDocumentVersion(
+        transaction(sql),
+        publicationInput(versionId, rowVersion, publishedAt, effectiveFrom),
+      );
+
+      expect(published.lifecycleState).toBe("PUBLISHED");
+      expect(
+        await resolveEffectiveVersion(transaction(sql), {
+          tenantId: TENANT,
+          documentVariantId: variantId,
+          at: effectiveFrom,
+        }),
+      ).toMatchObject({ id: versionId, lifecycleState: "PUBLISHED" });
+
+      const processingInstant = new Date(effectiveFrom.valueOf() + 30_000);
+      const input = effectivityInput(versionId, processingInstant);
+      const transitioned = await transitionDocumentVersionEffective(transaction(sql), input);
+      expect(transitioned).toMatchObject({
+        outcome: "TRANSITIONED",
+        previousLifecycleState: "PUBLISHED",
+        lifecycleState: "EFFECTIVE",
+        effectiveFrom,
+        documentActivated: true,
+      });
+      const state = await sql.query<{ lifecycle_status: string }>(
+        "select lifecycle_status from document where tenant_id = $1 and id = $2",
+        [TENANT, documentId],
+      );
+      expect(state.rows).toEqual([{ lifecycle_status: "ACTIVE" }]);
+      const events = await sql.query<{
+        event_type: string;
+        actor_type: string;
+        actor_id: string | null;
+        occurred_at: Date;
+      }>(
+        `select event_type, actor_type, actor_id, occurred_at
+           from audit_event where correlation_id = $1 order by sequence`,
+        [input.correlationId],
+      );
+      expect(events.rows).toEqual([
+        {
+          event_type: "version.effective",
+          actor_type: "SYSTEM",
+          actor_id: null,
+          occurred_at: effectiveFrom,
+        },
+        {
+          event_type: "document.activated",
+          actor_type: "SYSTEM",
+          actor_id: null,
+          occurred_at: effectiveFrom,
+        },
+      ]);
+
+      const repeated = await transitionDocumentVersionEffective(transaction(sql), {
+        ...input,
+        requestId: randomUUID(),
+        correlationId: randomUUID(),
+      });
+      expect(repeated).toMatchObject({
+        outcome: "ALREADY_TRANSITIONED",
+        emittedEvents: [],
+      });
+      const activationEvents = await sql.query<{ count: number }>(
+        `select count(*)::int as count from audit_event
+          where event_type = 'document.activated' and document_id = $1`,
+        [documentId],
+      );
+      expect(activationEvents.rows).toEqual([{ count: 1 }]);
+    });
+  });
+
+  it("INV-EFF-003: supersedes the authoritative predecessor exactly at the scheduled boundary", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const variantId = randomUUID();
+      const predecessorId = randomUUID();
+      const successorId = randomUUID();
+      await addVariant(sql, variantId);
+      const predecessorRowVersion = await addApprovedVersion(sql, predecessorId, variantId, 1);
+      const predecessorAt = new Date(Date.now() - 180_000);
+      await publishDocumentVersion(
+        transaction(sql),
+        publicationInput(predecessorId, predecessorRowVersion, predecessorAt, predecessorAt),
+      );
+      const successorRowVersion = await addApprovedVersion(sql, successorId, variantId, 2);
+      const publishedAt = new Date(Date.now() - 120_000);
+      const effectiveFrom = new Date(Date.now() - 60_000);
+      await publishDocumentVersion(
+        transaction(sql),
+        publicationInput(successorId, successorRowVersion, publishedAt, effectiveFrom),
+      );
+
+      const input = effectivityInput(successorId, effectiveFrom);
+      const transitioned = await transitionDocumentVersionEffective(transaction(sql), input);
+      expect(transitioned).toMatchObject({
+        outcome: "TRANSITIONED",
+        predecessorVersionId: predecessorId,
+        documentActivated: false,
+      });
+      const states = await sql.query<{ id: string; lifecycle_state: string }>(
+        `select id, lifecycle_state from document_version
+          where id = any($1::uuid[]) order by version_sequence`,
+        [[predecessorId, successorId]],
+      );
+      expect(states.rows).toEqual([
+        { id: predecessorId, lifecycle_state: "SUPERSEDED" },
+        { id: successorId, lifecycle_state: "EFFECTIVE" },
+      ]);
+      const events = await sql.query<{ event_type: string }>(
+        "select event_type from audit_event where correlation_id = $1 order by sequence",
+        [input.correlationId],
+      );
+      expect(events.rows.map(({ event_type }) => event_type)).toEqual([
+        "version.superseded",
+        "version.effective",
+      ]);
+    });
+  });
+
+  it("INV-EFF-007 / INV-EFF-008: treats not-due, cancelled and ineligible versions as explicit no-ops", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const variantId = randomUUID();
+      await addVariant(sql, variantId);
+
+      const notDueId = randomUUID();
+      const notDueRowVersion = await addApprovedVersion(sql, notDueId, variantId, 1);
+      const publishedAt = new Date(Date.now() - 60_000);
+      const effectiveFrom = new Date(Date.now() + 60_000);
+      await publishDocumentVersion(
+        transaction(sql),
+        publicationInput(notDueId, notDueRowVersion, publishedAt, effectiveFrom),
+      );
+      expect(
+        await transitionDocumentVersionEffective(
+          transaction(sql),
+          effectivityInput(notDueId, publishedAt),
+        ),
+      ).toMatchObject({ outcome: "NOT_DUE", emittedEvents: [] });
+
+      const cancelledId = randomUUID();
+      await addApprovedVersion(sql, cancelledId, variantId, 2);
+      await sql.query(
+        `update document_version
+            set lifecycle_state = 'CANCELLED', row_version = row_version + 1
+          where tenant_id = $1 and id = $2`,
+        [TENANT, cancelledId],
+      );
+      expect(
+        await transitionDocumentVersionEffective(
+          transaction(sql),
+          effectivityInput(cancelledId, publishedAt),
+        ),
+      ).toMatchObject({ outcome: "CANCELLED", emittedEvents: [] });
+
+      const approvedId = randomUUID();
+      await addApprovedVersion(sql, approvedId, variantId, 3);
+      expect(
+        await transitionDocumentVersionEffective(
+          transaction(sql),
+          effectivityInput(approvedId, publishedAt),
+        ),
+      ).toMatchObject({ outcome: "INELIGIBLE", emittedEvents: [] });
+    });
+  });
+
+  it("INV-EFF-004 / INV-EFF-008: a withdrawn scheduled version emits one high-severity gap and never resurrects a predecessor", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const variantId = randomUUID();
+      const predecessorId = randomUUID();
+      const withdrawnId = randomUUID();
+      await addVariant(sql, variantId);
+      const predecessorRowVersion = await addApprovedVersion(sql, predecessorId, variantId, 1);
+      const predecessorAt = new Date(Date.now() - 180_000);
+      await publishDocumentVersion(
+        transaction(sql),
+        publicationInput(predecessorId, predecessorRowVersion, predecessorAt, predecessorAt),
+      );
+      const withdrawnRowVersion = await addApprovedVersion(sql, withdrawnId, variantId, 2);
+      const publishedAt = new Date(Date.now() - 120_000);
+      const effectiveFrom = new Date(Date.now() - 60_000);
+      const published = await publishDocumentVersion(
+        transaction(sql),
+        publicationInput(withdrawnId, withdrawnRowVersion, publishedAt, effectiveFrom),
+      );
+      await withdrawDocumentVersion(transaction(sql), {
+        ...publicationInput(withdrawnId, published.rowVersion, publishedAt, effectiveFrom),
+        withdrawalReason: "Withdrawn before scheduled narration",
+      });
+
+      const input = effectivityInput(withdrawnId, effectiveFrom);
+      const first = await transitionDocumentVersionEffective(transaction(sql), input);
+      expect(first).toMatchObject({ outcome: "WITHDRAWN", policyGap: true });
+      expect(first.emittedEvents).toHaveLength(1);
+      const second = await transitionDocumentVersionEffective(transaction(sql), {
+        ...input,
+        requestId: randomUUID(),
+        correlationId: randomUUID(),
+      });
+      expect(second).toMatchObject({ outcome: "WITHDRAWN", policyGap: false, emittedEvents: [] });
+
+      const predecessor = await sql.query<{ lifecycle_state: string }>(
+        "select lifecycle_state from document_version where tenant_id = $1 and id = $2",
+        [TENANT, predecessorId],
+      );
+      expect(predecessor.rows).toEqual([{ lifecycle_state: "EFFECTIVE" }]);
+      const gaps = await sql.query<{
+        count: number;
+        severity: string;
+        actor_type: string;
+      }>(
+        `select count(*)::int as count,
+                min(safe_after->>'severity') as severity,
+                min(actor_type::text) as actor_type
+           from audit_event
+          where event_type = 'governance.policy_gap'
+            and document_version_id = $1`,
+        [withdrawnId],
+      );
+      expect(gaps.rows).toEqual([{ count: 1, severity: "HIGH", actor_type: "SYSTEM" }]);
+    });
+  });
+
+  it("INV-EFF-005: emits no policy gap when a replacement already holds the withdrawn instant", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const variantId = randomUUID();
+      const withdrawnId = randomUUID();
+      const replacementId = randomUUID();
+      await addVariant(sql, variantId);
+      const withdrawnRowVersion = await addApprovedVersion(sql, withdrawnId, variantId, 1);
+      const publishedAt = new Date(Date.now() - 120_000);
+      const effectiveFrom = new Date(Date.now() - 60_000);
+      const published = await publishDocumentVersion(
+        transaction(sql),
+        publicationInput(withdrawnId, withdrawnRowVersion, publishedAt, effectiveFrom),
+      );
+      await withdrawDocumentVersion(transaction(sql), {
+        ...publicationInput(withdrawnId, published.rowVersion, publishedAt, effectiveFrom),
+        withdrawalReason: "Replace before scheduled narration",
+      });
+      const replacementRowVersion = await addApprovedVersion(sql, replacementId, variantId, 2);
+      await publishDocumentVersion(
+        transaction(sql),
+        publicationInput(replacementId, replacementRowVersion, publishedAt, effectiveFrom),
+      );
+
+      const transition = await transitionDocumentVersionEffective(
+        transaction(sql),
+        effectivityInput(withdrawnId, effectiveFrom),
+      );
+      expect(transition).toMatchObject({
+        outcome: "WITHDRAWN",
+        policyGap: false,
+        emittedEvents: [],
+      });
+      expect(
+        await resolveEffectiveVersion(transaction(sql), {
+          tenantId: TENANT,
+          documentVariantId: variantId,
+          at: effectiveFrom,
+        }),
+      ).toMatchObject({ id: replacementId });
+      const gaps = await sql.query<{ count: number }>(
+        `select count(*)::int as count from audit_event
+          where event_type = 'governance.policy_gap' and document_version_id = $1`,
+        [withdrawnId],
+      );
+      expect(gaps.rows).toEqual([{ count: 0 }]);
+    });
+  });
+
+  it("INV-TEN-001 / INV-TEN-003: the effective-instant entry point fails closed and hides cross-tenant identifiers", async () => {
+    await withoutTenant(async (sql) => {
+      await expect(
+        transitionDocumentVersionEffective(
+          transaction(sql),
+          effectivityInput(randomUUID(), new Date(Date.now() - 1_000)),
+        ),
+      ).rejects.toThrow();
+    });
+    await withTenant(TENANT, async (sql) => {
+      await expect(
+        transitionDocumentVersionEffective(
+          transaction(sql),
+          effectivityInput(OTHER_VERSION, new Date(Date.now() - 1_000)),
+        ),
+      ).rejects.toBeInstanceOf(DocumentVersionNotFoundError);
+    });
+  });
+
+  it("installs a narrow SECURITY DEFINER transition owned by migration_role", async () => {
+    const { rows } = await withAppRole((sql) =>
+      sql.query<{
+        owner: string;
+        prosecdef: boolean;
+        proconfig: string[];
+        acl: string;
+      }>(`
+        select pg_get_userbyid(proc.proowner) as owner,
+               proc.prosecdef,
+               proc.proconfig,
+               proc.proacl::text as acl
+          from pg_proc proc
+          join pg_namespace namespace on namespace.oid = proc.pronamespace
+         where namespace.nspname = 'public'
+           and proc.proname = 'transition_document_version_effective'
+      `),
+    );
+    expect(rows).toEqual([
+      {
+        owner: "migration_role",
+        prosecdef: true,
+        proconfig: ["search_path=pg_catalog, public"],
+        acl: "{migration_role=X/migration_role,app_role=X/migration_role}",
+      },
+    ]);
+    const privileges = await withAppRole((sql) =>
+      sql.query<{ grantee: string; privilege_type: string }>(`
+        select grantee, privilege_type
+          from information_schema.routine_privileges
+         where routine_schema = 'public'
+           and routine_name = 'transition_document_version_effective'
+         order by grantee, privilege_type
+      `),
+    );
+    expect(privileges.rows).toEqual([{ grantee: "app_role", privilege_type: "EXECUTE" }]);
+  });
+});
+
+describe("effective-instant transaction concurrency", () => {
+  async function concurrentTransition(
+    input: TransitionDocumentVersionEffectiveInput,
+  ): Promise<unknown> {
+    return withAppRole(async (sql) => {
+      await sql.query("begin");
+      try {
+        await sql.query("select set_config('app.tenant_id', $1, true)", [TENANT]);
+        const result = await transitionDocumentVersionEffective(transaction(sql), input);
+        await sql.query("commit");
+        return result;
+      } catch (error) {
+        await sql.query("rollback");
+        return error;
+      }
+    });
+  }
+
+  it("INV-EFF-007 / INV-TIME-003: eight contenders emit exactly one effective event", async () => {
+    const variantId = randomUUID();
+    const versionId = randomUUID();
+    const { effectiveFrom } = await addCommittedScheduledVersion(variantId, versionId);
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        concurrentTransition(effectivityInput(versionId, effectiveFrom)),
+      ),
+    );
+
+    expect(results.filter((result) => result instanceof Error)).toEqual([]);
+    expect(
+      results.filter(
+        (result) =>
+          (result as Awaited<ReturnType<typeof transitionDocumentVersionEffective>>).outcome ===
+          "TRANSITIONED",
+      ),
+    ).toHaveLength(1);
+    expect(
+      results.filter(
+        (result) =>
+          (result as Awaited<ReturnType<typeof transitionDocumentVersionEffective>>).outcome ===
+          "ALREADY_TRANSITIONED",
+      ),
+    ).toHaveLength(7);
+    await committedTenant(TENANT, async (sql) => {
+      const events = await sql.query<{ count: number }>(
+        `select count(*)::int as count from audit_event
+          where event_type = 'version.effective' and document_version_id = $1`,
+        [versionId],
+      );
+      expect(events.rows).toEqual([{ count: 1 }]);
+    });
+  });
+
+  it("INV-EFF-004 / INV-EFF-008: a transition blocked behind withdrawal re-reads WITHDRAWN and emits no effective event", async () => {
+    const variantId = randomUUID();
+    const versionId = randomUUID();
+    const { effectiveFrom, rowVersion } = await addCommittedScheduledVersion(variantId, versionId);
+    let releaseWithdrawal!: () => void;
+    let reportLocked!: () => void;
+    const release = new Promise<void>((resolve) => {
+      releaseWithdrawal = resolve;
+    });
+    const locked = new Promise<void>((resolve) => {
+      reportLocked = resolve;
+    });
+
+    const withdrawal = withAppRole(async (sql) => {
+      await sql.query("begin");
+      try {
+        await sql.query("select set_config('app.tenant_id', $1, true)", [TENANT]);
+        await sql.query(
+          "select 1 from document_variant where tenant_id = $1 and id = $2 for update",
+          [TENANT, variantId],
+        );
+        reportLocked();
+        await release;
+        await withdrawDocumentVersion(transaction(sql), {
+          tenantId: TENANT,
+          versionId,
+          expectedRowVersion: rowVersion,
+          withdrawalReason: "Concurrent emergency withdrawal",
+          actor: { type: "USER", id: USER },
+          configurationVersionId: CONFIGURATION,
+          occurredAt: new Date(),
+          requestId: randomUUID(),
+          correlationId: randomUUID(),
+          sourceChannel: "API",
+        });
+        await sql.query("commit");
+      } catch (error) {
+        await sql.query("rollback");
+        throw error;
+      }
+    });
+    await locked;
+
+    let transitionSettled = false;
+    const transition = concurrentTransition(effectivityInput(versionId, effectiveFrom)).then(
+      (result) => {
+        transitionSettled = true;
+        return result;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(transitionSettled).toBe(false);
+    releaseWithdrawal();
+
+    await withdrawal;
+    const transitionResult = await transition;
+    expect(transitionResult).toMatchObject({
+      outcome: "WITHDRAWN",
+      lifecycleState: "WITHDRAWN",
+      policyGap: true,
+    });
+    await committedTenant(TENANT, async (sql) => {
+      const state = await sql.query<{ lifecycle_state: string }>(
+        "select lifecycle_state from document_version where tenant_id = $1 and id = $2",
+        [TENANT, versionId],
+      );
+      expect(state.rows).toEqual([{ lifecycle_state: "WITHDRAWN" }]);
+      const effectiveEvents = await sql.query<{ count: number }>(
+        `select count(*)::int as count from audit_event
+          where event_type = 'version.effective' and document_version_id = $1`,
+        [versionId],
+      );
+      expect(effectiveEvents.rows).toEqual([{ count: 0 }]);
+    });
+  });
+
+  it("INV-EFF-003 / INV-AUD-004: rollback leaves scheduled lifecycle state and events unchanged", async () => {
+    const variantId = randomUUID();
+    const versionId = randomUUID();
+    const { effectiveFrom } = await addCommittedScheduledVersion(variantId, versionId);
+    await withTenant(TENANT, async (sql) => {
+      await transitionDocumentVersionEffective(
+        transaction(sql),
+        effectivityInput(versionId, effectiveFrom),
+      );
+    });
+    await committedTenant(TENANT, async (sql) => {
+      const state = await sql.query<{ lifecycle_state: string }>(
+        "select lifecycle_state from document_version where tenant_id = $1 and id = $2",
+        [TENANT, versionId],
+      );
+      expect(state.rows).toEqual([{ lifecycle_state: "PUBLISHED" }]);
+      const events = await sql.query<{ count: number }>(
+        `select count(*)::int as count from audit_event
+          where event_type = 'version.effective' and document_version_id = $1`,
+        [versionId],
       );
       expect(events.rows).toEqual([{ count: 0 }]);
     });

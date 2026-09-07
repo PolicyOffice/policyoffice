@@ -147,6 +147,15 @@ export {
 } from "./publication.js";
 
 export {
+  EFFECTIVITY_SYSTEM_ACTOR,
+  EFFECTIVITY_TRANSITION_OUTCOMES,
+  transitionDocumentVersionEffective,
+  type EffectiveInstantTransition,
+  type EffectivityTransitionOutcome,
+  type TransitionDocumentVersionEffectiveInput,
+} from "./effectivity.js";
+
+export {
   DIRECT_VERSION_LIFECYCLE_TRANSITIONS,
   DOCUMENT_VERSION_COLUMN_CLASSIFICATION,
   MATERIALITY_CLASSES,

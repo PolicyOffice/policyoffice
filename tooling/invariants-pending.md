@@ -31,8 +31,6 @@ Format, parsed strictly:
 
 ## INV-EFF — Effectivity and supersession
 
-- INV-EFF-005 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-EFF-008 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-EFF-009 — V1; no schema or domain code yet (Phase 2/3)
 
 ## INV-APR — Approval

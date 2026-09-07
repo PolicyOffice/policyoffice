@@ -133,6 +133,7 @@ export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "document.owner_changed",
   "document.retired",
   "document.type_changed",
+  "governance.policy_gap",
   "version.created",
   "version.effective",
   "version.materiality_changed",
@@ -217,6 +218,11 @@ const DOCUMENT_RETIRED_AFTER_KEYS = Object.freeze([
 ]);
 const DOCUMENT_ACTIVATED_BEFORE_KEYS = Object.freeze(["lifecycleStatus"]);
 const DOCUMENT_ACTIVATED_AFTER_KEYS = Object.freeze(["lifecycleStatus", "effectiveVersionId"]);
+const GOVERNANCE_POLICY_GAP_AFTER_KEYS = Object.freeze([
+  "severity",
+  "gapAt",
+  "triggeringVersionId",
+]);
 const VERSION_CREATED_AFTER_KEYS = Object.freeze([
   "documentVariantId",
   "versionSequence",
@@ -329,6 +335,15 @@ const DOCUMENT_ACTIVATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeAfterRequired: true,
 });
 
+const GOVERNANCE_POLICY_GAP_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([]),
+  safeAfterKeys: GOVERNANCE_POLICY_GAP_AFTER_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: GOVERNANCE_POLICY_GAP_AFTER_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
 const VERSION_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeBeforeKeys: Object.freeze([]),
   safeAfterKeys: VERSION_CREATED_AFTER_KEYS,
@@ -427,6 +442,9 @@ auditEventSchemas["document.type_changed"] = Object.freeze({
   1: DOCUMENT_TYPE_CHANGED_SCHEMA_V1,
 });
 auditEventSchemas["document.retired"] = Object.freeze({ 1: DOCUMENT_RETIRED_SCHEMA_V1 });
+auditEventSchemas["governance.policy_gap"] = Object.freeze({
+  1: GOVERNANCE_POLICY_GAP_SCHEMA_V1,
+});
 auditEventSchemas["version.created"] = Object.freeze({ 1: VERSION_CREATED_SCHEMA_V1 });
 auditEventSchemas["version.effective"] = Object.freeze({ 1: VERSION_EFFECTIVE_SCHEMA_V1 });
 auditEventSchemas["version.materiality_changed"] = Object.freeze({
@@ -882,6 +900,15 @@ function validateContentRevisionAuditSnapshots(input: Record<string, unknown>): 
   }
 }
 
+function validateGovernanceAuditSnapshots(input: Record<string, unknown>): void {
+  if (input.eventType !== "governance.policy_gap" || !record(input.safeAfter)) return;
+  if (input.safeAfter.severity !== "HIGH") {
+    throw new InvalidAuditEventError("safeAfter.severity must be HIGH for a policy gap");
+  }
+  requireInstant(input.safeAfter.gapAt, "safeAfter.gapAt");
+  requiredUuid(input.safeAfter.triggeringVersionId, "safeAfter.triggeringVersionId");
+}
+
 /** Validate at the domain boundary, before PostgreSQL repeats the level-1 checks. */
 export function validateAuditEvent(input: unknown): asserts input is AuditEventInput {
   if (!record(input)) throw new InvalidAuditEventError("audit event must be an object");
@@ -955,6 +982,7 @@ export function validateAuditEvent(input: unknown): asserts input is AuditEventI
   validateConfigurationChangedSnapshots(input);
   validateContentRevisionAuditSnapshots(input);
   validateDocumentAuditSnapshots(input);
+  validateGovernanceAuditSnapshots(input);
   validateVersionAuditSnapshots(input);
 }
 
