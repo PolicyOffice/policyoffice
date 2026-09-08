@@ -278,6 +278,31 @@ describe("the audit event envelope", () => {
     }
   });
 
+  it("INV-AUD-008 / INV-EFF-005: policy gaps have a high-severity version-1 contract", () => {
+    const policyGap = event({
+      eventType: "governance.policy_gap",
+      subject: { type: "DOCUMENT_VARIANT", id: "10000000-0000-0000-0018-000000000001" },
+      documentVariantId: "10000000-0000-0000-0018-000000000001",
+      documentVersionId: "10000000-0000-0000-0019-000000000001",
+      outcome: "FAILURE",
+      reasonCode: "WITHDRAWAL_LEFT_NO_EFFECTIVE_VERSION",
+      safeAfter: {
+        severity: "HIGH",
+        gapAt: "2027-01-15T09:42:17.231Z",
+        triggeringVersionId: "10000000-0000-0000-0019-000000000001",
+      },
+    });
+
+    expect(IMPLEMENTED_AUDIT_EVENT_TYPES).toContain("governance.policy_gap");
+    expect(() => validateAuditEvent(policyGap)).not.toThrow();
+    expect(() =>
+      validateAuditEvent({
+        ...policyGap,
+        safeAfter: { ...policyGap.safeAfter, severity: "LOW" },
+      }),
+    ).toThrow(/must be HIGH/i);
+  });
+
   it("INV-AUD-004 / INV-EFF-001 / INV-EFF-004: validates publication lifecycle snapshots", () => {
     const published = event({
       eventType: "version.published",
