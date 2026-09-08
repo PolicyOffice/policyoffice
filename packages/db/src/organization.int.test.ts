@@ -240,13 +240,48 @@ describe("the organization schema", () => {
              'legal_entity_acyclic',
              'org_unit_acyclic',
              'enforce_org_membership_jurisdictions',
-             'protect_org_membership_history'
+             'protect_org_membership_history',
+             'protect_body_membership_history'
            )
          order by c.relname, t.tgname
       `),
     );
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(5);
     expect(rows.filter((row) => !row.comment?.includes("INV-"))).toEqual([]);
+  });
+
+  it("INV-ORG-002 / INV-ORG-005: keeps body history enforcement owned and invoked without elevation", async () => {
+    const { rows } = await withAppRole((sql) =>
+      sql.query<{
+        function_name: string;
+        owner: string;
+        owner_superuser: boolean;
+        security_definer: boolean;
+        comment: string | null;
+      }>(`
+        select p.proname as function_name,
+               owner.rolname as owner,
+               owner.rolsuper as owner_superuser,
+               p.prosecdef as security_definer,
+               obj_description(p.oid, 'pg_proc') as comment
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+          join pg_roles owner on owner.oid = p.proowner
+         where n.nspname = 'public'
+           and p.proname = 'protect_body_membership_history'
+      `),
+    );
+
+    expect(rows).toEqual([
+      {
+        function_name: "protect_body_membership_history",
+        owner: "migration_role",
+        owner_superuser: false,
+        security_definer: false,
+        comment: expect.stringContaining("INV-ORG-002"),
+      },
+    ]);
+    expect(rows[0]?.comment).toContain("INV-ORG-005");
   });
 });
 
@@ -518,6 +553,227 @@ describe("organization history", () => {
         await sql.query("delete from org_membership where id = $1", [ended]);
       }),
     ).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("INV-ORG-002: app_role cannot delete or truncate body membership history", async () => {
+    const privileges = await withAppRole((sql) =>
+      sql.query<{ can_delete: boolean; can_truncate: boolean }>(
+        `select has_table_privilege('app_role', 'body_membership', 'DELETE') as can_delete,
+                has_table_privilege('app_role', 'body_membership', 'TRUNCATE') as can_truncate`,
+      ),
+    );
+    expect(privileges.rows).toEqual([{ can_delete: false, can_truncate: false }]);
+
+    await expect(
+      withTenant(TENANT, async (sql) => {
+        const body = "81000000-0000-0000-0015-100000000001";
+        const membership = "81000000-0000-0000-0015-100000000002";
+        await sql.query(
+          `insert into governance_body
+             (tenant_id, id, code, name, legal_entity_id, status)
+           values ($1, $2, 'DELETE-BOARD', 'Delete Board', $3, 'ACTIVE')`,
+          [TENANT, body, ROOT_ENTITY],
+        );
+        await sql.query(
+          `insert into body_membership
+             (tenant_id, id, body_id, user_id, seat_role, validity)
+           values ($1, $2, $3, $4, 'MEMBER', tstzrange('2025-01-01', '2026-01-01', '[)'))`,
+          [TENANT, membership, body, USER],
+        );
+        await sql.query("delete from body_membership where id = $1", [membership]);
+      }),
+    ).rejects.toMatchObject({ code: "42501" });
+
+    await expect(
+      withTenant(TENANT, (sql) => sql.query("truncate table body_membership")),
+    ).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("INV-ORG-002: refuses every rewrite of an ended body membership", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const body = "81000000-0000-0000-0015-200000000001";
+      const membership = "81000000-0000-0000-0015-200000000002";
+      await sql.query(
+        `insert into governance_body
+           (tenant_id, id, code, name, legal_entity_id, status)
+         values ($1, $2, 'ENDED-BOARD', 'Ended Board', $3, 'ACTIVE')`,
+        [TENANT, body, ROOT_ENTITY],
+      );
+      await sql.query(
+        `insert into body_membership
+           (tenant_id, id, body_id, user_id, seat_role, validity)
+         values ($1, $2, $3, $4, 'MEMBER', tstzrange('2025-01-01', '2026-01-01', '[)'))`,
+        [TENANT, membership, body, USER],
+      );
+
+      await sql.query("savepoint before_ended_rewrite");
+      try {
+        await sql.query(
+          "update body_membership set seat_role = 'CHAIR', row_version = 2 where id = $1",
+          [membership],
+        );
+        expect.unreachable("an ended body membership unexpectedly changed");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "55000" });
+        await sql.query("rollback to savepoint before_ended_rewrite");
+      }
+    });
+  });
+
+  it("INV-ORG-002: refuses identity changes while closing an open body membership", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const body = "81000000-0000-0000-0015-300000000001";
+      const otherBody = "81000000-0000-0000-0015-300000000002";
+      const otherUser = "81000000-0000-0000-0015-300000000003";
+      const membership = "81000000-0000-0000-0015-300000000004";
+      await sql.query(
+        `insert into app_user
+           (tenant_id, id, display_name, contact_email, status)
+         values ($1, $2, 'Other body member', 'other-body-member@example.test', 'ACTIVE')`,
+        [TENANT, otherUser],
+      );
+      await sql.query(
+        `insert into governance_body
+           (tenant_id, id, code, name, legal_entity_id, status)
+         values
+           ($1, $2, 'PRIMARY-BOARD', 'Primary Board', $4, 'ACTIVE'),
+           ($1, $3, 'OTHER-BOARD', 'Other Board', $4, 'ACTIVE')`,
+        [TENANT, body, otherBody, ROOT_ENTITY],
+      );
+      await sql.query(
+        `insert into body_membership
+           (tenant_id, id, body_id, user_id, seat_role, validity)
+         values ($1, $2, $3, $4, 'MEMBER', tstzrange('2026-01-01', null, '[)'))`,
+        [TENANT, membership, body, USER],
+      );
+
+      const rewrites = [
+        {
+          label: "body_id",
+          query: `update body_membership
+                     set body_id = $2,
+                         validity = tstzrange('2026-01-01', '2027-01-01', '[)'),
+                         row_version = 2
+                   where id = $1`,
+          value: otherBody,
+        },
+        {
+          label: "user_id",
+          query: `update body_membership
+                     set user_id = $2,
+                         validity = tstzrange('2026-01-01', '2027-01-01', '[)'),
+                         row_version = 2
+                   where id = $1`,
+          value: otherUser,
+        },
+        {
+          label: "seat_role",
+          query: `update body_membership
+                     set seat_role = $2,
+                         validity = tstzrange('2026-01-01', '2027-01-01', '[)'),
+                         row_version = 2
+                   where id = $1`,
+          value: "CHAIR",
+        },
+      ];
+
+      for (const rewrite of rewrites) {
+        await sql.query("savepoint before_identity_rewrite");
+        try {
+          await sql.query(rewrite.query, [membership, rewrite.value]);
+          expect.unreachable(`body membership ${rewrite.label} unexpectedly changed`);
+        } catch (error) {
+          expect(error, rewrite.label).toMatchObject({ code: "55000" });
+          await sql.query("rollback to savepoint before_identity_rewrite");
+        }
+      }
+    });
+  });
+
+  it("INV-ORG-002: refuses an update that leaves a body membership open", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const body = "81000000-0000-0000-0015-400000000001";
+      const membership = "81000000-0000-0000-0015-400000000002";
+      await sql.query(
+        `insert into governance_body
+           (tenant_id, id, code, name, legal_entity_id, status)
+         values ($1, $2, 'OPEN-BOARD', 'Open Board', $3, 'ACTIVE')`,
+        [TENANT, body, ROOT_ENTITY],
+      );
+      await sql.query(
+        `insert into body_membership
+           (tenant_id, id, body_id, user_id, seat_role, validity)
+         values ($1, $2, $3, $4, 'MEMBER', tstzrange('2026-01-01', null, '[)'))`,
+        [TENANT, membership, body, USER],
+      );
+
+      await sql.query("savepoint before_open_update");
+      try {
+        await sql.query("update body_membership set row_version = 2 where id = $1", [membership]);
+        expect.unreachable("an update leaving a body membership open unexpectedly succeeded");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "55000" });
+        await sql.query("rollback to savepoint before_open_update");
+      }
+    });
+  });
+
+  it("INV-ORG-002 / INV-ORG-005: closes and appends a correction that survives body dissolution", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const body = "81000000-0000-0000-0015-500000000001";
+      const first = "81000000-0000-0000-0015-500000000002";
+      const correction = "81000000-0000-0000-0015-500000000003";
+      await sql.query(
+        `insert into governance_body
+           (tenant_id, id, code, name, legal_entity_id, status)
+         values ($1, $2, 'HISTORY-BOARD', 'History Board', $3, 'ACTIVE')`,
+        [TENANT, body, ROOT_ENTITY],
+      );
+      await sql.query(
+        `insert into body_membership
+           (tenant_id, id, body_id, user_id, seat_role, validity)
+         values ($1, $2, $3, $4, 'MEMBER', tstzrange('2026-01-01', null, '[)'))`,
+        [TENANT, first, body, USER],
+      );
+      await sql.query(
+        `update body_membership
+            set validity = tstzrange('2026-01-01', '2027-01-01', '[)'), row_version = 2
+          where id = $1`,
+        [first],
+      );
+      await sql.query(
+        `insert into body_membership
+           (tenant_id, id, body_id, user_id, seat_role, validity)
+         values ($1, $2, $3, $4, 'CHAIR', tstzrange('2027-01-01', null, '[)'))`,
+        [TENANT, correction, body, USER],
+      );
+      await sql.query(
+        `update governance_body
+            set status = 'DISSOLVED', closed_at = '2028-01-01T00:00:00Z', row_version = 2
+          where id = $1`,
+        [body],
+      );
+
+      const history = await sql.query<{ id: string; seat_role: string; validity: string }>(
+        `select id, seat_role, validity::text
+           from body_membership
+          where id = any($1::uuid[])
+          order by id`,
+        [[first, correction]],
+      );
+      expect(history.rows).toEqual([
+        {
+          id: first,
+          seat_role: "MEMBER",
+          validity: '["2026-01-01 00:00:00+00","2027-01-01 00:00:00+00")',
+        },
+        {
+          id: correction,
+          seat_role: "CHAIR",
+          validity: '["2027-01-01 00:00:00+00",)',
+        },
+      ]);
+    });
   });
 
   it("INV-ORG-002 / INV-TIME-005: rejects overlap and counts an abutting boundary once", async () => {

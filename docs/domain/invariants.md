@@ -71,10 +71,15 @@ immutable, and a system in which forgetting is not sufficient to cause harm.
 | ID | Invariant | Why it matters | Test | Phase |
 |---|---|---|---|---|
 | INV-ORG-001 | Legal entity and org unit hierarchies are acyclic and contained wholly within one tenant | A cycle makes ancestor resolution non-terminating; a cross-tenant parent is a leak | I, P | MVP |
-| INV-ORG-002 | Org memberships are dated, and a membership that has ended is never deleted or rewritten | Every point-in-time question in the product resolves through them | I | MVP |
+| INV-ORG-002 | Dated memberships, organisational and governance-body alike, are never deleted or rewritten once ended; corrections close an interval and append a new fact | Every point-in-time question resolves through them, including who sat on a body when it decided | I | MVP |
 | INV-ORG-003 | Closing a legal entity, org unit or governance body marks it inactive and never deletes it while any governed record references it | An entity that has been wound up still appears in the history of everything it governed | I | MVP |
 | INV-ORG-004 | Jurisdiction is never derived from a legal entity's country of registration | An entity registered in Lithuania may employ someone operating under Finnish rules | U, I | V1 |
 | INV-ORG-005 | A Governance Body belongs to exactly one legal entity, and dissolving it never alters the decisions it made | "The Management Board approved this" must stay true after that board is reconstituted | I | MVP |
+
+**Dated-membership scope, 2026-09-05.** Decision Request #66 extended INV-ORG-002 to
+governance-body membership. `body_membership` was previously deletable despite recording a
+dated seat. Parity was chosen because reconstructing who sat on a body when it decided is the
+same kind of point-in-time evidence that already requires organisational membership history.
 
 ## INV-DOC — Document identity and lifecycle
 

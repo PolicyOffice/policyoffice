@@ -279,7 +279,7 @@ create trigger legal_entity_acyclic
 | `jurisdiction` | `code`, `name`, `level`, `status`. `unique (tenant_id, code)` |
 | `org_membership` | `user_id`, `legal_entity_id`, `org_unit_id`, `validity tstzrange`, `is_primary`, `jurisdiction_ids uuid[]`. `revoke delete` — INV-ORG-002 |
 | `governance_body` | `code`, `name`, `legal_entity_id`, `parent_body_id`, `quorum_rule`, `status`. `unique (tenant_id, code)` |
-| `body_membership` | `body_id`, `user_id`, `seat_role`, `validity tstzrange` |
+| `body_membership` | `body_id`, `user_id`, `seat_role`, `validity tstzrange`. `revoke delete` — INV-ORG-002 |
 | `space` | `name`, `code`, `owning_org_unit_id`, `status`. Administrative grouping only — it appears in no authorization or applicability path (INV-AUTH-015, INV-APL-010) |
 
 ## Authorization
