@@ -147,7 +147,9 @@ Both ADRs are amended and `data-model.md` is corrected.
   | POL-021 (#75) | **merged** #77. `document_version.lifecycle_state` had no transition guard at all: any state to any state, and a row insertable straight into `EFFECTIVE` |
   | — | Five Decision Requests (#72, #76, #78, #81, and #66) settled rules the specification implied but never stated. Four were defects in tickets rather than in the specification |
 
-- [ ] **Playwright** — booted in the runner, no deployed environment
+- [ ] **Playwright** — booted in the runner, **carried to Phase 3**. There is nothing to
+      point it at: `apps/web` contains exactly one route, `/health`. A browser test suite
+      against no interface is ceremony, and it arrives with the first screens
 - [x] **Repository governance** — CODEOWNERS carries the Tier 2 paths, the issue templates
       exist, and the branch ruleset is **applied** (2026-08-31): thirteen required checks,
       squash-only, linear history, no force-push, no deletion. A direct push to `main` is
@@ -165,7 +167,12 @@ Both ADRs are amended and `data-model.md` is corrected.
 ## Exit criteria
 
 - [ ] Every item on every ADR's verification list is checked, or has produced a Decision
-      Request — **one outstanding**: Neon restore timing, which needs a Neon API key
+      Request — **one outstanding, carried forward**: Neon restore timing, which needs a Neon
+      API key. `ADR-0009` wants a measured number so the disaster-recovery claim is not an
+      assumption; Neon restores by branching to a past instant, a control-plane operation that
+      a connection string cannot reach. **Deliberately not done now**: the claim is made to
+      nobody yet, there is no deployment and no customer data. **The trigger is the first real
+      data** — measure it before any production data exists, not before Phase 2 closes
 - [x] `docker compose up -d && ./verification/run.sh` passes from a clean clone — verified
       2026-08-25 from a destroyed volume, having never actually held before
 - [x] The migration chain builds the schema in `data-model.md` on a fresh database, and as
@@ -181,12 +188,58 @@ Both ADRs are amended and `data-model.md` is corrected.
       allowlist has to be extended by hand. A schema-discovered check, in the style of the
       seeds' tenant-coverage test, would close it
 - [ ] CI blocks a pull request that breaks a tenant-isolation or authorization test — the
-      tenant-isolation gate is live; the authorization matrix remains pending
+      tenant-isolation gate is live; **the authorization matrix is carried to Phase 3** because
+      it cannot exist before the `ADR-0003` evaluator does. Every ticket in this phase recorded
+      the capability its entry points require and deferred enforcement to that evaluator; those
+      recorded contracts are what the matrix will be built from
 - [x] A cross-tenant negative test exists and **fails** when RLS is removed — proving the
       test tests something
+
+
+## Phase 2 is closed
+
+**Closed 2026-09-08.** A ticket can be implemented, tested and merged without anyone setting
+anything up by hand, which is what this phase existed to prove.
+
+Fourteen migrations build the schema from nothing and as an upgrade with data. The document
+spine is complete end to end — a document and its baseline variant, versions with an
+exclusion-constrained effectivity interval, governed content revisions with a byte-exact
+canonical digest, publication, supersession, the effective instant and withdrawal. Twelve
+deterministic CI checks plus an independent review gate every pull request, and `main` is
+protected against everything including its own maintainers.
+
+**Three exit criteria are carried forward rather than met, each with its reason and its
+trigger recorded above**: Neon restore timing needs an API key and is not needed until real
+data exists; Playwright needs an interface that does not exist yet; the authorization matrix
+needs the `ADR-0003` evaluator, which every ticket in this phase deliberately deferred.
+
+**One criterion is partially met and the gap is real**: only two of five spine suites assert
+that constraints carry their invariant IDs, each against a hand-maintained allowlist. This is
+tooling work, not specification work, and it is the first ticket of Phase 3.
+
+### What building it taught, which the plan did not predict
+
+Three tickets exist that were never planned — POL-019, POL-020 and POL-021 — and every one
+covers **enforcement that was missing around a spine that was otherwise decomposed correctly**.
+An audit event could be implemented while carrying no state; `body_membership` was deletable
+while `org_membership` was not; `document_version.lifecycle_state` had no transition guard at
+all, so a row could be inserted straight into `EFFECTIVE`. The tables were right and the
+things stopping them being misused were not.
+
+Seven Decision Requests were raised. **One was a genuine product question** — whether
+INV-ORG-002 covers governance-body membership. **Five were defects in tickets rather than in
+the specification**, all of the same shape: a ticket asserted what another artefact contained
+instead of opening it. That is now a rule in `CLAUDE.md`. **One was a specification gap found
+late** — applicability rules are specified on the variant while applicability scope is
+immutable from approval and corrected by a new version, which cannot all hold. POL-018 (#56)
+is deferred until Phase 3 settles it.
+
+Every one of the seven was caught before implementation. The two-agent split is doing the work
+it was built for, and the measurable cost of a bad ticket is one round trip rather than one bad
+migration.
 
 ## What comes after
 
 | Phase | Output |
 |---|---|
-| **3 — Golden slice** | The vertical slice as Codex-ready tickets: create → draft → submit → request changes → approve → publish → effective → attest → review → evidence pack |
+| **3 — Golden slice** | `phase-3-golden-slice.md`. The vertical slice as Codex-ready tickets, and the four things that must be decided before most of them can be written |

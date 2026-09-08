@@ -21,7 +21,7 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 2 | Authoring model and canonical content | Content storage, hashing, diff, editor | File-centric for the Pilot | **Decided 2026-08-24** |
 | 3 | `Space` semantics | Register navigation | One Space per tenant in the Pilot | Open — does not block |
 | 4 | Pilot workflow configurability | Approval implementation, admin scope | Template-backed, not customer-editable | Open — does not block |
-| 5 | Pilot applicability complexity | Campaign audience, register filters | Explicit audience lists | Open — does not block |
+| 5 | Pilot applicability complexity | Campaign audience, register filters | Explicit audience lists | **Open — now blocks** POL-018 (#56), see Decision Request #86 |
 | 6 | Licence | Publishing the repository | PolyForm Shield 1.0.0 | **Decided 2026-08-24** |
 | 7 | Data residency and region | ADR-000 and every infrastructure ADR | One EU region, stated completely | **Decided 2026-08-24** |
 | 8 | Product and repository name | Publishing the repository, and CI on the free tier | **PolicyOffice** | **Decided 2026-08-25** |
