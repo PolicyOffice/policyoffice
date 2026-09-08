@@ -38,7 +38,7 @@ verify without the application.**
 ## Decide first — four questions that shape the tickets
 
 Most of Phase 3 cannot be decomposed until these are answered. They are listed in the order
-they block work.
+they block work. **Decision 2 was answered on 2026-09-08**; the other three stand.
 
 ### 1. The `ADR-0003` authorization evaluator
 
@@ -52,18 +52,25 @@ The recorded contracts are the specification — `DOCUMENT_REQUIRED_CAPABILITIES
 The evaluator is the first substantial ticket of this phase, and the authorization matrix is
 built from what it enforces.
 
-### 2. Open decision 5 — Pilot applicability complexity
+### 2. Open decision 5 — Pilot applicability complexity — **decided**
 
-`open-decisions.md` proposes **explicit audience lists** and marks the decision open. It is no
-longer merely shaping scope: it now blocks POL-018 (#56), which Decision Request #86 deferred
-because `data-model.md` puts `applicability_rule` on the **variant** while `versioning.md`
-makes applicability immutable from approval and corrected by a *new version*. Those cannot all
-hold.
+`open-decisions.md` proposes **explicit audience lists**, and that is now **decided — option
+A**, by founder delegation on 2026-09-08.
 
-Settling decision 5 settles that too. If the Pilot resolves audience from explicit lists, the
-rule table's shape follows from a much smaller question than full rule-based resolution. **Do
-not write POL-018's replacement before this is answered** — that is precisely the mistake that
-produced #86.
+**Corrected 2026-09-08.** This section previously claimed that settling decision 5 would also
+settle Decision Request #86. It does not, and the claim was made without reading
+`multi-entity-model.md` — the same failure `CLAUDE.md` now rules against, committed in the very
+document that records the rule.
+
+The two are orthogonal. Decision 5 is about how applicability is **expressed** — explicit lists
+versus predicates — and `multi-entity-model.md` says plainly that it *"changes no invariant
+above"*. Decision Request #86 asked what a rule is **attached to**, which that same document had
+already answered: *"An applicability rule attaches to a variant… over a dated interval."*
+
+#86's real finding survives the correction, and is now recorded in `multi-entity-model.md` and
+`data-model.md`: variant-attached dated rules cannot satisfy `versioning.md`'s *immutable after
+approval, corrected by a new version* unless they record **which version authorised each
+interval**. That is one column, not a change of attachment.
 
 ### 3. Approval configurability — open decision 4
 
@@ -87,7 +94,7 @@ Not tickets yet — tickets follow the decisions above. This is the shape.
 | **Authorization** | The evaluator, grants, the capability matrix and its CI gate | Decision 1 |
 | **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | Decision 4 |
 | **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | Decisions 1, 3 |
-| **Audience and attestation** | Applicability resolution, assignment, acknowledgement | Decisions 1, 2 |
+| **Audience and attestation** | Applicability resolution, assignment, acknowledgement | Decision 1 |
 | **Read paths** | The register, a version's history, the audit trail as a person can read it | Decisions 1, 4 |
 | **Review cases** | Scheduled review, completion, the obligations that survive it | Decision 1 |
 | **Evidence packs** | Assembly, the manifest, byte-exact verification outside the application | Everything above |

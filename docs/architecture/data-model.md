@@ -477,7 +477,7 @@ create trigger content_revision_immutable_after_submission
 | Table | Columns |
 |---|---|
 | `content_attachment` | `content_revision_id`, `filename`, `media_type`, `byte_size`, `storage_ref`, `digest`. No "reference only" column exists, because every attachment is governed content (INV-VER-013) |
-| `applicability_rule` | `document_variant_id`, `effect`, `legal_entity_ids uuid[]`, `org_unit_ids uuid[]`, `jurisdiction_ids uuid[]`, `group_ids uuid[]`, `user_ids uuid[]`, `inheritance_mode`, `validity tstzrange` |
+| `applicability_rule` | `document_variant_id`, `authorised_by_version_id`, `effect`, `legal_entity_ids uuid[]`, `org_unit_ids uuid[]`, `jurisdiction_ids uuid[]`, `group_ids uuid[]`, `user_ids uuid[]`, `inheritance_mode`, `validity tstzrange`. The rule attaches to the **variant** and is dated (`multi-entity-model.md`); `authorised_by_version_id` records which version's submission opened the interval, which is what makes `versioning.md`'s *immutable after approval, corrected by a new version* enforceable. Nullable while the authorising version is still a draft, exactly as `content_revision.submitted_at` is |
 | `alignment_obligation` | `subject_type`, `subject_id`, `source_version_id`, `raised_at`, `due_at`, `reason`, `status`, `resolved_by`, `resolved_at`, `resolution_note`, `resolving_review_case_id`. Stored rather than derived, because INV-APL-008 requires a recorded action to clear it. `due_at` is nullable and never auto-resolves anything (INV-APL-013) |
 
 ## Approval

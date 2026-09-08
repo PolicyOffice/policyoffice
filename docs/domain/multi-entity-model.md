@@ -97,6 +97,22 @@ that one displaces the other.
 An applicability rule attaches to a variant and states which scopes it includes or
 excludes, over a dated interval.
 
+**Which version authorised an interval, added 2026-09-08.** A rule interval is opened by the
+submission of the version whose scope it states (`document-lifecycle.md` transition 2 sets
+applicability at submission) and records that version. That is what reconciles this section
+with `versioning.md`, which makes applicability scope **immutable after approval** and requires
+a wrong scope to be corrected by *"a new version with corrected scope"* rather than by
+rewriting in place.
+
+Correcting scope therefore closes the current interval and opens a new one citing the new
+version — the same close-and-append discipline INV-ORG-002 imposes on dated memberships. Two
+questions stay answerable from stored records alone: *which rules were in force at instant T*,
+from the interval, and *which approval authorised them*, from the version. Neither is derivable
+from the other, and INV-APL-009 needs both.
+
+Recorded while resolving Decision Request #86, which found that a variant-attached rule with no
+version provenance cannot satisfy `versioning.md` at all.
+
 | Inheritance mode | Meaning |
 |---|---|
 | `MANDATORY` | Descendant entities inherit it and **may not** replace it. Only supplements are permitted below |
