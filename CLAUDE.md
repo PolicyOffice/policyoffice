@@ -50,6 +50,34 @@ A ticket is Codex-ready only when it is a complete contract. Use the
 invariants or acceptance-criteria sections, the specification is not ready and the
 ticket should not exist yet.
 
+### Never assert from memory what a file already states
+
+Before writing or amending any ticket, **open the authority and read the specific lines
+the ticket depends on**. Not your summary of them, not the earlier ticket that cited
+them, not what you wrote in a review last week.
+
+Two forms, both of which have shipped defects here:
+
+- **A claim about landed code.** If a ticket says how a merged migration behaves — which
+  branch does what, which column a trigger guards, what a function already emits — read
+  the migration. POL-017's ticket said `document.activated` was emitted by POL-016; it is
+  emitted only inside POL-016's `if v_immediate` branch, so a scheduled first version
+  would have gone effective with its document stuck at `PLANNED` and no event ever
+  recorded.
+- **A constraint written without re-reading what it must hold against.** POL-014 was
+  amended to require a check refusing "a digest without `submitted_at`", which is
+  unsatisfiable for every draft row because `data-model.md` makes three of those four
+  columns `not null`.
+
+Of the five Decision Requests raised while building the document spine, four were defects
+in tickets rather than in the specification, and every one had this shape. Codex caught
+all of them before implementation, which is the two-agent split working — but a blocked
+ticket still costs a full round trip, and these are the cheapest defects in the project
+to prevent.
+
+The tell is any sentence in a ticket asserting what another artefact contains. When you
+write one, go and look.
+
 ## Subagent policy
 
 Default: none. This project runs on two €20/month subscriptions.
