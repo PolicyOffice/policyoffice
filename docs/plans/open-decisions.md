@@ -21,7 +21,7 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 2 | Authoring model and canonical content | Content storage, hashing, diff, editor | File-centric for the Pilot | **Decided 2026-08-24** |
 | 3 | `Space` semantics | Register navigation | One Space per tenant in the Pilot | Open — does not block |
 | 4 | Pilot workflow configurability | Approval implementation, admin scope | Template-backed, not customer-editable | Open — does not block |
-| 5 | Pilot applicability complexity | Campaign audience, register filters | Explicit audience lists | **Open — now blocks** POL-018 (#56), see Decision Request #86 |
+| 5 | Pilot applicability complexity | Campaign audience, register filters | **Explicit audience lists** | **Decided 2026-09-08** — option A, by delegation |
 | 6 | Licence | Publishing the repository | PolyForm Shield 1.0.0 | **Decided 2026-08-24** |
 | 7 | Data residency and region | ADR-000 and every infrastructure ADR | One EU region, stated completely | **Decided 2026-08-24** |
 | 8 | Product and repository name | Publishing the repository, and CI on the free tier | **PolicyOffice** | **Decided 2026-08-25** |
@@ -157,6 +157,16 @@ to resolve. The question is what the Pilot expresses applicability *with*.
 **Recommendation: A.** The `ApplicabilityRule` entity already holds structural targets, so
 moving from A to B is data and resolver work, not a schema change. Property-based testing
 of the specificity ladder arrives with the capability it protects.
+
+> **Decided 2026-09-08 — option A.** Founder, by delegation. Nothing in the recommendation
+> changed on inspection: the Pilot has one legal entity and a baseline variant, so the
+> specificity ladder has nothing to resolve.
+>
+> **This decision does not touch applicability provenance.** Decision Request #86 asked what a
+> rule is *attached to* — which `multi-entity-model.md` had already answered, a variant over a
+> dated interval — and which version authorised each interval, now recorded there and in
+> `data-model.md`. Expression and provenance are separate questions, briefly conflated in
+> `phase-3-golden-slice.md` and corrected there.
 
 **Reversibility.** High.
 
