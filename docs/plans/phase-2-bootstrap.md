@@ -178,15 +178,10 @@ Both ADRs are amended and `data-model.md` is corrected.
 - [x] The migration chain builds the schema in `data-model.md` on a fresh database, and as
       an upgrade — `pnpm db:verify` covers fresh, upgrade-with-data and Drizzle drift, and has
       passed on every migration through `0011`
-- [ ] Every level-1 and level-2 constraint carries its invariant ID in a
-      `comment on constraint`. **Partially met, and the gap is in the checking rather than the
-      comments.** The convention is settled — since POL-012's review a constraint enforcing
-      **no** registered invariant deliberately carries none, rather than the nearest-looking ID
-      — but only `document.int.test.ts` and `version.int.test.ts` assert it, each against an
-      explicit allowlist. So a constraint added without a comment is caught in neither
-      `content_revision`, `configuration` nor `organization`, and even where it is checked, the
-      allowlist has to be extended by hand. A schema-discovered check, in the style of the
-      seeds' tenant-coverage test, would close it
+- [x] Every level-1 and level-2 constraint carries its invariant ID in a
+      `comment on constraint` — met by POL-022 (#93). One gate now discovers all governed
+      constraints from PostgreSQL's catalogue and requires an invariant ID or an explicit,
+      constraint-specific exception when no registered invariant exists
 - [ ] CI blocks a pull request that breaks a tenant-isolation or authorization test — the
       tenant-isolation gate is live; **the authorization matrix is carried to Phase 3** because
       it cannot exist before the `ADR-0003` evaluator does. Every ticket in this phase recorded
@@ -213,9 +208,8 @@ trigger recorded above**: Neon restore timing needs an API key and is not needed
 data exists; Playwright needs an interface that does not exist yet; the authorization matrix
 needs the `ADR-0003` evaluator, which every ticket in this phase deliberately deferred.
 
-**One criterion is partially met and the gap is real**: only two of five spine suites assert
-that constraints carry their invariant IDs, each against a hand-maintained allowlist. This is
-tooling work, not specification work, and it is the first ticket of Phase 3.
+The former partial constraint-comment criterion is now met by a schema-discovered gate; it
+does not depend on a ticket author remembering to extend a constraint-name allowlist.
 
 ### What building it taught, which the plan did not predict
 

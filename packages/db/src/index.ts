@@ -20,6 +20,13 @@ export {
 } from "./runner.js";
 export { snapshot, verifyDrift, verifyFresh, verifyUpgrade, withTempDatabase } from "./verify.js";
 export {
+  CONSTRAINT_COMMENT_EXCEPTIONS,
+  CONSTRAINT_COMMENT_QUERY,
+  constraintCommentProblems,
+  type ConstraintCommentException,
+  type ConstraintCommentRow,
+} from "./constraint-comments.js";
+export {
   TENANT_TABLE_SECURITY_QUERY,
   tenantTableSecurityProblems,
   type TenantTableSecurityProblem,

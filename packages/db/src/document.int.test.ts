@@ -726,44 +726,4 @@ describe("document and variant identity", () => {
       ]);
     });
   });
-
-  it("INV-DOC-004 / INV-APL-011 / INV-TEN-003: comments every invariant-bearing constraint", async () => {
-    const expectedConstraints = [
-      "audit_event_document_fk",
-      "audit_event_document_variant_fk",
-      "document_id_unique",
-      "document_owner_fk",
-      "document_owning_org_unit_fk",
-      "document_pkey",
-      "document_space_fk",
-      "document_tenant_code_unique",
-      "document_tenant_fk",
-      "document_type_fk",
-      "document_variant_baseline_source",
-      "document_variant_document_fk",
-      "document_variant_id_unique",
-      "document_variant_pkey",
-      "document_variant_source_fk",
-      "document_variant_tenant_fk",
-      "document_variant_translation_locale",
-    ].sort();
-    const { rows } = await withAppRole((sql) =>
-      sql.query<{ table_name: string; constraint_name: string; description: string | null }>(
-        `
-        select con.conrelid::regclass::text as table_name,
-               con.conname as constraint_name,
-               obj_description(con.oid, 'pg_constraint')::text as description
-          from pg_constraint con
-         where con.conname = any($1::text[])
-           and con.connamespace = 'public'::regnamespace
-         order by con.conrelid::regclass::text, con.conname
-      `,
-        [expectedConstraints],
-      ),
-    );
-    expect(rows.map((row) => row.constraint_name).sort()).toEqual(expectedConstraints);
-    for (const row of rows) {
-      expect(row.description).toMatch(/INV-/);
-    }
-  });
 });
