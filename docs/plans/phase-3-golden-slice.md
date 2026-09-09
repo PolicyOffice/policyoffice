@@ -40,17 +40,40 @@ verify without the application.**
 Most of Phase 3 cannot be decomposed until these are answered. They are listed in the order
 they block work. **Decision 2 was answered on 2026-09-08**; the other three stand.
 
-### 1. The `ADR-0003` authorization evaluator
+### 1. The `ADR-0003` authorization evaluator — **started 2026-09-09**
 
 Every Phase 2 ticket recorded a capability requirement and enforced none, deliberately and
 consistently. That debt is now due: approval, publication and the reader path are all
 authorization decisions, and the exit criterion *"CI blocks a pull request that breaks a
 tenant-isolation or authorization test"* carried over from Phase 2 cannot be met without it.
 
-The recorded contracts are the specification — `DOCUMENT_REQUIRED_CAPABILITIES`,
-`VERSION_REQUIRED_CAPABILITIES` and their siblings already name what each entry point needs.
-The evaluator is the first substantial ticket of this phase, and the authorization matrix is
-built from what it enforces.
+`ADR-0003` is unusually complete — one function, a `Decision` carrying a reason rather than a
+boolean, deny-beats-allow in one pass with no specificity, containment along the administrative
+chain only, memoisation within a request and never across. It needs decomposing, not designing.
+
+**Decomposed into four tickets. Only the first is written.**
+
+| | What | Written |
+|---|---|---|
+| **POL-023 (#95)** | The capability, scope and grant schema, the nine system roles, and a gate keeping them equal to `authorization-model.md`'s role table | **yes — ready** |
+| POL-024 | `decide()` itself: the `Decision` type, deny-beats-allow, containment, validity at check time, per-request memoisation | after #95 lands |
+| POL-025 | The authorization matrix, generated from the role table — `ADR-0003` § *Proving it*, and Phase 2's carried-over exit criterion | after POL-024 |
+| POL-026 | The context boundary: an architecture test that no repository function is reachable without a principal-carrying context | after POL-024 defines the context |
+
+**The later three are deliberately unwritten.** POL-016 and POL-017 both needed amending because
+they were written before the ticket they depended on had landed, and two of the five Decision
+Requests in Phase 2 came from exactly that. A ticket that asserts how POL-023 turned out, before
+POL-023 exists, is the failure `CLAUDE.md` § *Never assert from memory* describes.
+
+**Nothing is enforced when POL-023 lands.** A schema called `access_grant` looks like access
+control and is not; the `*_REQUIRED_CAPABILITIES` constants stay contracts until POL-024. Two
+further pieces — enforcement at entry points, and search filtering at retrieval
+(INV-AUTH-011/012) — wait on decision 4, because there are no entry points to enforce at.
+
+`ADR-0003`'s own verify-at-bootstrap list carries two items into POL-024: **the evaluator's
+query cost** with the grant tables under `ADR-0001`'s RLS policy, since it runs on every check,
+and whether the matrix **can** be generated from the role table rather than hand-maintained.
+POL-023 proves the second half is possible by parsing that table for its own gate.
 
 ### 2. Open decision 5 — Pilot applicability complexity — **decided**
 
