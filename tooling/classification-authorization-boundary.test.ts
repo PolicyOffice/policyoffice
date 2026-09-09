@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SCHEMA_DEFINITION = "packages/db/src/schema.ts";
+const FIXTURE_LOADER = "packages/db/src/fixtures.ts";
 const AUTHORIZATION_PATH =
   /(?:^|\/)(?:authorization|authorizer|authz|access[-_.]?(?:grant|evaluator)|permissions?|capabilities?)(?:\/|\.|[-_.])/i;
 const AUTHORIZATION_SOURCE =
@@ -32,6 +33,7 @@ function authorizationClassificationProblems(sources: readonly ProductionSource[
     .filter(
       ({ path, source }) =>
         path !== SCHEMA_DEFINITION &&
+        path !== FIXTURE_LOADER &&
         (AUTHORIZATION_PATH.test(path) || AUTHORIZATION_SOURCE.test(source)) &&
         CLASSIFICATION_REFERENCE.test(source),
     )

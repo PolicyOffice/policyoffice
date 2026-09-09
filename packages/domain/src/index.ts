@@ -156,6 +156,23 @@ export {
 } from "./effectivity.js";
 
 export {
+  ALIGNMENT_OBLIGATION_STATUSES,
+  ALIGNMENT_SUBJECT_TYPES,
+  APPLICABILITY_EFFECTS,
+  APPLICABILITY_REQUIRED_CAPABILITIES,
+  INHERITANCE_MODES,
+  evaluateAlignmentObligationDeadline,
+  type AlignmentObligation,
+  type AlignmentObligationDeadline,
+  type AlignmentObligationDeadlineVisibility,
+  type AlignmentObligationStatus,
+  type AlignmentSubjectType,
+  type ApplicabilityEffect,
+  type ApplicabilityRule,
+  type InheritanceMode,
+} from "./applicability.js";
+
+export {
   DIRECT_VERSION_LIFECYCLE_TRANSITIONS,
   DOCUMENT_VERSION_COLUMN_CLASSIFICATION,
   MATERIALITY_CLASSES,

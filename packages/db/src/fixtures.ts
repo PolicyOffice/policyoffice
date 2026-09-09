@@ -25,6 +25,7 @@ export const REFERENCE_ENUM_VALUES = Object.freeze({
   governance_body_status: Object.freeze(["ACTIVE", "DISSOLVED"]),
   governance_seat_role: Object.freeze(["CHAIR", "SECRETARY", "MEMBER"]),
   information_classification_status: Object.freeze(["ACTIVE", "RETIRED"]),
+  inheritance_mode: Object.freeze(["MANDATORY", "DEFAULT", "LOCAL_ONLY"]),
   jurisdiction_level: Object.freeze(["SUPRANATIONAL", "NATIONAL", "REGIONAL", "SECTORAL"]),
   jurisdiction_status: Object.freeze(["ACTIVE", "RETIRED"]),
   legal_entity_status: Object.freeze(["ACTIVE", "DORMANT", "CLOSED"]),
@@ -119,6 +120,8 @@ interface DocumentFixture {
   draftVersionId: string;
   contentRevisionId: string;
   contentAttachmentId: string;
+  applicabilityRuleId: string;
+  alignmentObligationId: string;
   documentCode: string;
   canonicalTitle: string;
   documentTypeId: string;
@@ -255,6 +258,8 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
         draftVersionId: fixtureId(prefix, 20, 1),
         contentRevisionId: fixtureId(prefix, 21, 1),
         contentAttachmentId: fixtureId(prefix, 22, 1),
+        applicabilityRuleId: fixtureId(prefix, 23, 1),
+        alignmentObligationId: fixtureId(prefix, 24, 1),
         documentCode: "POL-001",
         canonicalTitle: `${name} Policy Framework`,
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -420,6 +425,8 @@ function developmentTenant(): TenantFixture {
         draftVersionId: fixtureId(prefix, 20, 1),
         contentRevisionId: fixtureId(prefix, 21, 1),
         contentAttachmentId: fixtureId(prefix, 22, 1),
+        applicabilityRuleId: fixtureId(prefix, 23, 1),
+        alignmentObligationId: fixtureId(prefix, 24, 1),
         documentCode: "POL-001",
         canonicalTitle: "Policy Management Policy",
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -799,6 +806,47 @@ async function insertDocuments(
         item.configuration.id,
       ],
     );
+    await sql.query(
+      `insert into applicability_rule (
+         tenant_id, id, created_at, updated_at, row_version, document_variant_id,
+         authorised_by_version_id, effect, legal_entity_ids, org_unit_ids,
+         jurisdiction_ids, group_ids, user_ids, inheritance_mode, validity
+       ) values (
+         $1, $2, $3, $3, 1, $4, $5, 'INCLUDE', $6::uuid[], $7::uuid[],
+         $8::uuid[], $9::uuid[], $10::uuid[], 'DEFAULT',
+         tstzrange($3::timestamptz, null, '[)')
+       )
+       on conflict (tenant_id, id) do nothing`,
+      [
+        item.tenant.id,
+        document.applicabilityRuleId,
+        fixture.createdAt,
+        document.baselineVariantId,
+        document.draftVersionId,
+        [item.legalEntity.id],
+        [item.orgUnit.id],
+        [item.jurisdiction.id],
+        [item.groups[0]?.id],
+        [item.users[0]?.id],
+      ],
+    );
+    await sql.query(
+      `insert into alignment_obligation (
+         tenant_id, id, created_at, updated_at, row_version, subject_type, subject_id,
+         source_version_id, raised_at, due_at, reason, status
+       ) values (
+         $1, $2, $3, $3, 1, 'DOCUMENT_VARIANT', $4, $5, $3, null,
+         'Fixture alignment obligation', 'OPEN'
+       )
+       on conflict (tenant_id, id) do nothing`,
+      [
+        item.tenant.id,
+        document.alignmentObligationId,
+        fixture.createdAt,
+        document.baselineVariantId,
+        document.draftVersionId,
+      ],
+    );
     const bodyBytes = new TextEncoder().encode(`${document.canonicalTitle}\n\nInitial draft.`);
     const attachmentBytes = new TextEncoder().encode("Fixture approval matrix.\n");
     const bodyDigest = sha256Digest(bodyBytes);
@@ -928,6 +976,8 @@ export async function loadFixtureSet(
 const DELETE_ORDER = [
   "audit_event",
   "tenant_event_sequence",
+  "alignment_obligation",
+  "applicability_rule",
   "content_attachment",
   "content_revision",
   "document_version",

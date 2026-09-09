@@ -81,6 +81,7 @@ export const materiality = pgEnum("materiality", [
   "MATERIAL",
   "EMERGENCY",
 ]);
+export const inheritanceMode = pgEnum("inheritance_mode", ["MANDATORY", "DEFAULT", "LOCAL_ONLY"]);
 
 export const tenant = pgTable("tenant", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -846,6 +847,140 @@ export const documentVersion = pgTable(
     index("document_version_classification_idx").on(t.tenantId, t.classificationId),
     index("document_version_configuration_idx").on(t.tenantId, t.configurationVersionId),
     index("document_version_successor_idx").on(t.tenantId, t.supersededByVersionId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const applicabilityRule = pgTable(
+  "applicability_rule",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    documentVariantId: uuid("document_variant_id").notNull(),
+    authorisedByVersionId: uuid("authorised_by_version_id"),
+    effect: text("effect").notNull(),
+    legalEntityIds: uuid("legal_entity_ids")
+      .array()
+      .default(sql`'{}'::uuid[]`)
+      .notNull(),
+    orgUnitIds: uuid("org_unit_ids")
+      .array()
+      .default(sql`'{}'::uuid[]`)
+      .notNull(),
+    jurisdictionIds: uuid("jurisdiction_ids")
+      .array()
+      .default(sql`'{}'::uuid[]`)
+      .notNull(),
+    groupIds: uuid("group_ids")
+      .array()
+      .default(sql`'{}'::uuid[]`)
+      .notNull(),
+    userIds: uuid("user_ids")
+      .array()
+      .default(sql`'{}'::uuid[]`)
+      .notNull(),
+    inheritanceMode: inheritanceMode("inheritance_mode").notNull(),
+    validity: tstzrange("validity").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "applicability_rule_pkey", columns: [t.tenantId, t.id] }),
+    unique("applicability_rule_id_unique").on(t.id),
+    foreignKey({
+      name: "applicability_rule_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "applicability_rule_variant_fk",
+      columns: [t.tenantId, t.documentVariantId],
+      foreignColumns: [documentVariant.tenantId, documentVariant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "applicability_rule_authorised_version_fk",
+      columns: [t.tenantId, t.authorisedByVersionId],
+      foreignColumns: [documentVersion.tenantId, documentVersion.id],
+    }).onDelete("restrict"),
+    check("applicability_rule_effect_supported", sql`${t.effect} in ('INCLUDE', 'EXCLUDE')`),
+    check(
+      "applicability_rule_validity_half_open",
+      sql`not isempty(${t.validity}) and lower_inc(${t.validity}) and not upper_inc(${t.validity})`,
+    ),
+    index("applicability_rule_variant_idx").on(t.tenantId, t.documentVariantId),
+    index("applicability_rule_authorised_version_idx").on(t.tenantId, t.authorisedByVersionId),
+    index("applicability_rule_validity_idx").using("gist", t.tenantId, t.validity),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const alignmentObligation = pgTable(
+  "alignment_obligation",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    subjectType: text("subject_type").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    sourceVersionId: uuid("source_version_id").notNull(),
+    raisedAt: instant("raised_at").notNull(),
+    dueAt: instant("due_at"),
+    reason: text("reason").notNull(),
+    status: text("status").notNull(),
+    resolvedBy: uuid("resolved_by"),
+    resolvedAt: instant("resolved_at"),
+    resolutionNote: text("resolution_note"),
+    resolvingReviewCaseId: uuid("resolving_review_case_id"),
+  },
+  (t) => [
+    primaryKey({ name: "alignment_obligation_pkey", columns: [t.tenantId, t.id] }),
+    unique("alignment_obligation_id_unique").on(t.id),
+    foreignKey({
+      name: "alignment_obligation_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "alignment_obligation_source_version_fk",
+      columns: [t.tenantId, t.sourceVersionId],
+      foreignColumns: [documentVersion.tenantId, documentVersion.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "alignment_obligation_resolved_by_fk",
+      columns: [t.tenantId, t.resolvedBy],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    check(
+      "alignment_obligation_subject_supported",
+      sql`${t.subjectType} in ('DOCUMENT_VARIANT', 'DOCUMENT_TYPE')`,
+    ),
+    check("alignment_obligation_reason_not_blank", sql`nullif(btrim(${t.reason}), '') is not null`),
+    check("alignment_obligation_status_supported", sql`${t.status} in ('OPEN', 'RESOLVED')`),
+    check(
+      "alignment_obligation_resolution_consistent",
+      sql`(
+            ${t.status} = 'OPEN'
+            and ${t.resolvedBy} is null
+            and ${t.resolvedAt} is null
+            and ${t.resolutionNote} is null
+            and ${t.resolvingReviewCaseId} is null
+          )
+          or (
+            ${t.status} = 'RESOLVED'
+            and ${t.resolvedBy} is not null
+            and ${t.resolvedAt} is not null
+            and nullif(btrim(${t.resolutionNote}), '') is not null
+          )`,
+    ),
+    index("alignment_obligation_subject_idx").on(t.tenantId, t.subjectType, t.subjectId),
+    index("alignment_obligation_source_version_idx").on(t.tenantId, t.sourceVersionId),
+    index("alignment_obligation_resolved_by_idx").on(t.tenantId, t.resolvedBy),
+    index("alignment_obligation_open_due_idx")
+      .on(t.tenantId, t.dueAt)
+      .where(sql`${t.status} = 'OPEN'`),
     tenantPolicy(),
   ],
 ).enableRLS();
