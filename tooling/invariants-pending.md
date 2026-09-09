@@ -86,10 +86,8 @@ Format, parsed strictly:
 - INV-APL-005 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-006 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-007 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-008 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-009 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-012 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-013 — V1; no schema or domain code yet (Phase 2/3)
 
 ## INV-REV — Review
 

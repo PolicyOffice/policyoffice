@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SCHEMA_DEFINITION = "packages/db/src/schema.ts";
+const FIXTURE_LOADER = "packages/db/src/fixtures.ts";
 const AUTHORITY_PATH = /(?:authorization|applicability|access[-_]?grant|capability|resolver)/i;
 const AUTHORITY_SOURCE = /\b(?:access_grant|accessGrant|applicability_rule|applicabilityRule)\b/;
 const SPACE_QUERY =
@@ -27,14 +28,21 @@ function sourceFiles(directory: string): string[] {
   for (const entry of readdirSync(directory)) {
     const path = join(directory, entry);
     if (statSync(path).isDirectory()) files.push(...sourceFiles(path));
-    else if (entry.endsWith(".ts") && !entry.endsWith(".test.ts")) files.push(path);
+    else if ((entry.endsWith(".ts") || entry.endsWith(".sql")) && !entry.endsWith(".test.ts"))
+      files.push(path);
   }
   return files;
 }
 
 function productionSources(): ProductionSource[] {
-  return ["apps/web", "apps/worker", "packages/domain", "packages/db"]
-    .map((directory) => join(ROOT, directory, "src"))
+  return [
+    "apps/web/src",
+    "apps/worker/src",
+    "packages/domain/src",
+    "packages/db/src",
+    "packages/db/migrations",
+  ]
+    .map((directory) => join(ROOT, directory))
     .filter((directory) => statSync(directory).isDirectory())
     .flatMap(sourceFiles)
     .map((path) => ({ path: relative(ROOT, path), source: readFileSync(path, "utf8") }));
@@ -45,6 +53,7 @@ function organizationBoundaryProblems(sources: readonly ProductionSource[]): str
     .filter(
       ({ path, source }) =>
         path !== SCHEMA_DEFINITION &&
+        path !== FIXTURE_LOADER &&
         (AUTHORITY_PATH.test(path) || AUTHORITY_SOURCE.test(source)) &&
         SPACE_QUERY.test(source),
     )
