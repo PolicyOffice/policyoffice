@@ -78,6 +78,31 @@ to prevent.
 The tell is any sentence in a ticket asserting what another artefact contains. When you
 write one, go and look.
 
+## Committing: never `git add -A`
+
+**Codex works in the same working directory you do.** It is not a separate checkout. So at any
+moment the tree may hold files from a branch it is mid-implementation on, and `git add -A`,
+`git add .` and `git commit -a` will all sweep them into your commit.
+
+Stage explicit paths. Every time:
+
+```bash
+git add docs/plans/phase-3-golden-slice.md docs/plans/open-decisions.md
+```
+
+Then read `git status --short` before committing, and treat anything you did not name as a
+signal that Codex is working — not as something to include.
+
+This is not hypothetical. On 2026-09-09, PR #96 was opened as *"documentation only, Tier 0"*,
+intended to change two files in `docs/plans/`. It landed nine: a migration, a new module, its
+test, an export and two test-file edits — the whole of POL-022, swept out of Codex's working
+tree by one `git add -A`. The founder approved it on the Tier 0 description. Nothing unreviewed
+reached `main` only because the same code was independently reviewed on its own pull request an
+hour later, which was luck rather than process.
+
+A Tier 0 label that is false is worse than no label. It is the one thing a reviewer is entitled
+to take at face value.
+
 ## Subagent policy
 
 Default: none. This project runs on two €20/month subscriptions.
