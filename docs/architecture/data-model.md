@@ -300,7 +300,12 @@ create table access_grant (
 
   -- a grant confers a role's bundle or one capability, never both and never neither
   check (num_nonnulls(security_role_id, capability) = 1),
-  -- INV-AUTH-002/003: a deny and a time-bounded grant both require a recorded reason
+  -- Accountability, not evaluation. `authorization-model.md` § Grants requires a reason on
+  -- every DENY and every time-bounded grant. These two checks carry no invariant ID: they
+  -- cannot enforce INV-AUTH-002 or INV-AUTH-003, both of which are decisions taken at check
+  -- time by ADR-0003's evaluator and are level 4 in the map above. Corrected 2026-09-10;
+  -- the comment previously named those two IDs, which would have registered coverage in
+  -- tooling/invariant-coverage.ts for invariants nothing yet evaluates.
   check (effect = 'ALLOW' or reason is not null),
   check (upper_inf(validity) or reason is not null),
   check ((scope_type = 'TENANT') = (scope_id is null))
