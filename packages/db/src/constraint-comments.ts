@@ -50,6 +50,36 @@ export const CONSTRAINT_COMMENT_EXCEPTIONS: readonly ConstraintCommentException[
     reason:
       "Prevents duplicate membership facts for the exact same validity interval; no registered invariant requires exact-row uniqueness.",
   }),
+  Object.freeze({
+    table: "security_role",
+    constraint: "security_role_tenant_code_unique",
+    reason:
+      "Keeps tenant-local role codes stable and unambiguous; no registered invariant requires role-code uniqueness.",
+  }),
+  Object.freeze({
+    table: "access_grant",
+    constraint: "access_grant_role_or_capability",
+    reason:
+      "Requires one role bundle or one capability per grant; no registered invariant states that storage-shape rule.",
+  }),
+  Object.freeze({
+    table: "access_grant",
+    constraint: "access_grant_deny_reason_required",
+    reason:
+      "Requires an administrative reason for a stored deny; no registered invariant makes that reason the deny decision rule.",
+  }),
+  Object.freeze({
+    table: "access_grant",
+    constraint: "access_grant_bounded_reason_required",
+    reason:
+      "Requires an administrative reason for a bounded grant; no registered invariant makes that reason the expiry decision rule.",
+  }),
+  Object.freeze({
+    table: "access_grant",
+    constraint: "access_grant_scope_id_consistent",
+    reason:
+      "Keeps tenant and resource scope identifiers structurally consistent; no registered invariant states this nullability rule.",
+  }),
 ]);
 
 /**

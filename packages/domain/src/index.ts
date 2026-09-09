@@ -26,6 +26,8 @@
 /** Marker for the domain module. Replaced by real exports as the model lands. */
 export const DOMAIN_PACKAGE = "@policyoffice/domain" as const;
 
+export { ACCESS_GRANT_REQUIRED_CAPABILITIES } from "./authorization.js";
+
 export {
   AUDIT_ACTOR_TYPES,
   AUDIT_EVENT_SCHEMAS,

@@ -26,6 +26,11 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import {
+  AUTHORIZATION_CAPABILITIES,
+  AUTHORIZATION_SCOPE_TYPES,
+  GRANT_EFFECTS,
+} from "./authorization-reference.js";
 
 const instant = (name: string) => timestamp(name, { withTimezone: true });
 const tstzrange = customType<{ data: string }>({ dataType: () => "tstzrange" });
@@ -82,6 +87,9 @@ export const materiality = pgEnum("materiality", [
   "EMERGENCY",
 ]);
 export const inheritanceMode = pgEnum("inheritance_mode", ["MANDATORY", "DEFAULT", "LOCAL_ONLY"]);
+export const capability = pgEnum("capability", AUTHORIZATION_CAPABILITIES);
+export const scopeType = pgEnum("scope_type", AUTHORIZATION_SCOPE_TYPES);
+export const grantEffect = pgEnum("grant_effect", GRANT_EFFECTS);
 
 export const tenant = pgTable("tenant", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -258,6 +266,94 @@ export const groupMembership = pgTable(
     check(
       "group_membership_validity_half_open",
       sql`not isempty(${t.validity}) and lower_inc(${t.validity}) and not upper_inc(${t.validity})`,
+    ),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const securityRole = pgTable(
+  "security_role",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    capabilities: capability("capabilities")
+      .array()
+      .default(sql`'{}'::capability[]`)
+      .notNull(),
+    isSystem: boolean("is_system").default(false).notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "security_role_pkey", columns: [t.tenantId, t.id] }),
+    unique("security_role_id_unique").on(t.id),
+    foreignKey({
+      name: "security_role_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    unique("security_role_tenant_code_unique").on(t.tenantId, t.code),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const accessGrant = pgTable(
+  "access_grant",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    effect: grantEffect("effect").notNull(),
+    principalType: text("principal_type").notNull(),
+    principalId: uuid("principal_id").notNull(),
+    securityRoleId: uuid("security_role_id"),
+    capability: capability("capability"),
+    scopeType: scopeType("scope_type").notNull(),
+    scopeId: uuid("scope_id"),
+    validity: tstzrange("validity")
+      .default(sql`tstzrange(now(), null, '[)')`)
+      .notNull(),
+    grantedBy: uuid("granted_by").notNull(),
+    reason: text("reason"),
+  },
+  (t) => [
+    primaryKey({ name: "access_grant_pkey", columns: [t.tenantId, t.id] }),
+    unique("access_grant_id_unique").on(t.id),
+    foreignKey({
+      name: "access_grant_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "access_grant_security_role_fk",
+      columns: [t.tenantId, t.securityRoleId],
+      foreignColumns: [securityRole.tenantId, securityRole.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "access_grant_granted_by_fk",
+      columns: [t.tenantId, t.grantedBy],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    check(
+      "access_grant_role_or_capability",
+      sql`num_nonnulls(${t.securityRoleId}, ${t.capability}) = 1`,
+    ),
+    check(
+      "access_grant_deny_reason_required",
+      sql`${t.effect} = 'ALLOW' or ${t.reason} is not null`,
+    ),
+    check(
+      "access_grant_bounded_reason_required",
+      sql`upper_inf(${t.validity}) or ${t.reason} is not null`,
+    ),
+    check(
+      "access_grant_scope_id_consistent",
+      sql`(${t.scopeType} = 'TENANT') = (${t.scopeId} is null)`,
     ),
     tenantPolicy(),
   ],
