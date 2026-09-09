@@ -7,6 +7,11 @@ import {
   REFERENCE_ENUM_VALUES,
   removeFixtureSetForTests,
 } from "./fixtures.js";
+import {
+  CONSTRAINT_COMMENT_QUERY,
+  constraintCommentProblems,
+  type ConstraintCommentRow,
+} from "./constraint-comments.js";
 
 const fixture = buildFixtureSet("test");
 const developmentFixture = buildFixtureSet("development");
@@ -170,6 +175,15 @@ describe("reference, development and test fixtures", () => {
         }
       });
     }
+  });
+
+  it("discovers every public constraint and requires an invariant comment or documented exception", async () => {
+    const { rows } = await withAppRole((sql) =>
+      sql.query<ConstraintCommentRow>(CONSTRAINT_COMMENT_QUERY),
+    );
+
+    expect(rows.length).toBeGreaterThan(150);
+    expect(constraintCommentProblems(rows)).toEqual([]);
   });
 
   it("INV-TEN-001: tenant A cannot see tenant B through any discovered seeded table", async () => {

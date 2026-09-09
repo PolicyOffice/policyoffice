@@ -1230,50 +1230,7 @@ describe("document version effectivity and immutability", () => {
     },
   );
 
-  it("INV-VER-011 / INV-VER-012 / INV-EFF-002: comments every invariant-bearing version constraint without inventing coverage", async () => {
-    const invariantConstraints = [
-      "audit_event_document_version_fk",
-      "document_type_mandated_by_version_fk",
-      "document_version_classification_fk",
-      "document_version_classification_id_not_null",
-      "document_version_configuration_fk",
-      "document_version_document_type_id_not_null",
-      "document_version_id_unique",
-      "document_version_pkey",
-      "document_version_successor_fk",
-      "document_version_tenant_fk",
-      "document_version_title_not_null",
-      "document_version_type_fk",
-      "document_version_variant_fk",
-      "document_version_variant_sequence_unique",
-      "document_version_withdrawal_reason_required",
-      "one_effective_version_per_variant",
-    ].sort();
-    const constraints = await withAppRole((sql) =>
-      sql.query<{ constraint_name: string; description: string | null }>(
-        `select con.conname as constraint_name,
-                obj_description(con.oid, 'pg_constraint')::text as description
-           from pg_constraint con
-          where con.conname = any($1::text[])
-            and con.connamespace = 'public'::regnamespace
-          order by con.conname`,
-        [invariantConstraints],
-      ),
-    );
-    expect(constraints.rows.map((row) => row.constraint_name)).toEqual(invariantConstraints);
-    expect(constraints.rows.every((row) => /INV-/.test(row.description ?? ""))).toBe(true);
-
-    const neutral = await withAppRole((sql) =>
-      sql.query<{ description: string | null }>(`
-        select obj_description(con.oid, 'pg_constraint')::text as description
-          from pg_constraint con
-         where con.conname = 'document_version_effective_interval_start_required'
-      `),
-    );
-    expect(neutral.rows).toEqual([
-      { description: "An interval cannot close unless it first has a lower bound" },
-    ]);
-
+  it("INV-VER-012: comments the one-pre-release uniqueness index", async () => {
     const indexes = await withAppRole((sql) =>
       sql.query<{ description: string | null }>(`
         select obj_description('one_pre_release_version_per_variant'::regclass, 'pg_class')::text
