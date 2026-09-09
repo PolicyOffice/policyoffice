@@ -9,6 +9,13 @@ import {
 } from "../../domain/src/index.js";
 import { migrationDatabaseUrl } from "./migration-connection.js";
 import { applyMigrations } from "./runner.js";
+import {
+  AUTHORIZATION_CAPABILITIES,
+  AUTHORIZATION_SCOPE_TYPES,
+  GRANT_EFFECTS,
+  SYSTEM_ROLE_SEEDS,
+  type SystemRoleSeed,
+} from "./authorization-reference.js";
 
 export type FixtureKind = "development" | "test";
 
@@ -19,11 +26,13 @@ export type FixtureKind = "development" | "test";
  */
 export const REFERENCE_ENUM_VALUES = Object.freeze({
   app_user_status: Object.freeze(["INVITED", "ACTIVE", "DEACTIVATED"]),
+  capability: AUTHORIZATION_CAPABILITIES,
   credential_kind: Object.freeze(["PASSWORD", "OIDC", "SAML"]),
   document_lifecycle: Object.freeze(["PLANNED", "ACTIVE", "RETIRED"]),
   document_type_status: Object.freeze(["ACTIVE", "RETIRED"]),
   governance_body_status: Object.freeze(["ACTIVE", "DISSOLVED"]),
   governance_seat_role: Object.freeze(["CHAIR", "SECRETARY", "MEMBER"]),
+  grant_effect: GRANT_EFFECTS,
   information_classification_status: Object.freeze(["ACTIVE", "RETIRED"]),
   inheritance_mode: Object.freeze(["MANDATORY", "DEFAULT", "LOCAL_ONLY"]),
   jurisdiction_level: Object.freeze(["SUPRANATIONAL", "NATIONAL", "REGIONAL", "SECTORAL"]),
@@ -31,6 +40,7 @@ export const REFERENCE_ENUM_VALUES = Object.freeze({
   legal_entity_status: Object.freeze(["ACTIVE", "DORMANT", "CLOSED"]),
   materiality: Object.freeze(["EDITORIAL", "NON_MATERIAL", "MATERIAL", "EMERGENCY"]),
   org_unit_status: Object.freeze(["ACTIVE", "INACTIVE"]),
+  scope_type: AUTHORIZATION_SCOPE_TYPES,
   space_status: Object.freeze(["ACTIVE", "ARCHIVED"]),
   tenant_status: Object.freeze(["ACTIVE", "SUSPENDED", "CLOSED"]),
   user_group_source: Object.freeze(["LOCAL", "SCIM"]),
@@ -87,6 +97,16 @@ interface GroupMembershipFixture {
   validUntil: string | null;
 }
 
+interface SecurityRoleFixture extends SystemRoleSeed {
+  id: string;
+}
+
+interface AccessGrantFixture {
+  id: string;
+  principalId: string;
+  securityRoleCode: string;
+}
+
 interface OrgMembershipFixture {
   id: string;
   userId: string;
@@ -140,6 +160,8 @@ export interface TenantFixture {
   sessions: readonly SessionFixture[];
   groups: readonly GroupFixture[];
   groupMemberships: readonly GroupMembershipFixture[];
+  securityRoles: readonly SecurityRoleFixture[];
+  accessGrant: Readonly<AccessGrantFixture>;
   legalEntity: Readonly<{ id: string; legalName: string }>;
   orgUnit: Readonly<{ id: string; name: string; code: string }>;
   jurisdiction: Readonly<{ id: string; code: string; name: string }>;
@@ -168,9 +190,17 @@ function fixtureId(prefix: "a" | "b" | "d", namespace: number, ordinal: number):
   return `${prefix}0000000-0000-0000-${String(namespace).padStart(4, "0")}-${String(ordinal).padStart(12, "0")}`;
 }
 
+function systemRoleFixtures(prefix: "a" | "b" | "d"): readonly SecurityRoleFixture[] {
+  return SYSTEM_ROLE_SEEDS.map((role, index) => ({
+    ...role,
+    id: fixtureId(prefix, 26, index + 1),
+  }));
+}
+
 function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
   const userId = fixtureId(prefix, 1, 1);
   const groupId = fixtureId(prefix, 4, 1);
+  const securityRoles = systemRoleFixtures(prefix);
   return {
     tenant: {
       id: fixtureId(prefix, 0, 1),
@@ -198,6 +228,12 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
         validUntil: null,
       },
     ],
+    securityRoles,
+    accessGrant: {
+      id: fixtureId(prefix, 25, 1),
+      principalId: userId,
+      securityRoleCode: "TENANT_ADMIN",
+    },
     legalEntity: { id: fixtureId(prefix, 6, 1), legalName: `${name} OÜ` },
     orgUnit: { id: fixtureId(prefix, 7, 1), name: "Head Office", code: "HEAD_OFFICE" },
     jurisdiction: { id: fixtureId(prefix, 8, 1), code: "EE", name: "Estonia" },
@@ -293,6 +329,7 @@ function developmentTenant(): TenantFixture {
     { id: fixtureId(prefix, 4, 1), name: "Compliance" },
     { id: fixtureId(prefix, 4, 2), name: "Policy Owners" },
   ];
+  const securityRoles = systemRoleFixtures(prefix);
   return {
     tenant: {
       id: fixtureId(prefix, 0, 1),
@@ -331,6 +368,12 @@ function developmentTenant(): TenantFixture {
         validUntil: null,
       },
     ],
+    securityRoles,
+    accessGrant: {
+      id: fixtureId(prefix, 25, 1),
+      principalId: users[0]?.id ?? "",
+      securityRoleCode: "TENANT_ADMIN",
+    },
     legalEntity: { id: fixtureId(prefix, 6, 1), legalName: "PolicyOffice Development OÜ" },
     orgUnit: { id: fixtureId(prefix, 7, 1), name: "Compliance", code: "COMPLIANCE" },
     jurisdiction: { id: fixtureId(prefix, 8, 1), code: "EE", name: "Estonia" },
@@ -573,6 +616,53 @@ async function insertIdentity(
       ],
     );
   }
+}
+
+async function insertAuthorization(
+  sql: Client,
+  fixture: FixtureSet,
+  item: TenantFixture,
+): Promise<void> {
+  for (const role of item.securityRoles) {
+    await sql.query(
+      `insert into security_role (
+         tenant_id, id, created_at, updated_at, row_version,
+         code, name, capabilities, is_system
+       ) values ($1, $2, $3, $3, 1, $4, $5, $6::capability[], true)
+       on conflict (tenant_id, id) do update
+         set code = excluded.code,
+             name = excluded.name,
+             capabilities = excluded.capabilities,
+             is_system = true,
+             row_version = security_role.row_version + 1
+       where (security_role.code, security_role.name,
+              security_role.capabilities, security_role.is_system)
+             is distinct from
+             (excluded.code, excluded.name, excluded.capabilities, excluded.is_system)`,
+      [item.tenant.id, role.id, fixture.createdAt, role.code, role.name, role.capabilities],
+    );
+  }
+
+  await sql.query(
+    `insert into access_grant (
+       tenant_id, id, created_at, updated_at, row_version, effect,
+       principal_type, principal_id, security_role_id, capability,
+       scope_type, scope_id, validity, granted_by, reason
+     )
+     select $1, $2, $3, $3, 1, 'ALLOW',
+            'USER', $4, role.id, null,
+            'TENANT', null, tstzrange($3::timestamptz, null, '[)'), $4, null
+       from security_role role
+      where role.tenant_id = $1 and role.code = $5
+     on conflict (tenant_id, id) do nothing`,
+    [
+      item.tenant.id,
+      item.accessGrant.id,
+      fixture.createdAt,
+      item.accessGrant.principalId,
+      item.accessGrant.securityRoleCode,
+    ],
+  );
 }
 
 async function insertOrganization(
@@ -912,6 +1002,7 @@ async function insertTenantOwnedRows(
 ): Promise<void> {
   await inRoleTransaction(sql, "app_role", item.tenant.id, async () => {
     await insertIdentity(sql, fixture, item);
+    await insertAuthorization(sql, fixture, item);
     await insertOrganization(sql, fixture, item);
     await insertConfiguration(sql, item);
     await insertDocuments(sql, fixture, item);
@@ -976,6 +1067,8 @@ export async function loadFixtureSet(
 const DELETE_ORDER = [
   "audit_event",
   "tenant_event_sequence",
+  "access_grant",
+  "security_role",
   "alignment_obligation",
   "applicability_rule",
   "content_attachment",

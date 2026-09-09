@@ -74,7 +74,6 @@ Format, parsed strictly:
 - INV-AUTH-011 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-012 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-013 — V1; no schema or domain code yet (Phase 2/3)
-- INV-AUTH-016 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-018 — V1; no schema or domain code yet (Phase 2/3)
 
 ## INV-APL — Applicability and variants
