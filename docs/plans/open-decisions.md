@@ -27,10 +27,11 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 8 | Product and repository name | Publishing the repository, and CI on the free tier | **PolicyOffice** | **Decided 2026-08-25** |
 | 9 | Human-readable rendering in evidence packs | One line of the pack layout | Ship originals in the Pilot; amend the layout | Open — does not block |
 | 10 | Machine-readable governance positioning | Public positioning and roadmap pressure, not architecture | Build the substrate, hold the claim until the Pilot | Open — does not block |
+| 11 | Golden-slice interface scope | Sessions, read paths and Playwright — three of eight Phase 3 groups | **Minimal, except approval inbox and reader view** | **Decided 2026-09-10** — option B |
 
-Decisions 1, 2, 6, 7 and 8 are answered. Phase 1 is complete and **Phase 2 is unblocked**.
-The licensor is recorded and `LICENSE` is committed. Decisions 3, 4 and 5 shape Pilot scope
-and stop nothing. Decision 10 is a positioning question with no architectural consequence —
+Decisions 1, 2, 6, 7, 8 and 11 are answered. Phase 1 is complete, **Phase 2 is unblocked**,
+and decision 11 unblocks the rest of Phase 3. The licensor is recorded and `LICENSE` is
+committed. Decisions 3, 4 and 5 shape Pilot scope and stop nothing. Decision 10 is a positioning question with no architectural consequence —
 the constraints it would rest on are already recorded in
 `docs/architecture/machine-access.md`.
 
@@ -404,6 +405,50 @@ it is made.
 
 ---
 
+## 11 — Golden-slice interface scope
+
+**Decided 2026-09-10 — option B**, by the founder, on `#114`.
+
+The Phase 3 exit criteria require the reference flow to run *"end to end through the
+interface"* with author, approver and reader as distinct principals, and for Playwright to
+drive it. Neither says how much interface that is, and the answer moved the ticket count by
+roughly a factor of two. `ADR-0002` had already settled the mechanism — server-side sessions as
+rows, opaque hashed cookie tokens, Argon2id for the Pilot — so this was never an architectural
+question, which is why it sat as a plan heading for a whole phase without an entry here.
+
+**The answer: minimal surfaces everywhere, except the approval inbox and the reader view,
+which are built as `information-architecture.md` § *Key surfaces* specifies them.**
+
+The tempting answer was the smallest thing Playwright can drive, and it is wrong for a reason
+specific to this product rather than a general preference for finish.
+`information-architecture.md` says of the approval inbox:
+
+> A reviewer who approves without having seen what they were approving has produced a record
+> that says the opposite of the truth. So the decision controls come *after* the content, the
+> digest is visible and comparable, and prior decisions on this candidate are shown before the
+> buttons rather than behind a tab.
+
+That ordering is the governance requirement, not styling. A minimal form with two buttons and
+no content above them would satisfy every Phase 3 exit criterion while embodying the exact
+failure the product exists to prevent. The slice would prove the chain and disprove the thesis.
+
+The reader view earns the same treatment on a narrower point: the classification appears with
+the document and repeats on every rendered page, *"because a page that leaves the screen
+carries its handling rules with it or it carries none."* Also a rule about what is on the page.
+
+Everything else — register, document record, draft workspace — can be plain forms in the slice
+without asserting anything false.
+
+**Reversibility.** High in the direction that matters. Surfaces are additive and no schema or
+domain code depends on how many exist. The costly direction was the other one: shipping a
+minimal approval screen and rebuilding it before anyone could be shown it, with the
+demonstrations misrepresenting the product in the meantime.
+
+**Blocks.** Was blocking **Sessions and identity**, **Read paths** and **Playwright** in
+`phase-3-golden-slice.md`. Now unblocked.
+
+---
+
 ## Decided
 
 The reasoning stays in the numbered section above each decision, because *why we chose
@@ -417,6 +462,7 @@ file-centric* is a question that will be asked again.
 | 6 | Licence | 2026-08-24 | PolyForm Shield 1.0.0, and the repository goes public. Licensor: Aksel Costa, personally, pending incorporation | `LICENSE`, committed 2026-08-25 |
 | — | Application language | 2026-08-24 | TypeScript end to end. The founder reviews every agent-written pull request, and their fluency dominates any technical argument | `ADR-0000` |
 | — | Repository visibility | 2026-08-24 | Public. The CI gate list assumes unlimited Actions minutes | `ADR-0000`, and decisions 6 and 8 |
+| 11 | Golden-slice interface scope | 2026-09-10 | **Minimal, except the approval inbox and reader view**, which follow `information-architecture.md`. The page ordering there is a governance requirement, not finish | Phase 3: the sessions, read-path and Playwright groups |
 | 8 | Product and repository name | 2026-08-25 | **PolicyOffice.** `.eu`, `.ee`, `.io` and the GitHub org are free; `.com` is held by a brand marketplace at roughly €7k and treated as a later option | Phase 2: the licence file, the repository name, package names |
 
 Decision 7 has no effect on `docs/domain/`. It constrains provider and managed-service
