@@ -327,9 +327,31 @@ describe("the single authorization evaluator", () => {
     ).resolves.toEqual({ allowed: false, because: "NO_GRANT" });
   });
 
+  it("INV-AUTH-017: body.act_for rejects a matching id under a non-body scope type", async () => {
+    const confusedGrant = grant({
+      index: 14,
+      capabilities: ["body.act_for"],
+      scope: { type: "ORG_UNIT", id: BODY },
+    });
+    const ctx = fixedContext(
+      facts({
+        resourceScopes: [
+          { type: "TENANT", id: null },
+          { type: "LEGAL_ENTITY", id: ENTITY },
+          { type: "GOVERNANCE_BODY", id: BODY },
+        ],
+        grants: [confusedGrant],
+      }),
+    );
+
+    await expect(
+      decide(ctx, "body.act_for", { tenantId: TENANT, type: "GOVERNANCE_BODY", id: BODY }),
+    ).resolves.toEqual({ allowed: false, because: "NO_GRANT" });
+  });
+
   it("INV-AUTH-017: body.act_for cannot reach a non-body resource", async () => {
     const tenantGrant = grant({
-      index: 14,
+      index: 15,
       capabilities: ["body.act_for"],
     });
 
@@ -340,7 +362,7 @@ describe("the single authorization evaluator", () => {
 
   it("INV-AUTH-017: a body-scoped grant cannot reach a non-body resource", async () => {
     const bodyGrant = grant({
-      index: 15,
+      index: 16,
       scope: { type: "GOVERNANCE_BODY", id: BODY },
     });
     const overBroadFacts = facts({
