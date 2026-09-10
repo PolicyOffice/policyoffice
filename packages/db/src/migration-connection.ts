@@ -1,3 +1,5 @@
+import { Client } from "pg";
+
 /**
  * Migrations connect administratively and immediately narrow to migration_role in the
  * runner. A clean database cannot be reached as migration_role because 0001 has not
@@ -10,4 +12,16 @@ export function migrationDatabaseUrl(
   env: { MIGRATION_DATABASE_URL?: string } = process.env,
 ): string {
   return env.MIGRATION_DATABASE_URL ?? DEFAULT_MIGRATION_DATABASE_URL;
+}
+
+/**
+ * The one administrative connection constructor. Migration and local-fixture operations
+ * may receive this client, but no repository module gets to invent an ambient connection.
+ */
+export async function connectAdministrativeDatabase(
+  connectionString: string = migrationDatabaseUrl(),
+): Promise<Client> {
+  const client = new Client({ connectionString });
+  await client.connect();
+  return client;
 }

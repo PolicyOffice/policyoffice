@@ -14,8 +14,9 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Client } from "pg";
+import type { Client } from "pg";
 import { fileURLToPath } from "node:url";
+import { connectAdministrativeDatabase } from "./migration-connection.js";
 import { applyMigrations, LEDGER_TABLE, readMigrations, MIGRATIONS_DIR } from "./runner.js";
 
 const PKG_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -29,12 +30,6 @@ const urlForDatabase = (database: string): string => {
   return url.toString();
 };
 
-async function connect(connectionString: string): Promise<Client> {
-  const client = new Client({ connectionString });
-  await client.connect();
-  return client;
-}
-
 /**
  * A disposable database, always dropped.
  *
@@ -47,19 +42,19 @@ export async function withTempDatabase<T>(
   fn: (url: string, sql: Client) => Promise<T>,
 ): Promise<T> {
   const name = `po_verify_${label}_${process.pid}_${Date.now().toString(36)}`;
-  const admin = await connect(adminUrl());
+  const admin = await connectAdministrativeDatabase(adminUrl());
   try {
     await admin.query(`create database "${name}"`);
   } finally {
     await admin.end();
   }
   const url = urlForDatabase(name);
-  const sql = await connect(url);
+  const sql = await connectAdministrativeDatabase(url);
   try {
     return await fn(url, sql);
   } finally {
     await sql.end();
-    const cleanup = await connect(adminUrl());
+    const cleanup = await connectAdministrativeDatabase(adminUrl());
     try {
       await cleanup.query(`drop database if exists "${name}" with (force)`);
     } finally {

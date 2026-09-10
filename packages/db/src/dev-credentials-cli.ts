@@ -13,7 +13,7 @@
  * ALTER, never DROP and recreate: Neon's pooled endpoint caches connections by role OID
  * (verification/README.md finding 6). The habit matters more than this particular script.
  */
-import { Client } from "pg";
+import { connectAdministrativeDatabase } from "./migration-connection.js";
 
 const ROLES = ["migration_role", "app_role", "retention_role"] as const;
 
@@ -25,8 +25,7 @@ if (process.env.NODE_ENV === "production") {
   process.exit(2);
 }
 
-const sql = new Client({ connectionString: url });
-await sql.connect();
+const sql = await connectAdministrativeDatabase(url);
 try {
   for (const role of ROLES) {
     // The password equals the role name: unmistakably a development credential, and
