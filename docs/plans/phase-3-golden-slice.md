@@ -40,8 +40,8 @@ verify without the application.**
 Most of Phase 3 cannot be decomposed until these are answered. They are listed in the order
 they block work. **Decision 2 was answered on 2026-09-08**, **decision 1 is complete as of
 2026-09-10**, and **decision 4 was decided the same day** (#114, `open-decisions.md` § 11).
-**Decision 3 — approval configurability — is the only one left, and it is now on the critical
-path** rather than shaping scope from a distance.
+**Decision 3 was decided the same day** (`open-decisions.md` § 4, option A). **All four
+shaping questions are answered**, and nothing in Phase 3 is waiting on a decision.
 
 ### 1. The `ADR-0003` authorization evaluator — **complete 2026-09-10**
 
@@ -113,7 +113,7 @@ already answered: *"An applicability rule attaches to a variant… over a dated 
 approval, corrected by a new version* unless they record **which version authorised each
 interval**. That is one column, not a change of attachment.
 
-### 3. Approval configurability — open decision 4
+### 3. Approval configurability — **decided 2026-09-10, option A**
 
 `open-decisions.md` proposes **template-backed, not customer-editable**. Approval is the
 largest unbuilt subsystem — `approval_run`, `approval_stage`, `approval_task`,
@@ -151,16 +151,26 @@ Written one at a time, as the authorization epic was.
 | **POL-029** | Session lifecycle over the existing `0003` schema: issue, resolve, refresh idle, revoke. No routes, no UI | **written** |
 | POL-030 | The request context: a principal-carrying context assembled from a session, and `decide()` called at a real entry point for the first time | after POL-029 |
 | POL-031 | Sign-in and sign-out, and the author's minimal path — create, draft, submit | after POL-030 |
-| POL-032 | **The approval inbox**, built to `information-architecture.md` | blocked — see below |
+| POL-032 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
 | POL-033 | **The reader view**, built to `information-architecture.md` | after POL-031 |
 | POL-034 | Playwright drives the reference flow with three principals | last |
 
-**POL-032 is blocked by decision 3**, not by decision 4. An approval inbox needs an approval
-subsystem beneath it — `approval_run`, `approval_stage`, `approval_task`, `approval_decision`
-— and how much of that is configurable is `open-decisions.md` § 4, still open. The summary
-table there marks it *"Open — does not block"*, which was true when nothing was being built on
-it and is no longer. **That is the next decision to ask for**, and it should be asked before
-POL-031 lands rather than when POL-032 is due.
+**POL-032 is unblocked.** Approval configurability was answered the same day as decision 4 —
+`open-decisions.md` § 4, **option A**: one or two seeded template versions per governance
+profile, runs bind by identifier, no template editor ships. The approval subsystem beneath the
+inbox — `approval_run`, `approval_stage`, `approval_task`, `approval_decision`,
+`workflow_template`, `workflow_template_version` — is specified in `data-model.md` § *Approval*
+and entirely unbuilt.
+
+**The one thing that would spoil A → B, recorded so the ticket carries it.** Option A is
+reversible into a full editor only if seeded templates are written as **ordinary tenant-owned
+rows** with `published_at` and `published_by` set, exactly as an editor would write them. A
+hard-coded template identifier, or a seeded row with its authoring columns left null, turns B
+into a backfill. Those columns already exist in `data-model.md`, so this costs nothing to get
+right and is an acceptance criterion in whichever ticket seeds them.
+
+That ticket sits between POL-031 and POL-032 and is not written yet — the approval subsystem is
+several tickets, not one, and decomposing it is the next specification job after POL-030 lands.
 
 ## The work, in dependency order
 
@@ -170,7 +180,7 @@ Not tickets yet — tickets follow the decisions above. This is the shape.
 |---|---|---|
 | ~~**Authorization**~~ | The evaluator, grants, the capability matrix and its CI gate | **done** — POL-023…027 |
 | **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | **unblocked** — POL-029 |
-| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **decision 3** — the next to ask |
+| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **unblocked** — decompose after POL-030 |
 | **Audience and attestation** | Applicability resolution, assignment, acknowledgement | Decision 1 |
 | **Read paths** | The register, a version's history, the audit trail as a person can read it | **unblocked** — POL-033 |
 | **Review cases** | Scheduled review, completion, the obligations that survive it | Decision 1 |
