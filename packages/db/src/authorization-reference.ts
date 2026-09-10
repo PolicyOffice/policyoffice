@@ -1,51 +1,15 @@
-export const AUTHORIZATION_CAPABILITIES = Object.freeze([
-  "document.read",
-  "document.read_history",
-  "document.create",
-  "document.edit_draft",
-  "document.submit",
-  "document.approve",
-  "document.publish",
-  "document.withdraw",
-  "document.cancel_version",
-  "document.manage",
-  "document.retire",
-  "document.restore",
-  "document.manage_applicability",
-  "document.manage_access",
-  "variant.create",
-  "review.perform",
-  "review.manage",
-  "attestation.respond",
-  "attestation.manage",
-  "waiver.request",
-  "waiver.approve",
-  "evidence.generate",
-  "evidence.download",
-  "audit.read",
-  "body.act_for",
-  "tenant.manage_identity",
-  "tenant.manage_configuration",
-  "tenant.manage_security",
-  "tenant.manage_retention",
-  "tenant.break_glass",
-] as const);
+import {
+  AUTHORIZATION_CAPABILITIES,
+  AUTHORIZATION_SCOPE_TYPES,
+  GRANT_EFFECTS,
+  type AuthorizationScopeType,
+  type Capability,
+  type GrantEffect,
+} from "../../domain/src/authorization.js";
 
-export const AUTHORIZATION_SCOPE_TYPES = Object.freeze([
-  "TENANT",
-  "LEGAL_ENTITY",
-  "ORG_UNIT",
-  "DOCUMENT",
-  "DOCUMENT_VARIANT",
-  "DOCUMENT_VERSION",
-  "GOVERNANCE_BODY",
-] as const);
-
-export const GRANT_EFFECTS = Object.freeze(["ALLOW", "DENY"] as const);
-
-export type AuthorizationCapability = (typeof AUTHORIZATION_CAPABILITIES)[number];
-export type AuthorizationScopeType = (typeof AUTHORIZATION_SCOPE_TYPES)[number];
-export type GrantEffect = (typeof GRANT_EFFECTS)[number];
+export { AUTHORIZATION_CAPABILITIES, AUTHORIZATION_SCOPE_TYPES, GRANT_EFFECTS };
+export type AuthorizationCapability = Capability;
+export type { AuthorizationScopeType, GrantEffect };
 
 export interface SystemRoleSeed {
   readonly code: string;

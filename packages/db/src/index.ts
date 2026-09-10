@@ -32,3 +32,4 @@ export {
   type TenantTableSecurityProblem,
   type TenantTableSecurityRow,
 } from "./tenancy-schema.js";
+export { authorizationDataLoader, type AuthorizationTransaction } from "./authorization.js";

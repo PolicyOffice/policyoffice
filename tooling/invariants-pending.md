@@ -62,13 +62,9 @@ Format, parsed strictly:
 
 ## INV-AUTH — Authorization
 
-- INV-AUTH-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUTH-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUTH-004 — V1; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-005 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-006 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-007 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-AUTH-008 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-009 — V1; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-010 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-011 — MVP; no schema or domain code yet (Phase 2/3)

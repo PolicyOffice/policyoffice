@@ -26,7 +26,31 @@
 /** Marker for the domain module. Replaced by real exports as the model lands. */
 export const DOMAIN_PACKAGE = "@policyoffice/domain" as const;
 
-export { ACCESS_GRANT_REQUIRED_CAPABILITIES } from "./authorization.js";
+export {
+  ACCESS_GRANT_REQUIRED_CAPABILITIES,
+  AUTHORIZATION_CAPABILITIES,
+  AUTHORIZATION_PRINCIPAL_TYPES,
+  AUTHORIZATION_SCOPE_TYPES,
+  GRANT_EFFECTS,
+  AuthzContext,
+  decide,
+  type AuthorizationDataLoader,
+  type AuthorizationFacts,
+  type AuthorizationGrant,
+  type AuthorizationLoadRequest,
+  type AuthorizationPrincipalType,
+  type AuthorizationScopeType,
+  type AuthzContextInput,
+  type Capability,
+  type Decision,
+  type DecisionReason,
+  type GrantEffect,
+  type GrantRef,
+  type GrantValidity,
+  type PrincipalRef,
+  type ResourceRef,
+  type ScopeRef,
+} from "./authorization.js";
 
 export {
   AUDIT_ACTOR_TYPES,
