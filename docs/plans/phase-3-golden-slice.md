@@ -150,12 +150,22 @@ extending two allowlists.
 
 Nothing here blocks POL-025 or POL-026. Recorded so it is not rediscovered.
 
-- **The applied branch ruleset is missing a required check.** `audit-event completeness` has
-  been in `.github/rulesets/main.json` since #58 (2026-09-02) and is **not** in the applied
-  ruleset. POL-019's placeholder-schema gate therefore runs on every pull request and **cannot
-  block one**. POL-025 adds a fifteenth context, `authorization matrix`, to the same committed
-  file. Both need the founder to apply the ruleset — live configuration is never an agent's to
-  change. Compare with:
+- **The applied branch ruleset was missing a required check — applied 2026-09-10.**
+  `audit-event completeness` had been in `.github/rulesets/main.json` since #58 (2026-09-02)
+  and was **not** in the applied ruleset, so POL-019's placeholder-schema gate ran on every
+  pull request and could not block one. The founder directed the change in session and it was
+  applied: the live ruleset now carries all fourteen committed contexts, and nothing else in
+  it moved. Live configuration is still never an agent's to change on its own initiative —
+  what closed this was an explicit instruction, not an agent deciding the drift was safe to
+  fix.
+
+  Before requiring it, the job was checked for the failure that matters: a required context
+  that never reports blocks every merge permanently. `audit-event completeness` has no `paths`
+  filter and no `if`, and reported green on #101, #102 and #104.
+
+  **Still open:** POL-025 adds a fifteenth context, `authorization matrix`, to the committed
+  file. It must not be applied until that job exists and has reported on a pull request.
+  Compare with:
 
   ```bash
   gh api repos/PolicyOffice/policyoffice/rulesets/<id> --jq '[.rules[]|select(.type=="required_status_checks")|.parameters.required_status_checks[].context]'
