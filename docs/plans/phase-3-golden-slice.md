@@ -38,9 +38,10 @@ verify without the application.**
 ## Decide first — four questions that shape the tickets
 
 Most of Phase 3 cannot be decomposed until these are answered. They are listed in the order
-they block work. **Decision 2 was answered on 2026-09-08** and **decision 1 is complete as of
-2026-09-10**. Decision 3 stands. **Decision 4 is now a Decision Request — #114** — and is the
-only thing standing between the backlog and empty.
+they block work. **Decision 2 was answered on 2026-09-08**, **decision 1 is complete as of
+2026-09-10**, and **decision 4 was decided the same day** (#114, `open-decisions.md` § 11).
+**Decision 3 — approval configurability — is the only one left, and it is now on the critical
+path** rather than shaping scope from a distance.
 
 ### 1. The `ADR-0003` authorization evaluator — **complete 2026-09-10**
 
@@ -119,18 +120,47 @@ largest unbuilt subsystem — `approval_run`, `approval_stage`, `approval_task`,
 `approval_decision`, mandated authority, serial ordering, completion rules — and how much of it
 is configurable changes the ticket count materially.
 
-### 4. What the interface is — **asked as #114 on 2026-09-10**
+### 4. What the interface is — **decided 2026-09-10, option B**
 
-There is no UI, no session handling and no read path. `ADR-0002` chose server-side sessions in
-Postgres; nothing implements them. The slice needs enough interface for three principals to
-perform their parts, and that scope is a product decision rather than an architectural one.
+Asked as #114, answered by the founder the same day, and recorded as **`open-decisions.md`
+§ 11** so it stops being a plan heading and becomes a decision with reasoning attached.
 
-It had never actually been put to the founder — it has no entry in `open-decisions.md` — which
-is why it sat as a plan heading for a phase rather than as a question anyone could answer.
-**#114** asks it, with three options spanning roughly 6–8 to 14–18 tickets, and recommends the
-middle one: minimal surfaces everywhere except the approval inbox and reader view, where
-`information-architecture.md` makes the *ordering of the page* a governance requirement rather
-than a matter of finish.
+**Minimal surfaces everywhere, except the approval inbox and the reader view**, which are built
+as `information-architecture.md` § *Key surfaces* specifies them. The argument is in § 11 and
+turns on one thing: the approval inbox's page ordering — content and digest above the decision
+controls — is the governance requirement, not styling. A minimal form with two buttons and
+nothing above them would satisfy every exit criterion here while embodying the failure the
+product exists to prevent.
+
+**The plan was wrong about the starting point, and it matters for the first ticket.** This
+section said *"nothing implements them"*. The **schema is already complete**: `user_session`
+and `user_credential` landed in `0003`, and they match `ADR-0002` closely enough that no
+migration is needed to begin — `token_hash` rather than a token, `idle_expires_at` and
+`absolute_expires_at` both present, `revoked_at` for deletion-based revocation,
+`params jsonb` so Argon2id parameters can be raised without a schema change, and
+`credential_kind` as an enum so adding OIDC later is a new kind rather than a changed
+principal. What is missing is **domain code**: nothing in `packages/domain/src` or `apps/`
+references either table.
+
+### The interface work, decomposed
+
+Written one at a time, as the authorization epic was.
+
+| | What | Status |
+|---|---|---|
+| **POL-029** | Session lifecycle over the existing `0003` schema: issue, resolve, refresh idle, revoke. No routes, no UI | **written** |
+| POL-030 | The request context: a principal-carrying context assembled from a session, and `decide()` called at a real entry point for the first time | after POL-029 |
+| POL-031 | Sign-in and sign-out, and the author's minimal path — create, draft, submit | after POL-030 |
+| POL-032 | **The approval inbox**, built to `information-architecture.md` | blocked — see below |
+| POL-033 | **The reader view**, built to `information-architecture.md` | after POL-031 |
+| POL-034 | Playwright drives the reference flow with three principals | last |
+
+**POL-032 is blocked by decision 3**, not by decision 4. An approval inbox needs an approval
+subsystem beneath it — `approval_run`, `approval_stage`, `approval_task`, `approval_decision`
+— and how much of that is configurable is `open-decisions.md` § 4, still open. The summary
+table there marks it *"Open — does not block"*, which was true when nothing was being built on
+it and is no longer. **That is the next decision to ask for**, and it should be asked before
+POL-031 lands rather than when POL-032 is due.
 
 ## The work, in dependency order
 
@@ -139,13 +169,13 @@ Not tickets yet — tickets follow the decisions above. This is the shape.
 | Group | What it covers | Blocked by |
 |---|---|---|
 | ~~**Authorization**~~ | The evaluator, grants, the capability matrix and its CI gate | **done** — POL-023…027 |
-| **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | **#114** |
-| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | Decisions 1, 3 |
+| **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | **unblocked** — POL-029 |
+| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **decision 3** — the next to ask |
 | **Audience and attestation** | Applicability resolution, assignment, acknowledgement | Decision 1 |
-| **Read paths** | The register, a version's history, the audit trail as a person can read it | **#114** |
+| **Read paths** | The register, a version's history, the audit trail as a person can read it | **unblocked** — POL-033 |
 | **Review cases** | Scheduled review, completion, the obligations that survive it | Decision 1 |
 | **Evidence packs** | Assembly, the manifest, byte-exact verification outside the application | Everything above |
-| **Playwright** | The flow driven through the interface, carried from Phase 2 | **#114** |
+| **Playwright** | The flow driven through the interface, carried from Phase 2 | **unblocked** — POL-034 |
 
 Two items carry forward from Phase 2 with their triggers recorded there rather than repeated
 here: **Neon restore timing**, due before any real data exists, and the **authorization
