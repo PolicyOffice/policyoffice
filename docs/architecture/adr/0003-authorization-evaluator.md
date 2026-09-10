@@ -167,13 +167,24 @@ which one was used.
 
 ## To verify at repository bootstrap
 
-- That an architecture test can actually enforce the import boundary in the chosen
-  tooling, and fails the build rather than warning.
+- ~~That an architecture test can actually enforce the import boundary in the chosen
+  tooling, and fails the build rather than warning.~~ **Verified 2026-09-10 in POL-026
+  (#108):** `tooling/architecture.test.ts` discovers repository source, refuses database
+  client imports outside the data layer, confines production client construction to the
+  named administrative connection site (with the restricted test harness as the explicit
+  exception), and requires the transaction to be a data function's first argument.
+  Fixtures prove each rule fails with the offending file or function named; an empty scan
+  fails rather than passing vacuously.
 - ~~The evaluator's query cost with the grant tables under ADR-0001's RLS policy, since it
   runs on every check.~~ **Verified 2026-09-10 in POL-024 (#101): one query, 30.8 ms against
   1,000 grants with `FORCE ROW LEVEL SECURITY`.** The number is not merely recorded — the
   evaluator's integration suite counts queries and asserts **exactly one**, so the cost that
   actually matters, an N+1 appearing later, fails the build rather than being rediscovered
   under load.
-- That the matrix test can be generated from the role table rather than hand-maintained,
-  which is what makes it hold as the capability set grows.
+- ~~That the matrix test can be generated from the role table rather than hand-maintained,
+  which is what makes it hold as the capability set grows.~~ **Verified 2026-09-10 in
+  POL-025 (#107):** all 4,050 cells come from `parseAuthorizationModel()`, and a runtime
+  capability without a documented matrix decision fails by name.
+
+**All repository-bootstrap verification items are closed.** Each is enforced by a
+deterministic test rather than retained as a one-time observation.

@@ -1,4 +1,4 @@
-import { Client } from "pg";
+import type { Client } from "pg";
 import {
   buildCanonicalManifest,
   digestCanonicalManifest,
@@ -7,7 +7,7 @@ import {
   sha256Digest,
   type AuditTransaction,
 } from "../../domain/src/index.js";
-import { migrationDatabaseUrl } from "./migration-connection.js";
+import { connectAdministrativeDatabase, migrationDatabaseUrl } from "./migration-connection.js";
 import { applyMigrations } from "./runner.js";
 import {
   AUTHORIZATION_CAPABILITIES,
@@ -1013,8 +1013,7 @@ async function withAdministrativeClient<T>(
   connectionString: string,
   fn: (sql: Client) => Promise<T>,
 ): Promise<T> {
-  const sql = new Client({ connectionString });
-  await sql.connect();
+  const sql = await connectAdministrativeDatabase(connectionString);
   try {
     return await fn(sql);
   } finally {

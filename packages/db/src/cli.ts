@@ -8,14 +8,14 @@
  *
  * There is no revert command, and there is no down migration to revert to. See runner.ts.
  */
-import { Client } from "pg";
-import { migrationDatabaseUrl } from "./migration-connection.js";
+import type { Client } from "pg";
+import { connectAdministrativeDatabase, migrationDatabaseUrl } from "./migration-connection.js";
 import { applyMigrations, createMigration, MigrationTamperedError, status } from "./runner.js";
 
 async function withClient<T>(fn: (sql: Client) => Promise<T>): Promise<T> {
-  const sql = new Client({ connectionString: migrationDatabaseUrl() });
+  let sql: Client;
   try {
-    await sql.connect();
+    sql = await connectAdministrativeDatabase(migrationDatabaseUrl());
   } catch (cause) {
     throw new Error(
       [
