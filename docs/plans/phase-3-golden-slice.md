@@ -150,7 +150,7 @@ Written one at a time, as the authorization epic was.
 |---|---|---|
 | POL-029 (#117) | Session lifecycle over the existing `0003` schema: issue, resolve, refresh idle, revoke. No routes, no UI | **merged** #122 |
 | POL-030 (#125) | `ADR-0001` § 3's one transaction helper, and the `app_role` connection the application did not have | **merged** #127 |
-| **POL-031** | The request context: a session resolved into a principal-carrying context, and `decide()` called at a real entry point for the first time | **blocked** — #128 |
+| **POL-031 (#130)** | The request context: a session resolved into a principal-carrying context, and `decide()` called at a real entry point for the first time | **ready** |
 | POL-032 | Sign-in and sign-out, and the author's minimal path — create, draft, submit | after POL-031 |
 | POL-033 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
 | POL-034 | **The reader view**, built to `information-architecture.md` | after POL-032 |
