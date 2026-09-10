@@ -78,6 +78,23 @@ to prevent.
 The tell is any sentence in a ticket asserting what another artefact contains. When you
 write one, go and look.
 
+## Never brief Codex through the operator
+
+The repository is the only channel between the agents — `running-the-agents.md` § *The agents do
+not talk to each other*. The operator has three fixed lines to type and **needs no issue number,
+pull request number or sha**.
+
+So do not end a turn with a block for them to paste. If Codex needs to know something, it goes
+in the ticket or on the pull request, where it is versioned, reviewable, and still there for an
+agent that starts cold next week. Anything said only in chat is invisible to that agent.
+
+This includes the `Reviewed-commit` for pull requests you authored. Rule 8 stops you posting it;
+it does not make the operator a courier. Codex finds your open pull requests itself with
+`gh pr list --state open` and computes the sha. **A sha in the chat is a smell.**
+
+Done wrong for an entire session on 2026-09-10, until the founder asked whether the
+orchestration had broken. It had not — the design was being worked around.
+
 ## Committing: never `git add -A`
 
 **Codex works in the same working directory you do.** It is not a separate checkout. So at any
