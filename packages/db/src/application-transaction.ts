@@ -2,7 +2,7 @@ import {
   AUTHORIZATION_PRINCIPAL_TYPES,
   type AuditTransaction,
   type PrincipalRef,
-} from "@policyoffice/domain";
+} from "../../domain/src/index.js";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool, type Client, type PoolClient } from "pg";
 import type { AuthorizationTransaction } from "./authorization.js";

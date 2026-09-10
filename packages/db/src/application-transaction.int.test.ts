@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { issueSession } from "@policyoffice/domain";
 import { withAppRole } from "@policyoffice/testing";
+import { issueSession } from "../../domain/src/index.js";
 import { withTenantTransaction, type TenantContext } from "./application-transaction.js";
 import { authorizationDataLoader } from "./authorization.js";
 import { buildFixtureSet, loadFixtureSet, removeFixtureSetForTests } from "./fixtures.js";
