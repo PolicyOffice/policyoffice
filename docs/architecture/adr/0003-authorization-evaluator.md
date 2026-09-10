@@ -169,7 +169,11 @@ which one was used.
 
 - That an architecture test can actually enforce the import boundary in the chosen
   tooling, and fails the build rather than warning.
-- The evaluator's query cost with the grant tables under ADR-0001's RLS policy, since it
-  runs on every check.
+- ~~The evaluator's query cost with the grant tables under ADR-0001's RLS policy, since it
+  runs on every check.~~ **Verified 2026-09-10 in POL-024 (#101): one query, 30.8 ms against
+  1,000 grants with `FORCE ROW LEVEL SECURITY`.** The number is not merely recorded — the
+  evaluator's integration suite counts queries and asserts **exactly one**, so the cost that
+  actually matters, an N+1 appearing later, fails the build rather than being rediscovered
+  under load.
 - That the matrix test can be generated from the role table rather than hand-maintained,
   which is what makes it hold as the capability set grows.
