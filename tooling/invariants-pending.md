@@ -69,7 +69,7 @@ Format, parsed strictly:
 
 ## INV-AUTH — Authorization
 
-- INV-AUTH-005 — MVP; both subjects now exist — applicability rules (`0015`) and the evaluator (`0017`, `packages/domain/src/authorization.ts`) — and `decide()` takes no applicability input at all. Nothing calls the evaluator yet, so there is no path on which to assert the separation end to end
+- INV-AUTH-005 — MVP; both subjects now exist — applicability rules (`0015`) and the evaluator (`packages/domain/src/authorization.ts`, #101; `0017` is grant and role storage, and its own header disclaims deciding anything) — and `decide()` takes no applicability input at all. Nothing calls the evaluator yet, so there is no path on which to assert the separation end to end
 - INV-AUTH-006 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-007 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-009 — V1; no schema or domain code yet (Phase 2/3)
@@ -81,20 +81,21 @@ Format, parsed strictly:
 
 ## INV-APL — Applicability and variants
 
-`applicability_rule` and its constraints landed in `0015`, so "no schema yet" is false for
-this whole block. What is missing is the **resolver** — there is no code that turns rules
-into a result set, and every invariant here is a property of that resolution.
-`docs/engineering/ci-gates.md` records the same gap against the property-based gate.
+Every entry here waits on the same missing piece: the **resolver**. `applicability_rule` and
+its constraints (`0015`) and the `variant_type` branches (`0008`) are all stored; no code
+turns them into a result set for a given scope and instant, and most of these invariants are
+properties of that resolution. `docs/engineering/ci-gates.md` records the same gap against
+the property-based gate.
 
 - INV-APL-001 — MVP; rules are stored but nothing resolves them; determinism is a property of the resolver, which does not exist
-- INV-APL-002 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-003 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-004 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-005 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-006 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-007 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-009 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APL-012 — V1; no schema or domain code yet (Phase 2/3)
+- INV-APL-002 — V1; the `variant_type` branches (`0008`) and dated `applicability_rule` rows (`0015`) are stored. Nothing resolves a scope and instant to exactly one of them
+- INV-APL-003 — V1; publication landed in `0012` and does not consult applicability at all, so the publication-time collision check `data-model.md` assigns this invariant (level 4) has no home yet
+- INV-APL-004 — V1; there is no reader path to fail closed in. This invariant governs what resolution does when it cannot choose, and nothing resolves yet
+- INV-APL-005 — V1; `SUPPLEMENT` exists as a `variant_type` value (`0008`); coexistence is a property of the resolver, which does not exist
+- INV-APL-006 — V1; `TRANSLATION` exists as a `variant_type` value (`0008`). Neither normative scope resolution nor language selection is implemented, so their ordering has nothing to order
+- INV-APL-007 — V1; the *never auto-merges* half holds vacuously — no merge or translation code exists. The *marks them alignment-required* half is unbuilt: `alignment_obligation` landed in `0015` but publication (`0012`) raises nothing. Same gap as INV-DOC-030
+- INV-APL-009 — V1; the dated facts this reads are in place — membership history (INV-ORG-002) and `applicability_rule` intervals. No resolver reads them, at the requested instant or at all
+- INV-APL-012 — V1; both halves are expressible — `inheritance_mode.MANDATORY` (`0015`) and `variant_type.REPLACEMENT`/`SUPPLEMENT` (`0008`) — and nothing enforces the combination, because publication does not consult applicability
 
 ## INV-REV — Review
 
@@ -147,5 +148,5 @@ into a result set, and every invariant here is a property of that resolution.
 
 ## INV-TIME — Time and concurrency
 
-- INV-TIME-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-TIME-004 — MVP; no schema or domain code yet (Phase 2/3)
+- INV-TIME-002 — MVP; scheduled transitions landed (`transition_document_version_effective`, `0013`) and take an absolute `timestamptz`. `tenant.default_timezone` is stored (`0003`) but nothing converts a wall-clock time into an instant, which is where DST actually bites. Live once scheduling accepts a local time
+- INV-TIME-004 — MVP; no request layer exists to retry. The pieces it will build on are in place — `transition_document_version_effective` is idempotent by construction (`0013`) and audit emission carries a `dedupeKey`
