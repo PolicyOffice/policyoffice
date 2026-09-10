@@ -149,8 +149,8 @@ Written one at a time, as the authorization epic was.
 | | What | Status |
 |---|---|---|
 | POL-029 (#117) | Session lifecycle over the existing `0003` schema: issue, resolve, refresh idle, revoke. No routes, no UI | **merged** #122 |
-| **POL-030 (#125)** | `ADR-0001` § 3's one transaction helper, and the `app_role` connection the application does not yet have | **ready** |
-| POL-031 | The request context: a session resolved into a principal-carrying context, and `decide()` called at a real entry point for the first time | after POL-030 |
+| POL-030 (#125) | `ADR-0001` § 3's one transaction helper, and the `app_role` connection the application did not have | **merged** #127 |
+| **POL-031** | The request context: a session resolved into a principal-carrying context, and `decide()` called at a real entry point for the first time | **blocked** — #128 |
 | POL-032 | Sign-in and sign-out, and the author's minimal path — create, draft, submit | after POL-031 |
 | POL-033 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
 | POL-034 | **The reader view**, built to `information-architecture.md` | after POL-032 |
@@ -170,6 +170,22 @@ ticket ago should be widened in a diff a reviewer sees on its own rather than in
 POL-030 also closes the first of `ADR-0001`'s two *Still to verify* items — whether Drizzle can be
 driven entirely through a caller-supplied handle, which is what makes the one-helper rule
 enforceable at all.
+
+**POL-031 is blocked on #128, and the gap is real rather than an oversight in the ticket.**
+POL-030 landing is what exposed it. The transaction helper takes a tenant and sets it for the
+transaction — correct, and it makes the ordering problem visible: reading a session means querying
+`user_session`, which is tenant-scoped under forced row-level security, so the tenant must already
+be known. The session is what identifies the user. Nothing else in a request carries a customer.
+
+It is in none of the three places it should be. `ADR-0002` says the cookie carries *"an opaque,
+high-entropy identifier and nothing else"*. `information-architecture.md` § *Addresses* gives every
+public URL and **none carries a customer segment** — while saying URLs are *"a public contract …
+decided before the first route is written rather than falling out of a router's defaults"*. And
+the `tenant` table has no host, slug or domain column.
+
+There is no way to improvise it that does not either put the tenant where `ADR-0002` forbids, or
+open a query path outside row-level security — the one thing `ADR-0001` exists to prevent. #128
+puts it to the founder with a recommendation.
 
 **POL-033 is unblocked.** Approval configurability was answered the same day as decision 4 —
 `open-decisions.md` § 4, **option A**: one or two seeded template versions per governance
