@@ -224,7 +224,11 @@ By `verification/neon.sh`, against PostgreSQL 18.6 in `aws-eu-central-1`.
 
 ### Still to verify
 
-- Drizzle: that the query builder can be driven entirely through a caller-supplied
-  transaction handle, so the one-transaction-helper rule is enforceable.
+- ~~Drizzle: that the query builder can be driven entirely through a caller-supplied
+  transaction handle, so the one-transaction-helper rule is enforceable.~~ **Verified
+  2026-09-11 in POL-030:** the node-postgres driver is constructed from the `PoolClient`
+  already owned by the one application transaction helper. Its query builder and the
+  handle's raw `query` seam therefore share the same transaction and tenant setting; the
+  integration test drives both through that one yielded handle.
 - Planner behaviour with RLS on a table with a composite primary key, measured rather than
   assumed.
