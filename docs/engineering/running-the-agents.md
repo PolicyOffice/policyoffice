@@ -67,12 +67,37 @@ Two mechanical details, both learned the hard way and neither obvious:
   2026-09-04), so auto-merge updates the branch itself instead of waiting for someone to
   notice it is stuck.
 
-  What that does *not* remove is the re-review, and the earlier note here claiming it would
-  was wrong. Updating a branch changes its head sha; `independent review` is pinned to the
-  exact sha it reviewed, so the check returns to pending reading *last review covered
-  `abc1234`, not this commit*. The update is now automatic, the fresh `Reviewed-commit`
-  comment is not. Expect one per pull request that waits behind another — and note that a
-  run of merges can charge it more than once for the same pull request.
+  What that does *not* remove is the re-review. Updating a branch changes its head sha;
+  `independent review` is pinned to the exact sha it reviewed, so the check returns to pending
+  reading *last review covered `abc1234`, not this commit*. Expect one fresh `Reviewed-commit`
+  per pull request that waits behind another, and note that a run of merges can charge it more
+  than once for the same pull request.
+
+  **Corrected 2026-09-10: "auto-merge updates the branch itself" is not reliable.** On #94 the
+  branch sat at `BEHIND` for several minutes with `allow_update_branch` on, auto-merge armed,
+  every required check green, and GitHub never updated it. Re-arming auto-merge did not help
+  either. What worked:
+
+  ```bash
+  gh api -X PUT repos/PolicyOffice/policyoffice/pulls/<n>/update-branch
+  ```
+
+  That is the documented "Update branch" action, not a workaround, and it is the reviewer's to
+  run — it adds a merge commit rather than authoring work, so it does not make you the
+  implementer. The new head sha still needs a fresh `Reviewed-commit`.
+
+- **Auto-merge occasionally does not fire even when nothing is blocking.** On #91 the pull
+  request sat at `CLEAN`, `MERGEABLE`, auto-merge armed, all thirteen required checks green,
+  for ten minutes. Disabling and re-enabling auto-merge merged it within seconds:
+
+  ```bash
+  gh pr merge <n> --disable-auto && gh pr merge <n> --auto --squash
+  ```
+
+  Before reaching for that, check that every **required** context is actually reporting — a
+  check that never runs looks identical to one that is slow. Compare
+  `gh pr checks <n>` against the ruleset's `required_status_checks`. Seen twice in one day and
+  not since; if it becomes routine, it is worth asking GitHub about rather than absorbing.
 
 `independent review` is one of those checks, and it is set by a comment naming the exact
 head sha. For **Codex's** pull requests Claude posts it after reviewing, and the merge

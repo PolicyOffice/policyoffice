@@ -53,27 +53,33 @@ chain only, memoisation within a request and never across. It needs decomposing,
 
 **Decomposed into four tickets. Only the first is written.**
 
-| | What | Written |
+| | What | Status |
 |---|---|---|
-| **POL-023 (#95)** | The capability, scope and grant schema, the nine system roles, and a gate keeping them equal to `authorization-model.md`'s role table | **yes — ready** |
-| POL-024 | `decide()` itself: the `Decision` type, deny-beats-allow, containment, validity at check time, per-request memoisation | after #95 lands |
-| POL-025 | The authorization matrix, generated from the role table — `ADR-0003` § *Proving it*, and Phase 2's carried-over exit criterion | after POL-024 |
-| POL-026 | The context boundary: an architecture test that no repository function is reachable without a principal-carrying context | after POL-024 defines the context |
+| POL-023 (#95) | The capability, scope and grant schema, the nine system roles, and a gate keeping them equal to `authorization-model.md`'s role table | **merged** #98 |
+| POL-024 (#100) | `decide()` itself: the `Decision` type, deny-beats-allow, containment, validity at check time, per-request memoisation | **merged** #101 |
+| **POL-025 (#103)** | The authorization matrix, generated from the role table — `ADR-0003` § *Proving it*, and Phase 2's carried-over exit criterion | **ready** |
+| POL-026 | The context boundary: an architecture test that no repository function is reachable without a principal-carrying context | write after POL-025 lands |
 
-**The later three are deliberately unwritten.** POL-016 and POL-017 both needed amending because
-they were written before the ticket they depended on had landed, and two of the five Decision
-Requests in Phase 2 came from exactly that. A ticket that asserts how POL-023 turned out, before
-POL-023 exists, is the failure `CLAUDE.md` § *Never assert from memory* describes.
+`decide()` exists and is proven — deny-beats-allow has unit and property coverage, expiry is
+evaluated at the fixed instant, and the evaluator does **one** query against a thousand grants
+under forced RLS, asserted rather than measured once. **Still nothing is enforced**: there are
+no entry points, so the `*_REQUIRED_CAPABILITIES` constants remain contracts.
+
+**Each ticket is written only after the one before it lands**, and that discipline has held for
+three of the four. POL-016 and POL-017 both needed amending in Phase 2 because they were written
+too early, and two of that phase's five Decision Requests came from exactly that.
 
 **Nothing is enforced when POL-023 lands.** A schema called `access_grant` looks like access
 control and is not; the `*_REQUIRED_CAPABILITIES` constants stay contracts until POL-024. Two
 further pieces — enforcement at entry points, and search filtering at retrieval
 (INV-AUTH-011/012) — wait on decision 4, because there are no entry points to enforce at.
 
-`ADR-0003`'s own verify-at-bootstrap list carries two items into POL-024: **the evaluator's
-query cost** with the grant tables under `ADR-0001`'s RLS policy, since it runs on every check,
-and whether the matrix **can** be generated from the role table rather than hand-maintained.
-POL-023 proves the second half is possible by parsing that table for its own gate.
+`ADR-0003`'s verify-at-bootstrap list is down to one open item. **Query cost is closed** —
+POL-024 measured one query and 30.8 ms against 1,000 grants under forced RLS, and guarded it
+with an assertion rather than a note. **Generating the matrix from the role table** is
+half-proven: POL-023's `parseAuthorizationModel()` already parses roles and inheritance out of
+`authorization-model.md`, and POL-025 finishes it. **The import boundary** is POL-026's, and it
+is the last one.
 
 ### 2. Open decision 5 — Pilot applicability complexity — **decided**
 
@@ -139,6 +145,39 @@ schema-discovered check in the style of the seeds' tenant-coverage test — walk
 and level-2 constraint in `public`, assert each carries an invariant ID or is explicitly listed
 as carrying none. It is POL-019's shape, and it closes the criterion honestly rather than by
 extending two allowlists.
+
+## Open at the end of the 2026-09-10 session
+
+Nothing here blocks POL-025 or POL-026. Recorded so it is not rediscovered.
+
+- **The applied branch ruleset is missing a required check.** `audit-event completeness` has
+  been in `.github/rulesets/main.json` since #58 (2026-09-02) and is **not** in the applied
+  ruleset. POL-019's placeholder-schema gate therefore runs on every pull request and **cannot
+  block one**. POL-025 adds a fifteenth context, `authorization matrix`, to the same committed
+  file. Both need the founder to apply the ruleset — live configuration is never an agent's to
+  change. Compare with:
+
+  ```bash
+  gh api repos/PolicyOffice/policyoffice/rulesets/<id> --jq '[.rules[]|select(.type=="required_status_checks")|.parameters.required_status_checks[].context]'
+  ```
+
+- **One untested guard in the evaluator.** `scopeContains()` in
+  `packages/domain/src/authorization.ts` returns false for a `GOVERNANCE_BODY`-scoped grant
+  against a non-body resource. It is correct and currently redundant — the loader walks
+  `org_unit → legal_entity` and never into bodies — so removing it fails no test. If a
+  body-scoped document ever exists, nothing catches its loss. One test, next time someone is in
+  that file. Raised on #101.
+
+- **Decision Request #92 is parked deliberately.** *Does submission freeze applicability, or only
+  approval?* Applicability is mutable while a version is `IN_REVIEW`, which matches
+  `versioning.md` exactly — but INV-VER-007 calls applicability a field an approver relied upon,
+  while INV-VER-002 freezes the content revision at submission because *"approvers must not
+  review a moving target."* Nothing can approve anything yet. Answer it when the approval
+  workflow is built, deliberately, rather than inheriting whatever the implementation does.
+
+- **Neon restore timing** remains the only unaddressed ADR verification item outside
+  `ADR-0003`. Its trigger is recorded in `phase-2-bootstrap.md`: before any production data
+  exists, not before a phase closes.
 
 ## Exit criteria
 
