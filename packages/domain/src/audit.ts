@@ -134,6 +134,7 @@ export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "document.retired",
   "document.type_changed",
   "governance.policy_gap",
+  "session.revoked",
   "version.created",
   "version.effective",
   "version.materiality_changed",
@@ -223,6 +224,7 @@ const GOVERNANCE_POLICY_GAP_AFTER_KEYS = Object.freeze([
   "gapAt",
   "triggeringVersionId",
 ]);
+const SESSION_REVOKED_BEFORE_KEYS = Object.freeze(["sessionId"]);
 const VERSION_CREATED_AFTER_KEYS = Object.freeze([
   "documentVariantId",
   "versionSequence",
@@ -344,6 +346,15 @@ const GOVERNANCE_POLICY_GAP_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeAfterRequired: true,
 });
 
+const SESSION_REVOKED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: SESSION_REVOKED_BEFORE_KEYS,
+  safeAfterKeys: Object.freeze([]),
+  requiredSafeBeforeKeys: SESSION_REVOKED_BEFORE_KEYS,
+  requiredSafeAfterKeys: Object.freeze([]),
+  safeBeforeRequired: true,
+  safeAfterRequired: false,
+});
+
 const VERSION_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeBeforeKeys: Object.freeze([]),
   safeAfterKeys: VERSION_CREATED_AFTER_KEYS,
@@ -445,6 +456,7 @@ auditEventSchemas["document.retired"] = Object.freeze({ 1: DOCUMENT_RETIRED_SCHE
 auditEventSchemas["governance.policy_gap"] = Object.freeze({
   1: GOVERNANCE_POLICY_GAP_SCHEMA_V1,
 });
+auditEventSchemas["session.revoked"] = Object.freeze({ 1: SESSION_REVOKED_SCHEMA_V1 });
 auditEventSchemas["version.created"] = Object.freeze({ 1: VERSION_CREATED_SCHEMA_V1 });
 auditEventSchemas["version.effective"] = Object.freeze({ 1: VERSION_EFFECTIVE_SCHEMA_V1 });
 auditEventSchemas["version.materiality_changed"] = Object.freeze({
