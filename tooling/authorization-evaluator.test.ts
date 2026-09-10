@@ -279,7 +279,7 @@ describe("the single authorization evaluator", () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  it("allows body.act_for only through an exact Governance Body grant", async () => {
+  it("INV-AUTH-008: an exact Governance Body grant allows body.act_for for that body", async () => {
     const bodyGrant = grant({
       index: 12,
       capabilities: ["body.act_for"],
@@ -292,19 +292,65 @@ describe("the single authorization evaluator", () => {
           { type: "LEGAL_ENTITY", id: ENTITY },
           { type: "GOVERNANCE_BODY", id: BODY },
         ],
-        grants: [bodyGrant, grant({ index: 13, capabilities: ["body.act_for"] })],
+        grants: [bodyGrant],
       }),
     );
 
     await expect(
       decide(ctx, "body.act_for", { tenantId: TENANT, type: "GOVERNANCE_BODY", id: BODY }),
     ).resolves.toEqual({ allowed: true, via: bodyGrant.ref });
+  });
+
+  it("INV-AUTH-008: a Governance Body grant cannot act for a different body", async () => {
+    const bodyGrant = grant({
+      index: 13,
+      capabilities: ["body.act_for"],
+      scope: { type: "GOVERNANCE_BODY", id: BODY },
+    });
+    const ctx = fixedContext(
+      facts({
+        resourceScopes: [
+          { type: "TENANT", id: null },
+          { type: "LEGAL_ENTITY", id: ENTITY },
+          { type: "GOVERNANCE_BODY", id: OTHER_BODY },
+        ],
+        grants: [bodyGrant],
+      }),
+    );
+
     await expect(
       decide(ctx, "body.act_for", {
         tenantId: TENANT,
         type: "GOVERNANCE_BODY",
         id: OTHER_BODY,
       }),
+    ).resolves.toEqual({ allowed: false, because: "NO_GRANT" });
+  });
+
+  it("INV-AUTH-017: body.act_for cannot reach a non-body resource", async () => {
+    const tenantGrant = grant({
+      index: 14,
+      capabilities: ["body.act_for"],
+    });
+
+    await expect(
+      decide(fixedContext(facts({ grants: [tenantGrant] })), "body.act_for", DOCUMENT_RESOURCE),
+    ).resolves.toEqual({ allowed: false, because: "NO_GRANT" });
+  });
+
+  it("INV-AUTH-017: a body-scoped grant cannot reach a non-body resource", async () => {
+    const bodyGrant = grant({
+      index: 15,
+      scope: { type: "GOVERNANCE_BODY", id: BODY },
+    });
+    const overBroadFacts = facts({
+      // Keep the evaluator's guard observable even if a loader supplies an invalid scope chain.
+      resourceScopes: [...DOCUMENT_SCOPES, { type: "GOVERNANCE_BODY", id: BODY }],
+      grants: [bodyGrant],
+    });
+
+    await expect(
+      decide(fixedContext(overBroadFacts), "document.read", DOCUMENT_RESOURCE),
     ).resolves.toEqual({ allowed: false, because: "NO_GRANT" });
   });
 
