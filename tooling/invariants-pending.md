@@ -10,6 +10,13 @@ still listed here, so a stale entry cannot survive.
 Adding an entry is deliberately more visible in a diff than writing the test would have
 been. That is the incentive, and it is the point of the file.
 
+**A reason states what exists and what is missing.** "No schema or domain code yet" is a
+claim about the tree, and it stops being true the moment the schema lands — after which the
+entry hides a real gap behind a false explanation instead of exposing it. Name the thing
+that landed and the specific clause still unenforced, so a reader can tell an untouched
+subject from a half-built one. Re-read the code before writing the reason; do not copy the
+line above it.
+
 Format, parsed strictly:
 
 ```text
@@ -21,17 +28,17 @@ Format, parsed strictly:
 
 ## INV-DOC — Document identity and lifecycle
 
-- INV-DOC-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-DOC-030 — V1; no schema or domain code yet (Phase 2/3)
+- INV-DOC-003 — MVP; retirement landed (`retireDocument` emits `document.retired`, with integration coverage). Restoration did not: `document.restored` is a name in the audit catalogue with no emission path, and this invariant is entirely about restoring
+- INV-DOC-030 — V1; `alignment_obligation` and its integrity triggers landed in `0015`. Nothing raises an obligation when a Governing Framework version is published, and `alignment.raised`/`alignment.resolved` have no emission path yet
 
 ## INV-VER — Versioning and immutability
 
-- INV-VER-014 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-VER-015 — MVP; no schema or domain code yet (Phase 2/3)
+- INV-VER-014 — MVP; the *never derived* half holds by construction — `changeVersionMateriality` takes an explicit class from its caller and no classifier exists — and is covered by tests naming INV-VER-007 and INV-AUD-008. The *confirmed at approval* half has no approval workflow to be confirmed in
+- INV-VER-015 — MVP; `changeVersionMateriality` already refuses any change outside `DRAFT`. Raising by resubmission, and the elevated capability plus recorded reason for lowering, all wait on the approval workflow
 
 ## INV-EFF — Effectivity and supersession
 
-- INV-EFF-009 — V1; no schema or domain code yet (Phase 2/3)
+- INV-EFF-009 — V1; publication currently **refuses** retroactive dates outright (`document_version_retroactive_publication_unsupported`), which is stronger than this invariant asks for. The elevated-capability-with-reason path arrives with approval — whoever builds it must relax that constraint deliberately, not discover it
 
 ## INV-APR — Approval
 
@@ -57,12 +64,12 @@ Format, parsed strictly:
 
 ## INV-CFG — Configuration
 
-- INV-CFG-001 — MVP; no schema or domain code yet (Phase 2/3)
+- INV-CFG-001 — MVP; configuration landed in `0007`. This is a meta-invariant over every other entry in the registry, and no single test establishes it — it needs either a structural argument that configuration cannot express an invariant-weakening value, or a per-invariant check. Open as a design question, not merely unimplemented
 - INV-CFG-005 — V1; no schema or domain code yet (Phase 2/3)
 
 ## INV-AUTH — Authorization
 
-- INV-AUTH-005 — MVP; no schema or domain code yet (Phase 2/3)
+- INV-AUTH-005 — MVP; both subjects now exist — applicability rules (`0015`) and the evaluator (`0017`, `packages/domain/src/authorization.ts`) — and `decide()` takes no applicability input at all. Nothing calls the evaluator yet, so there is no path on which to assert the separation end to end
 - INV-AUTH-006 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-007 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-AUTH-009 — V1; no schema or domain code yet (Phase 2/3)
@@ -74,7 +81,12 @@ Format, parsed strictly:
 
 ## INV-APL — Applicability and variants
 
-- INV-APL-001 — MVP; no schema or domain code yet (Phase 2/3)
+`applicability_rule` and its constraints landed in `0015`, so "no schema yet" is false for
+this whole block. What is missing is the **resolver** — there is no code that turns rules
+into a result set, and every invariant here is a property of that resolution.
+`docs/engineering/ci-gates.md` records the same gap against the property-based gate.
+
+- INV-APL-001 — MVP; rules are stored but nothing resolves them; determinism is a property of the resolver, which does not exist
 - INV-APL-002 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-003 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APL-004 — V1; no schema or domain code yet (Phase 2/3)

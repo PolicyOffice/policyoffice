@@ -39,7 +39,11 @@ Levels, strongest first:
 > ticket implementing it records which level was chosen, and level 5 alone requires a
 > stated reason for why nothing stronger was feasible.
 
-Illustrative targets — to be confirmed once the database is selected:
+The database is selected — `ADR-0000` § *Decision* chose PostgreSQL — so these are no longer
+open questions. The level each invariant actually reaches is recorded in
+`docs/architecture/data-model.md` § *Enforcement map*, together with a § *Deliberately below
+level 2* section naming every invariant that settles for 4 or 5 and why. **That map is
+authoritative.** The table below illustrates the ladder; it is not a second record of it:
 
 | Invariant | Target | Mechanism |
 |---|---:|---|
