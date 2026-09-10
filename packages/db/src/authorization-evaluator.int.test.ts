@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { withTenant, type Sql } from "@policyoffice/testing";
 import {
+  AUTHORIZATION_CAPABILITIES,
   AuthzContext,
   decide,
   type AuthorizationPrincipalType,
@@ -9,8 +10,20 @@ import {
   type GrantEffect,
   type ResourceRef,
 } from "../../domain/src/authorization.js";
+import {
+  authorizationMatrixFacts,
+  authorizationMatrixGrantValidity,
+  buildAuthorizationMatrix,
+  type AuthorizationMatrixCell,
+  type AuthorizationMatrixCoordinates,
+  type AuthorizationMatrixGrantValidity,
+  type AuthorizationMatrixScopeRelationship,
+} from "../../../tooling/authorization-matrix.js";
+import { parseAuthorizationModel } from "../../../tooling/authorization-role-catalogue.js";
 import { authorizationDataLoader, type AuthorizationTransaction } from "./authorization.js";
 import { buildFixtureSet, loadFixtureSet, removeFixtureSetForTests } from "./fixtures.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const fixture = buildFixtureSet("test");
 const tenantA = fixture.tenants[0];
@@ -36,6 +49,130 @@ const EXPIRED_GROUP = "30000000-0000-0000-0002-000000000001";
 const EXPIRED_MEMBERSHIP = "30000000-0000-0000-0003-000000000001";
 const SIBLING_UNIT = "30000000-0000-0000-0004-000000000001";
 const SIBLING_DOCUMENT = "30000000-0000-0000-0005-000000000001";
+const MATRIX_ENTITY = "32000000-0000-0000-0000-000000000001";
+const MATRIX_UNIT = "32000000-0000-0000-0000-000000000002";
+
+const AUTHORIZATION_MODEL = readFileSync(
+  fileURLToPath(new URL("../../../docs/domain/authorization-model.md", import.meta.url)),
+  "utf8",
+);
+const AUTHORIZATION_MATRIX = buildAuthorizationMatrix(
+  parseAuthorizationModel(AUTHORIZATION_MODEL),
+  AUTHORIZATION_CAPABILITIES,
+);
+
+const MATRIX_COORDINATES: AuthorizationMatrixCoordinates = {
+  resource: { tenantId: TENANT_A, type: "DOCUMENT", id: DOCUMENT_A },
+  resourceScopes: [
+    { type: "TENANT", id: null },
+    { type: "LEGAL_ENTITY", id: ENTITY_A },
+    { type: "ORG_UNIT", id: UNIT_A },
+    { type: "DOCUMENT", id: DOCUMENT_A },
+  ],
+  grantScopes: {
+    AT: { type: "DOCUMENT", id: DOCUMENT_A },
+    ANCESTOR: { type: "ORG_UNIT", id: UNIT_A },
+    DESCENDANT: { type: "DOCUMENT_VERSION", id: VERSION_A },
+    SIBLING: { type: "DOCUMENT", id: SIBLING_DOCUMENT },
+    UNRELATED: { type: "ORG_UNIT", id: MATRIX_UNIT },
+  },
+};
+
+interface MatrixSample {
+  readonly roleCode: string;
+  readonly capability: Capability;
+  readonly scopeRelationship: AuthorizationMatrixScopeRelationship;
+  readonly grantValidity: AuthorizationMatrixGrantValidity;
+  readonly deny?: boolean;
+}
+
+const MATRIX_SAMPLES: readonly MatrixSample[] = [
+  {
+    roleCode: "READER",
+    capability: "document.read",
+    scopeRelationship: "AT",
+    grantValidity: "CURRENT",
+  },
+  {
+    roleCode: "READER",
+    capability: "document.read",
+    scopeRelationship: "ANCESTOR",
+    grantValidity: "CURRENT",
+  },
+  {
+    roleCode: "READER",
+    capability: "document.read",
+    scopeRelationship: "DESCENDANT",
+    grantValidity: "CURRENT",
+  },
+  {
+    roleCode: "READER",
+    capability: "document.read",
+    scopeRelationship: "SIBLING",
+    grantValidity: "CURRENT",
+  },
+  {
+    roleCode: "READER",
+    capability: "document.read",
+    scopeRelationship: "UNRELATED",
+    grantValidity: "CURRENT",
+  },
+  {
+    roleCode: "READER",
+    capability: "document.read",
+    scopeRelationship: "AT",
+    grantValidity: "EXPIRED",
+  },
+  {
+    roleCode: "READER",
+    capability: "document.read",
+    scopeRelationship: "AT",
+    grantValidity: "NOT_YET_STARTED",
+  },
+  {
+    roleCode: "READER",
+    capability: "document.publish",
+    scopeRelationship: "AT",
+    grantValidity: "CURRENT",
+  },
+  {
+    roleCode: "COMPLIANCE_ADMIN",
+    capability: "document.publish",
+    scopeRelationship: "ANCESTOR",
+    grantValidity: "CURRENT",
+  },
+  {
+    roleCode: "AUDITOR",
+    capability: "document.publish",
+    scopeRelationship: "AT",
+    grantValidity: "CURRENT",
+  },
+  {
+    roleCode: "TENANT_ADMIN",
+    capability: "tenant.manage_identity",
+    scopeRelationship: "ANCESTOR",
+    grantValidity: "CURRENT",
+  },
+  {
+    roleCode: "COMPLIANCE_ADMIN",
+    capability: "document.read",
+    scopeRelationship: "AT",
+    grantValidity: "CURRENT",
+    deny: true,
+  },
+];
+
+function matrixCell(sample: MatrixSample): AuthorizationMatrixCell {
+  const cell = AUTHORIZATION_MATRIX.find(
+    (candidate) =>
+      candidate.roleCode === sample.roleCode &&
+      candidate.capability === sample.capability &&
+      candidate.scopeRelationship === sample.scopeRelationship &&
+      candidate.grantValidity === sample.grantValidity,
+  );
+  if (!cell) throw new Error(`missing authorization matrix sample ${JSON.stringify(sample)}`);
+  return cell;
+}
 
 interface GrantInput {
   readonly id: string;
@@ -133,6 +270,118 @@ afterAll(async () => {
 });
 
 describe("authorization evaluator under forced RLS", () => {
+  it("INV-AUTH-001 / INV-AUTH-002 / INV-AUTH-003 / INV-AUTH-008 / INV-AUTH-016: database facts agree with representative matrix cells", async () => {
+    await withTenant(TENANT_A, async (sql) => {
+      await sql.query(
+        `insert into legal_entity (tenant_id, id, legal_name, status)
+         values ($1, $2, 'Matrix unrelated entity', 'ACTIVE')`,
+        [TENANT_A, MATRIX_ENTITY],
+      );
+      await sql.query(
+        `insert into org_unit (tenant_id, id, name, code, legal_entity_id, status)
+         values
+           ($1, $2, 'Matrix sibling unit', 'MATRIX_SIBLING', $3, 'ACTIVE'),
+           ($1, $4, 'Matrix unrelated unit', 'MATRIX_UNRELATED', $5, 'ACTIVE')`,
+        [TENANT_A, SIBLING_UNIT, ENTITY_A, MATRIX_UNIT, MATRIX_ENTITY],
+      );
+      await sql.query(
+        `insert into document (
+           tenant_id, id, document_code, canonical_title, document_type_id,
+           owning_org_unit_id, lifecycle_status, is_governing_framework
+         ) values ($1, $2, 'MATRIX-SIBLING', 'Matrix sibling document', $3,
+                   $4, 'PLANNED', false)`,
+        [TENANT_A, SIBLING_DOCUMENT, DOCUMENT_TYPE_A, SIBLING_UNIT],
+      );
+
+      const failures: string[] = [];
+      for (const [index, sample] of MATRIX_SAMPLES.entries()) {
+        const cell = matrixCell(sample);
+        const principalId = `32000000-0000-0000-0001-${String(index + 1).padStart(12, "0")}`;
+        const grantId = `32000000-0000-0000-0002-${String(index + 1).padStart(12, "0")}`;
+        const denyId = `32000000-0000-0000-0003-${String(index + 1).padStart(12, "0")}`;
+        const roleId = tenantA.securityRoles.find((role) => role.code === cell.roleCode)?.id;
+        if (!roleId) throw new Error(`fixture is missing role ${cell.roleCode}`);
+
+        await sql.query(
+          `insert into app_user (tenant_id, id, display_name, contact_email, status)
+           values ($1, $2, $3, $4, 'ACTIVE')`,
+          [
+            TENANT_A,
+            principalId,
+            `Matrix principal ${index + 1}`,
+            `matrix-${index + 1}@example.test`,
+          ],
+        );
+        const validity = authorizationMatrixGrantValidity(cell.grantValidity, NOW);
+        if (validity.from === null) {
+          throw new Error(`matrix fixture ${cell.key} needs a finite lower bound`);
+        }
+        await insertGrant(sql, {
+          id: grantId,
+          principalId,
+          capability: null,
+          securityRoleId: roleId,
+          scopeType: MATRIX_COORDINATES.grantScopes[cell.scopeRelationship].type,
+          scopeId: MATRIX_COORDINATES.grantScopes[cell.scopeRelationship].id,
+          validFrom: validity.from,
+          validUntil: validity.until,
+        });
+
+        let syntheticFacts = authorizationMatrixFacts(cell, MATRIX_COORDINATES, NOW, {
+          tenantId: TENANT_A,
+          id: grantId,
+        });
+        if (sample.deny) {
+          await insertGrant(sql, {
+            id: denyId,
+            principalId,
+            effect: "DENY",
+            capability: cell.capability,
+            scopeType: "ORG_UNIT",
+            scopeId: UNIT_A,
+          });
+          syntheticFacts = {
+            ...syntheticFacts,
+            grants: [
+              ...syntheticFacts.grants,
+              {
+                ref: { tenantId: TENANT_A, id: denyId },
+                effect: "DENY",
+                capabilities: [cell.capability],
+                scope: MATRIX_COORDINATES.grantScopes.ANCESTOR,
+                validity: authorizationMatrixGrantValidity("CURRENT", NOW),
+              },
+            ],
+          };
+        }
+
+        const syntheticContext = new AuthzContext({
+          tenantId: TENANT_A,
+          principal: { type: "USER", id: principalId },
+          instant: NOW,
+          load: () => Promise.resolve(syntheticFacts),
+        });
+        const expected = await decide(
+          syntheticContext,
+          cell.capability,
+          MATRIX_COORDINATES.resource,
+        );
+        const actual = await decide(
+          context(transaction(sql), principalId),
+          cell.capability,
+          MATRIX_COORDINATES.resource,
+        );
+        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+          failures.push(
+            `${cell.key}${sample.deny ? " / DENY" : ""}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`,
+          );
+        }
+      }
+
+      expect(failures).toEqual([]);
+    });
+  });
+
   it("INV-TEN-002 / INV-TEN-005: foreign and absent resources do the same fact-query work", async () => {
     await withTenant(TENANT_A, async (sql) => {
       const foreignLoad = countedTransaction(sql);
