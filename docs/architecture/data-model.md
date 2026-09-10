@@ -245,9 +245,27 @@ pseudonymising `display_name` and `contact_email` while the row and its identifi
 | Table | Columns |
 |---|---|
 | `user_credential` | `user_id`, `kind` (`PASSWORD`, `OIDC`, `SAML`), `secret_hash`, `params jsonb`, `rotated_at`. Separated from the principal so V1 identity is additive (`ADR-0002`) |
-| `user_session` | `user_id`, `token_hash`, `issued_at`, `idle_expires_at`, `absolute_expires_at`, `revoked_at`, `user_agent_class`. Deleted on deactivation |
+| `user_session` | `user_id`, `token_hash`, `issued_at`, `idle_expires_at`, `absolute_expires_at`, `user_agent_class`. **Revocation deletes the row** (`ADR-0002`), including on deactivation, where `0003`'s `revoke_sessions_on_deactivation()` trigger does it. `revoked_at` exists in `0003` and is **dead** — see below |
 | `user_group` | `name`, `source` (`LOCAL`, `SCIM`), `external_id`, `status`. `unique (tenant_id, lower(name))` |
 | `group_membership` | `group_id`, `user_id`, `validity tstzrange`. `unique (tenant_id, group_id, user_id, validity)` |
+
+### `user_session.revoked_at` is dead, deliberately
+
+The column exists in `0003` and is mapped in `schema.ts`. **Nothing writes to it, and nothing
+can**: `ADR-0002` § *Server-side sessions* specifies *"Revocation | Delete the row"*, so a
+revoked session has no row left to carry a timestamp.
+
+It is recorded here because it has already misled once. POL-029's ticket was written requiring
+soft revocation — `revoked_at` set, rows retained — on the reasoning that INV-AUTH-014's
+*"historical attribution is preserved"* needed the rows to survive. It does not: attribution
+lives in the audit ledger and the surviving `app_user` row, and the trigger that deletes cites
+that same invariant. Codex caught the contradiction as Decision Request #120 before any code was
+written.
+
+A nullable `revoked_at` sitting beside a delete trigger reads as soft revocation to anyone who
+meets the column before the trigger. **Do not start writing to it**, and do not drop it either:
+a migration purely for tidiness is not worth it under `ADR-0009`'s no-down-migration rule. It
+goes when a migration touches `user_session` for a real reason.
 
 ## Organisation
 
