@@ -349,6 +349,40 @@ describe("the single authorization evaluator", () => {
     ).resolves.toEqual({ allowed: false, because: "NO_GRANT" });
   });
 
+  it("INV-AUTH-017: a Governance Body grant cannot authorize document.read on the body", async () => {
+    const bodyGrant = grant({
+      index: 17,
+      capabilities: ["document.read"],
+      scope: { type: "GOVERNANCE_BODY", id: BODY },
+    });
+    const ctx = fixedContext(
+      facts({
+        resourceScopes: [
+          { type: "TENANT", id: null },
+          { type: "LEGAL_ENTITY", id: ENTITY },
+          { type: "GOVERNANCE_BODY", id: BODY },
+        ],
+        grants: [bodyGrant],
+      }),
+    );
+
+    await expect(
+      decide(ctx, "document.read", { tenantId: TENANT, type: "GOVERNANCE_BODY", id: BODY }),
+    ).resolves.toEqual({ allowed: false, because: "NO_GRANT" });
+  });
+
+  it("INV-AUTH-008: body.act_for rejects a body scope carrying a non-body resource id", async () => {
+    const confusedGrant = grant({
+      index: 18,
+      capabilities: ["body.act_for"],
+      scope: { type: "GOVERNANCE_BODY", id: DOCUMENT },
+    });
+
+    await expect(
+      decide(fixedContext(facts({ grants: [confusedGrant] })), "body.act_for", DOCUMENT_RESOURCE),
+    ).resolves.toEqual({ allowed: false, because: "NO_GRANT" });
+  });
+
   it("INV-AUTH-017: body.act_for cannot reach a non-body resource", async () => {
     const tenantGrant = grant({
       index: 15,
