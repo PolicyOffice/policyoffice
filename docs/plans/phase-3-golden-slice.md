@@ -51,23 +51,32 @@ tenant-isolation or authorization test"* carried over from Phase 2 cannot be met
 boolean, deny-beats-allow in one pass with no specificity, containment along the administrative
 chain only, memoisation within a request and never across. It needs decomposing, not designing.
 
-**Decomposed into four tickets. Only the first is written.**
+**Decomposed into four tickets. All four are now written; three have landed.**
 
 | | What | Status |
 |---|---|---|
 | POL-023 (#95) | The capability, scope and grant schema, the nine system roles, and a gate keeping them equal to `authorization-model.md`'s role table | **merged** #98 |
 | POL-024 (#100) | `decide()` itself: the `Decision` type, deny-beats-allow, containment, validity at check time, per-request memoisation | **merged** #101 |
-| **POL-025 (#103)** | The authorization matrix, generated from the role table — `ADR-0003` § *Proving it*, and Phase 2's carried-over exit criterion | **ready** |
-| POL-026 | The context boundary: an architecture test that no repository function is reachable without a principal-carrying context | write after POL-025 lands |
+| POL-025 (#103) | The authorization matrix, generated from the role table — `ADR-0003` § *Proving it*, and Phase 2's carried-over exit criterion | **merged** #107 |
+| **POL-026 (#108)** | The context boundary: an architecture test that no repository function is reachable without a principal-carrying context | **ready** |
 
 `decide()` exists and is proven — deny-beats-allow has unit and property coverage, expiry is
 evaluated at the fixed instant, and the evaluator does **one** query against a thousand grants
 under forced RLS, asserted rather than measured once. **Still nothing is enforced**: there are
 no entry points, so the `*_REQUIRED_CAPABILITIES` constants remain contracts.
 
-**Each ticket is written only after the one before it lands**, and that discipline has held for
-three of the four. POL-016 and POL-017 both needed amending in Phase 2 because they were written
-too early, and two of that phase's five Decision Requests came from exactly that.
+**Each ticket was written only after the one before it landed**, and that discipline held for
+all four. POL-016 and POL-017 both needed amending in Phase 2 because they were written too
+early, and two of that phase's five Decision Requests came from exactly that. None of
+POL-023 through POL-026 needed amending.
+
+The matrix is proven rather than assumed: mutating `scopeContains()` to drop containment fails
+438 cells, bypassing expiry fails the matrix, and an undocumented capability fails both files by
+name. The twelve-cell database sample compares `decide()` on synthetic facts against `decide()`
+on database facts, so an algorithm bug cancels on both sides and only a **loader** disagreement
+shows — mutating the loader to drop a validity upper bound fails it, naming the cell, while the
+matrix correctly stays green. That division is deliberate: the matrix proves the algorithm, the
+sample proves the loader.
 
 **Nothing is enforced when POL-023 lands.** A schema called `access_grant` looks like access
 control and is not; the `*_REQUIRED_CAPABILITIES` constants stay contracts until POL-024. Two
@@ -76,10 +85,10 @@ further pieces — enforcement at entry points, and search filtering at retrieva
 
 `ADR-0003`'s verify-at-bootstrap list is down to one open item. **Query cost is closed** —
 POL-024 measured one query and 30.8 ms against 1,000 grants under forced RLS, and guarded it
-with an assertion rather than a note. **Generating the matrix from the role table** is
-half-proven: POL-023's `parseAuthorizationModel()` already parses roles and inheritance out of
-`authorization-model.md`, and POL-025 finishes it. **The import boundary** is POL-026's, and it
-is the last one.
+with an assertion rather than a note. **Generating the matrix from the role table is closed** —
+POL-025 builds all 4,050 cells from `parseAuthorizationModel()`, and a capability added to the
+runtime enum without a documented decision fails the build by name. **The import boundary** is
+POL-026's, and it is the last one; that ticket strikes it from the ADR.
 
 ### 2. Open decision 5 — Pilot applicability complexity — **decided**
 
@@ -148,7 +157,7 @@ extending two allowlists.
 
 ## Open at the end of the 2026-09-10 session
 
-Nothing here blocks POL-025 or POL-026. Recorded so it is not rediscovered.
+Nothing here blocks POL-026. Recorded so it is not rediscovered.
 
 - **The applied branch ruleset was missing a required check — applied 2026-09-10.**
   `audit-event completeness` had been in `.github/rulesets/main.json` since #58 (2026-09-02)
@@ -163,20 +172,26 @@ Nothing here blocks POL-025 or POL-026. Recorded so it is not rediscovered.
   that never reports blocks every merge permanently. `audit-event completeness` has no `paths`
   filter and no `if`, and reported green on #101, #102 and #104.
 
-  **Still open:** POL-025 adds a fifteenth context, `authorization matrix`, to the committed
-  file. It must not be applied until that job exists and has reported on a pull request.
-  Compare with:
+  **Now closed as well.** POL-025's fifteenth context, `authorization matrix`, was applied on
+  2026-09-10 after #107 merged — the same three pre-flight checks first: the job carries no
+  `paths` filter and no `if`, it had reported green on #107, and no pull request was open to be
+  disrupted. **The applied ruleset and `.github/rulesets/main.json` now match exactly, fifteen
+  contexts, with no drift for the first time.** Both applications were founder-directed in
+  session; live configuration remains not an agent's to change on its own initiative, and
+  `AGENTS.md` was deliberately left unamended rather than turning that into standing policy.
+  Verify with:
 
   ```bash
   gh api repos/PolicyOffice/policyoffice/rulesets/<id> --jq '[.rules[]|select(.type=="required_status_checks")|.parameters.required_status_checks[].context]'
   ```
 
-- **One untested guard in the evaluator.** `scopeContains()` in
-  `packages/domain/src/authorization.ts` returns false for a `GOVERNANCE_BODY`-scoped grant
-  against a non-body resource. It is correct and currently redundant — the loader walks
-  `org_unit → legal_entity` and never into bodies — so removing it fails no test. If a
-  body-scoped document ever exists, nothing catches its loss. One test, next time someone is in
-  that file. Raised on #101.
+- **One untested guard in the evaluator — now ticketed as POL-027 (#109).** `scopeContains()`
+  in `packages/domain/src/authorization.ts` returns false for a `GOVERNANCE_BODY`-scoped grant
+  against a non-body resource. Re-checked on 2026-09-10 after the matrix landed, by deleting
+  the line: **42 files, 538 tests, all still passing.** POL-025 does not reach it either — the
+  matrix uses a `DOCUMENT` resource for every cell, and `body.act_for` is held by no role, so
+  its 135 cells only ever assert denial. The whole governance-body arm is unproven, not just
+  the guard.
 
 - **Decision Request #92 is parked deliberately.** *Does submission freeze applicability, or only
   approval?* Applicability is mutable while a version is `IN_REVIEW`, which matches
