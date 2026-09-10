@@ -181,6 +181,8 @@ export const userSession = pgTable(
     issuedAt: instant("issued_at").notNull(),
     idleExpiresAt: instant("idle_expires_at").notNull(),
     absoluteExpiresAt: instant("absolute_expires_at").notNull(),
+    // Dead column: ADR-0002 revokes by deleting the row, so this can never be set.
+    // Kept rather than dropped -- see data-model.md, "revoked_at is dead, deliberately".
     revokedAt: instant("revoked_at"),
     userAgentClass: text("user_agent_class").notNull(),
   },
