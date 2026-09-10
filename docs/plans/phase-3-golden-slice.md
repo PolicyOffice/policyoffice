@@ -38,9 +38,11 @@ verify without the application.**
 ## Decide first — four questions that shape the tickets
 
 Most of Phase 3 cannot be decomposed until these are answered. They are listed in the order
-they block work. **Decision 2 was answered on 2026-09-08**; the other three stand.
+they block work. **Decision 2 was answered on 2026-09-08** and **decision 1 is complete as of
+2026-09-10**. Decision 3 stands. **Decision 4 is now a Decision Request — #114** — and is the
+only thing standing between the backlog and empty.
 
-### 1. The `ADR-0003` authorization evaluator — **started 2026-09-09**
+### 1. The `ADR-0003` authorization evaluator — **complete 2026-09-10**
 
 Every Phase 2 ticket recorded a capability requirement and enforced none, deliberately and
 consistently. That debt is now due: approval, publication and the reader path are all
@@ -117,11 +119,18 @@ largest unbuilt subsystem — `approval_run`, `approval_stage`, `approval_task`,
 `approval_decision`, mandated authority, serial ordering, completion rules — and how much of it
 is configurable changes the ticket count materially.
 
-### 4. What the interface is
+### 4. What the interface is — **asked as #114 on 2026-09-10**
 
 There is no UI, no session handling and no read path. `ADR-0002` chose server-side sessions in
 Postgres; nothing implements them. The slice needs enough interface for three principals to
 perform their parts, and that scope is a product decision rather than an architectural one.
+
+It had never actually been put to the founder — it has no entry in `open-decisions.md` — which
+is why it sat as a plan heading for a phase rather than as a question anyone could answer.
+**#114** asks it, with three options spanning roughly 6–8 to 14–18 tickets, and recommends the
+middle one: minimal surfaces everywhere except the approval inbox and reader view, where
+`information-architecture.md` makes the *ordering of the page* a governance requirement rather
+than a matter of finish.
 
 ## The work, in dependency order
 
@@ -129,31 +138,36 @@ Not tickets yet — tickets follow the decisions above. This is the shape.
 
 | Group | What it covers | Blocked by |
 |---|---|---|
-| **Authorization** | The evaluator, grants, the capability matrix and its CI gate | Decision 1 |
-| **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | Decision 4 |
+| ~~**Authorization**~~ | The evaluator, grants, the capability matrix and its CI gate | **done** — POL-023…027 |
+| **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | **#114** |
 | **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | Decisions 1, 3 |
 | **Audience and attestation** | Applicability resolution, assignment, acknowledgement | Decision 1 |
-| **Read paths** | The register, a version's history, the audit trail as a person can read it | Decisions 1, 4 |
+| **Read paths** | The register, a version's history, the audit trail as a person can read it | **#114** |
 | **Review cases** | Scheduled review, completion, the obligations that survive it | Decision 1 |
 | **Evidence packs** | Assembly, the manifest, byte-exact verification outside the application | Everything above |
-| **Playwright** | The flow driven through the interface, carried from Phase 2 | Decision 4 |
+| **Playwright** | The flow driven through the interface, carried from Phase 2 | **#114** |
 
 Two items carry forward from Phase 2 with their triggers recorded there rather than repeated
 here: **Neon restore timing**, due before any real data exists, and the **authorization
 matrix**, which is Decision 1's output.
 
-## Start here, before any decision
+## Start here, before any decision — **done, by an unusual route**
 
-One ticket is ready now and depends on none of the above.
+**The constraint-comment gate has shipped.** `packages/db/src/constraint-comments.ts` walks
+every level-1 and level-2 constraint in `public` from `pg_constraint` and asserts each carries
+an invariant ID or is explicitly excepted — schema-discovered, as the criterion required, not a
+third hand-maintained allowlist. It is asserted from `fixtures.int.test.ts` and
+`authorization.int.test.ts`, so it runs under `integration tests` rather than as its own gate.
 
-**The constraint-comment gate.** Phase 2's exit criterion is partially met: the convention is
-settled and the comments are written, but only `document.int.test.ts` and `version.int.test.ts`
-assert it, each against a hand-maintained allowlist. A constraint added to `content_revision`,
-`configuration` or `organization` without a comment is caught by nothing. The fix is a
-schema-discovered check in the style of the seeds' tenant-coverage test — walk every level-1
-and level-2 constraint in `public`, assert each carries an invariant ID or is explicitly listed
-as carrying none. It is POL-019's shape, and it closes the criterion honestly rather than by
-extending two allowlists.
+**How it landed is worth keeping.** POL-022's own pull request, #94, was closed unmerged. Its
+migration `0016_constraint_invariant_comments.sql` had already reached `main` inside #96 — the
+pull request opened as *"documentation only, Tier 0"* that `CLAUDE.md` § *Committing* records as
+the `git add -A` incident — and the module followed in #98 alongside POL-023's schema. So the
+work is in, complete and tested, but no pull request in the history is about it, and its
+migration is attributed to a docs change.
+
+Nothing needs redoing. It is recorded here because someone looking for when this gate arrived
+will not find it by reading pull request titles.
 
 ## Open at the end of the 2026-09-10 session
 
