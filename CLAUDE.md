@@ -112,6 +112,24 @@ being checked; a clean `origin/main` behaves identically on Node 20 and 24.
 moment the tree may hold files from a branch it is mid-implementation on, and `git add -A`,
 `git add .` and `git commit -a` will all sweep them into your commit.
 
+**And check which branch you are on before you create one.** Staging is not the only way another
+agent's work ends up in your pull request. On 2026-09-10 a two-file documentation change went out
+carrying the whole of POL-029 — 11 files, 1,318 lines — because `git checkout -b` was run while the
+shared checkout was on Codex's branch, so the new branch was cut from its commit instead of `main`.
+The commit itself was clean, explicit paths and all. **Codex changes the current branch between
+your turns.** So:
+
+```bash
+git checkout main && git pull --ff-only origin main && git checkout -b docs/whatever
+```
+
+Then confirm before opening the pull request:
+
+```bash
+git log --oneline origin/main..HEAD    # only your commits
+git diff origin/main HEAD --name-only  # only your files
+```
+
 Stage explicit paths. Every time:
 
 ```bash
