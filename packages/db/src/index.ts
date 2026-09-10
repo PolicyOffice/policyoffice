@@ -33,3 +33,4 @@ export {
   type TenantTableSecurityRow,
 } from "./tenancy-schema.js";
 export { authorizationDataLoader, type AuthorizationTransaction } from "./authorization.js";
+export { ARGON2ID_PARAMETERS, argon2idPasswordVerifier } from "./argon2id.js";

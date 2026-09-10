@@ -278,6 +278,22 @@ describe("the audit event envelope", () => {
     }
   });
 
+  it("INV-AUD-008: session.revoked publishes its required version-1 session identity", () => {
+    const revoked = event({
+      eventType: "session.revoked",
+      subject: { type: "USER", id: "10000000-0000-0000-0013-000000000001" },
+      action: "REVOKE_SESSION",
+      safeBefore: { sessionId: "10000000-0000-0000-0020-000000000001" },
+      safeAfter: null,
+    });
+
+    expect(IMPLEMENTED_AUDIT_EVENT_TYPES).toContain("session.revoked");
+    expect(() => validateAuditEvent(revoked)).not.toThrow();
+    expect(() => validateAuditEvent({ ...revoked, safeBefore: {} })).toThrow(
+      /sessionId is required/i,
+    );
+  });
+
   it("INV-AUD-008 / INV-EFF-005: policy gaps have a high-severity version-1 contract", () => {
     const policyGap = event({
       eventType: "governance.policy_gap",

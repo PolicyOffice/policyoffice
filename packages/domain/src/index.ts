@@ -173,6 +173,32 @@ export {
 } from "./publication.js";
 
 export {
+  SESSION_ABSOLUTE_LIFETIME_MS,
+  SESSION_IDLE_TIMEOUT_MS,
+  SESSION_TOKEN_BYTES,
+  SessionPrincipalUnavailableError,
+  deactivateUserAndRevokeSessions,
+  hashPassword,
+  issueSession,
+  resolveSession,
+  revokeAllSessions,
+  revokeSession,
+  verifyPasswordCredential,
+  type DeactivateUserInput,
+  type IssueSessionInput,
+  type IssuedSession,
+  type PasswordHash,
+  type PasswordHashParameter,
+  type PasswordVerifier,
+  type ResolveSessionInput,
+  type RevokeAllSessionsInput,
+  type RevokeSessionInput,
+  type RevokedSessions,
+  type SessionPrincipal,
+  type VerifyPasswordCredentialInput,
+} from "./session.js";
+
+export {
   EFFECTIVITY_SYSTEM_ACTOR,
   EFFECTIVITY_TRANSITION_OUTCOMES,
   transitionDocumentVersionEffective,
