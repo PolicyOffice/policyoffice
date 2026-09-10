@@ -27,7 +27,7 @@ gate — see `CONTRIBUTING.md`.
 | integration tests (real Postgres) | **live** | `pr.yml` → `integration`, service container, connecting as `app_role` |
 | migration validation: fresh **and** upgrade | **live** | `pr.yml` → `migrations`, plus the drift check |
 | tenant-isolation suite | **live** | `pr.yml` → `tenant-isolation`, schema-discovered forced RLS and cross-tenant negatives |
-| authorization matrix | *pending* | no authorization evaluator exists |
+| authorization matrix | **live** | `pr.yml` → `authorization-matrix`; 4,050 generated cells plus a representative `app_role` database sample |
 | audit-event completeness | **live** | `pr.yml` → `audit-events`; catalogue, versioned registry and the sole insertion path stay in step |
 | production build | **live** | `pr.yml` → `build` |
 | dependency review | **live** | `pr.yml` → `dependency-review` |
@@ -73,10 +73,9 @@ else applies it afterwards, in the order above.
 
 ## Each pending gate arrives with the code it protects
 
-Not as a follow-up ticket, and not as a placeholder job. The pull request that adds an
-authorization evaluator adds the authorization matrix in the same diff, and moves its row
-here from *pending* to **live**. That way the gate cannot lag the capability it exists to
-constrain.
+Not as a placeholder job. A gate moves its row here from *pending* to **live** only in the
+pull request that adds the substantive test it runs. That way the gate cannot be made green
+before the capability it exists to constrain.
 
 ## Repository settings, applied
 

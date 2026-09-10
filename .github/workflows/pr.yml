@@ -171,6 +171,35 @@ jobs:
         # no forced RLS or tenant policy makes this gate red without changing the test.
         run: pnpm test:tenant-isolation
 
+  authorization-matrix:
+    name: authorization matrix
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: policyoffice
+          LANG: C
+          POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d policyoffice"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      MIGRATION_ADMIN_URL: postgres://postgres:postgres@localhost:5432/policyoffice
+      MIGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/policyoffice
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Build the schema and grant development logins
+        run: |
+          pnpm --filter @policyoffice/db migrate
+          pnpm --filter @policyoffice/db dev:credentials
+      - name: Prove the generated matrix through memory and the restricted application role
+        run: pnpm test:authorization-matrix
+
   audit-events:
     name: audit-event completeness
     runs-on: ubuntu-latest
