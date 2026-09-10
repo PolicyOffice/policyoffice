@@ -86,19 +86,36 @@ chat is a smell.** The operator is not a transport.
 If Claude finds itself composing a prompt for Codex, the correct move is to fix the ticket, or
 put the finding on the pull request, and then say nothing.
 
-### The suite lies under the wrong Node
+### A full-suite count you cannot reconcile means the tree is not yours
 
-Also 2026-09-10, and the same shape of error: `AGENTS.md` says the toolchain is `nvm use`
-(Node 24, from `.nvmrc`), and both agents had been running `pnpm test` under **Node 20**.
+**2026-09-10.** Claude ran `pnpm test` and got:
 
-Under Node 20 two vitest worker forks crash, roughly twenty tests never run, and **the summary
-still reports everything it did run as passing** — `43 passed (45)`, `550 tests`, with the
-failure relegated to an "Unhandled Errors" footnote. On Node 24 the same tree is `45 passed
-(45)`, `570 tests`, clean.
+```
+Test Files  43 passed (45)
+Tests       550 passed (550)
+Errors      2 errors          ← relegated to a footnote
+```
 
-So a local run can look green while silently skipping a test file. Both agents quoted those
-undercounts in pull request bodies as evidence. **Run `nvm use` first, and treat CI as the only
-authoritative count** — it pins Node 24 and does not fork-crash.
+Two worker forks had crashed. Claude diagnosed it as a Node version problem — `.nvmrc` says 24,
+the shell default was 20 — wrote that into two documents, and was wrong. A clean `origin/main`
+gives **identical** results on Node 20 and Node 24: 42 files, 551 tests, no errors.
+
+**The actual cause was Codex's unfinished work in the shared working directory.** Codex was
+mid-implementation on POL-029 in the same checkout. `vitest` collects by glob, so it picked up
+three in-progress test files, two of which crashed their workers because the code under them was
+half-written.
+
+This is the `git add -A` hazard wearing a different hat — *see `CLAUDE.md` § Committing* — and it
+is worse than the commit version, because nothing looks wrong. The summary reports everything it
+did run as passing, and the crash reads as vitest flake.
+
+**So: before quoting a suite count as evidence, reconcile it.** `git status --short` first, and if
+the file count does not match `origin/main` plus whatever the branch adds, the extra files belong
+to the other agent and the run means nothing. A count that cannot be reconciled is not a green
+build.
+
+Run `nvm use` anyway — `.nvmrc` and `engines` require Node 24 and pnpm warns on 20 — but do not
+expect it to fix a number that does not add up.
 
 **Landing a pull request.** Usually nothing. Auto-merge is enabled: a pull request merges
 the moment its last required check goes green, and deletes its own branch.

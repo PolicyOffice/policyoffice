@@ -95,6 +95,17 @@ it does not make the operator a courier. Codex finds your open pull requests its
 Done wrong for an entire session on 2026-09-10, until the founder asked whether the
 orchestration had broken. It had not — the design was being worked around.
 
+## Reconcile a suite count before citing it
+
+Codex works in the same checkout, so `vitest`'s globs can collect its half-written test files.
+That produces a run which reports everything it executed as passing while two workers crash in a
+footnote — and it looks exactly like flake.
+
+Check `git status --short`, and reconcile the file count against `origin/main` plus whatever your
+branch adds. **If it does not add up, the tree is not yours and the run proves nothing.** On
+2026-09-10 this was misdiagnosed as a Node version problem and asserted in two documents before
+being checked; a clean `origin/main` behaves identically on Node 20 and 24.
+
 ## Committing: never `git add -A`
 
 **Codex works in the same working directory you do.** It is not a separate checkout. So at any
