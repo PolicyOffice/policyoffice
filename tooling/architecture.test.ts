@@ -28,10 +28,28 @@ import { describe, expect, it } from "vitest";
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const DOMAIN_SRC = join(REPO_ROOT, "packages/domain/src");
 const ADMIN_CONNECTION_SITE = "packages/db/src/migration-connection.ts";
+const APPLICATION_CONNECTION_SITE = "packages/db/src/application-transaction.ts";
 const TEST_CONNECTION_SITE = "packages/testing/src/db.ts";
-// Production has one administrative constructor. The test harness is the deliberate
-// exception: it must construct clients itself to prove each restricted PostgreSQL role.
-const CONNECTION_SITES = new Set([ADMIN_CONNECTION_SITE, TEST_CONNECTION_SITE]);
+// Production has one administrative constructor and POL-030 adds the one private app_role
+// pool. The test harness is the deliberate third site: it constructs clients itself to
+// prove each restricted PostgreSQL role. Naming exact sites keeps every other constructor
+// forbidden rather than widening the data layer as a whole.
+const CONNECTION_SITES = new Set([
+  ADMIN_CONNECTION_SITE,
+  APPLICATION_CONNECTION_SITE,
+  TEST_CONNECTION_SITE,
+]);
+// Administrative migrations and fixture loading necessarily own their separate transaction
+// boundaries. The test harness owns rolled-back test transactions. Application work has one
+// exact opener; allowlisting the function rather than its file means a neighbour still fails.
+const TRANSACTION_OPENERS = new Set([
+  `${APPLICATION_CONNECTION_SITE}#withTenantTransaction`,
+  "packages/db/src/fixtures.ts#inRoleTransaction",
+  "packages/db/src/runner.ts#applyMigrations",
+  `${TEST_CONNECTION_SITE}#withTenant`,
+  `${TEST_CONNECTION_SITE}#withRetentionTenant`,
+  `${TEST_CONNECTION_SITE}#withoutTenant`,
+]);
 const DATA_LAYER_PREFIX = "packages/db/src/";
 const EXCLUDED_SOURCE_DIRECTORIES = new Set([".git", ".next", "dist", "node_modules"]);
 
@@ -285,6 +303,83 @@ function connectionConstructionProblems(units: readonly SourceUnit[]): string[] 
   return problems.sort();
 }
 
+function functionName(
+  node: ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction | ts.MethodDeclaration,
+): string | undefined {
+  if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) && node.name) {
+    return node.name.text;
+  }
+  if (ts.isMethodDeclaration(node) && ts.isIdentifier(node.name)) return node.name.text;
+  if (ts.isVariableDeclaration(node.parent) && ts.isIdentifier(node.parent.name)) {
+    return node.parent.name.text;
+  }
+  if (ts.isPropertyAssignment(node.parent)) {
+    const name = node.parent.name;
+    if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
+  }
+  return undefined;
+}
+
+function beginsTransaction(node: ts.CallExpression): boolean {
+  if (
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.name.text !== "query" ||
+    !node.arguments[0] ||
+    !ts.isStringLiteralLike(node.arguments[0])
+  ) {
+    return false;
+  }
+  const statement = node.arguments[0].text.trim().toLowerCase();
+  return /^(?:begin\b|start\s+transaction\b)/.test(statement);
+}
+
+interface TransactionBegin {
+  readonly functionName: string;
+}
+
+function transactionBegins(unit: SourceUnit): TransactionBegin[] {
+  const source = parsedSource(unit);
+  const found: TransactionBegin[] = [];
+
+  const visit = (node: ts.Node, owner: string | undefined): void => {
+    let nextOwner = owner;
+    if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isArrowFunction(node) ||
+      ts.isMethodDeclaration(node)
+    ) {
+      nextOwner = functionName(node) ?? owner;
+    }
+    if (ts.isCallExpression(node) && beginsTransaction(node)) {
+      found.push({ functionName: nextOwner ?? "<module>" });
+    }
+    ts.forEachChild(node, (child) => visit(child, nextOwner));
+  };
+
+  visit(source, undefined);
+  return found;
+}
+
+function isTestSource(file: string): boolean {
+  return /\.(?:(?:int|prop)\.)?test\.tsx?$/.test(file);
+}
+
+function transactionOpenerProblems(units: readonly SourceUnit[]): string[] {
+  const problems: string[] = [];
+  for (const unit of units) {
+    const file = repositoryPath(unit.file);
+    if (isTestSource(file)) continue;
+    for (const begin of transactionBegins(unit)) {
+      if (TRANSACTION_OPENERS.has(`${file}#${begin.functionName}`)) continue;
+      problems.push(
+        `${file} function ${begin.functionName} issues BEGIN outside an approved transaction boundary`,
+      );
+    }
+  }
+  return problems.sort();
+}
+
 function isExported(node: { readonly modifiers?: ts.NodeArray<ts.ModifierLike> }): boolean {
   return node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
 }
@@ -409,11 +504,22 @@ function contextBoundaryProblems(units: readonly SourceUnit[]): string[] {
     ...databaseClientImportProblems(units),
     ...connectionConstructionProblems(units),
     ...dataFunctionParameterProblems(units),
+    ...transactionOpenerProblems(units),
   ].sort();
 }
 
 describe("INV-TEN-004 / INV-AUTH-001: data access requires an explicit context", () => {
   const units = sourceFiles(REPO_ROOT).map(sourceUnit);
+
+  it("INV-TEN-004: has exactly one application transaction opener", () => {
+    const applicationUnit = units.find(
+      (unit) => repositoryPath(unit.file) === APPLICATION_CONNECTION_SITE,
+    );
+    expect(applicationUnit).toBeDefined();
+    expect(transactionBegins(applicationUnit as SourceUnit)).toEqual([
+      { functionName: "withTenantTransaction" },
+    ]);
+  });
 
   it("has repository source and transaction-taking functions to check", () => {
     const dataFunctions = units
@@ -440,7 +546,7 @@ describe("INV-TEN-004 / INV-AUTH-001: data access requires an explicit context",
     ]);
   });
 
-  it("rejects client construction outside the administrative site and test harness", () => {
+  it("rejects client construction outside the three exact connection sites", () => {
     expect(
       contextBoundaryProblems([
         {
@@ -460,6 +566,20 @@ describe("INV-TEN-004 / INV-AUTH-001: data access requires an explicit context",
       "packages/db/src/leaked-client.ts constructs a database client with new Client",
       "packages/db/src/leaked-pool.ts constructs a database client with new Pool",
       "packages/db/src/leaked-postgres.ts constructs a database client with postgres(...)",
+    ]);
+  });
+
+  it("INV-TEN-004: rejects a second transaction opener even beside the approved helper", () => {
+    expect(
+      contextBoundaryProblems([
+        {
+          file: APPLICATION_CONNECTION_SITE,
+          source:
+            'export async function openAnotherTransaction(client: Connection) { await client.query("begin"); }',
+        },
+      ]),
+    ).toEqual([
+      `${APPLICATION_CONNECTION_SITE} function openAnotherTransaction issues BEGIN outside an approved transaction boundary`,
     ]);
   });
 
