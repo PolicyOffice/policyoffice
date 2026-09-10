@@ -148,14 +148,30 @@ Written one at a time, as the authorization epic was.
 
 | | What | Status |
 |---|---|---|
-| **POL-029** | Session lifecycle over the existing `0003` schema: issue, resolve, refresh idle, revoke. No routes, no UI | **written** |
-| POL-030 | The request context: a principal-carrying context assembled from a session, and `decide()` called at a real entry point for the first time | after POL-029 |
-| POL-031 | Sign-in and sign-out, and the author's minimal path — create, draft, submit | after POL-030 |
-| POL-032 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
-| POL-033 | **The reader view**, built to `information-architecture.md` | after POL-031 |
-| POL-034 | Playwright drives the reference flow with three principals | last |
+| POL-029 (#117) | Session lifecycle over the existing `0003` schema: issue, resolve, refresh idle, revoke. No routes, no UI | **merged** #122 |
+| **POL-030 (#125)** | `ADR-0001` § 3's one transaction helper, and the `app_role` connection the application does not yet have | **ready** |
+| POL-031 | The request context: a session resolved into a principal-carrying context, and `decide()` called at a real entry point for the first time | after POL-030 |
+| POL-032 | Sign-in and sign-out, and the author's minimal path — create, draft, submit | after POL-031 |
+| POL-033 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
+| POL-034 | **The reader view**, built to `information-architecture.md` | after POL-032 |
+| POL-035 | Playwright drives the reference flow with three principals | last |
 
-**POL-032 is unblocked.** Approval configurability was answered the same day as decision 4 —
+**Renumbered on 2026-09-10: what was POL-030 became two tickets.** Writing it revealed that the
+request context has a prerequisite nobody had noticed — **`ADR-0001` § 3's transaction helper does
+not exist.** `withTenant` is the test harness, named as such in the architecture test; production's
+only connection constructor is *administrative*, and the application has no `app_role` connection
+at all. So every domain function taking an `AuditTransaction` is currently reachable only from
+tests.
+
+It is a separate ticket rather than a bigger one because **POL-026 made client construction
+bounded**: `CONNECTION_SITES` holds two entries and its comment says *"Production has one
+administrative constructor."* Adding an application pool makes it three, and a boundary drawn one
+ticket ago should be widened in a diff a reviewer sees on its own rather than inside a feature.
+POL-030 also closes the first of `ADR-0001`'s two *Still to verify* items — whether Drizzle can be
+driven entirely through a caller-supplied handle, which is what makes the one-helper rule
+enforceable at all.
+
+**POL-033 is unblocked.** Approval configurability was answered the same day as decision 4 —
 `open-decisions.md` § 4, **option A**: one or two seeded template versions per governance
 profile, runs bind by identifier, no template editor ships. The approval subsystem beneath the
 inbox — `approval_run`, `approval_stage`, `approval_task`, `approval_decision`,
@@ -169,8 +185,9 @@ hard-coded template identifier, or a seeded row with its authoring columns left 
 into a backfill. Those columns already exist in `data-model.md`, so this costs nothing to get
 right and is an acceptance criterion in whichever ticket seeds them.
 
-That ticket sits between POL-031 and POL-032 and is not written yet — the approval subsystem is
-several tickets, not one, and decomposing it is the next specification job after POL-030 lands.
+That ticket sits between POL-032 and POL-033 and is not written yet — the approval subsystem is
+several tickets, not one, and decomposing it is the specification job that follows the request
+context, not this ticket.
 
 ## The work, in dependency order
 
@@ -179,13 +196,13 @@ Not tickets yet — tickets follow the decisions above. This is the shape.
 | Group | What it covers | Blocked by |
 |---|---|---|
 | ~~**Authorization**~~ | The evaluator, grants, the capability matrix and its CI gate | **done** — POL-023…027 |
-| **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | **unblocked** — POL-029 |
-| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **unblocked** — decompose after POL-030 |
+| **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | POL-029 **merged**; sign-in is POL-032 |
+| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **unblocked** — decompose after POL-031 |
 | **Audience and attestation** | Applicability resolution, assignment, acknowledgement | Decision 1 |
-| **Read paths** | The register, a version's history, the audit trail as a person can read it | **unblocked** — POL-033 |
+| **Read paths** | The register, a version's history, the audit trail as a person can read it | **unblocked** — POL-034 |
 | **Review cases** | Scheduled review, completion, the obligations that survive it | Decision 1 |
 | **Evidence packs** | Assembly, the manifest, byte-exact verification outside the application | Everything above |
-| **Playwright** | The flow driven through the interface, carried from Phase 2 | **unblocked** — POL-034 |
+| **Playwright** | The flow driven through the interface, carried from Phase 2 | **unblocked** — POL-035 |
 
 Two items carry forward from Phase 2 with their triggers recorded there rather than repeated
 here: **Neon restore timing**, due before any real data exists, and the **authorization
