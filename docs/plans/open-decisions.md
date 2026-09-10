@@ -20,7 +20,7 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 1 | Pilot `LegalEntity` capability | First migration, physical model | Schema-complete, behaviour-minimal | **Decided 2026-08-24** |
 | 2 | Authoring model and canonical content | Content storage, hashing, diff, editor | File-centric for the Pilot | **Decided 2026-08-24** |
 | 3 | `Space` semantics | Register navigation | One Space per tenant in the Pilot | Open — does not block |
-| 4 | Pilot workflow configurability | Approval implementation, admin scope | Template-backed, not customer-editable | Open — does not block |
+| 4 | Pilot workflow configurability | Approval implementation, admin scope | **Template-backed, not customer-editable** | **Decided 2026-09-10** — option A |
 | 5 | Pilot applicability complexity | Campaign audience, register filters | **Explicit audience lists** | **Decided 2026-09-08** — option A, by delegation |
 | 6 | Licence | Publishing the repository | PolyForm Shield 1.0.0 | **Decided 2026-08-24** |
 | 7 | Data residency and region | ADR-000 and every infrastructure ADR | One EU region, stated completely | **Decided 2026-08-24** |
@@ -29,9 +29,10 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 10 | Machine-readable governance positioning | Public positioning and roadmap pressure, not architecture | Build the substrate, hold the claim until the Pilot | Open — does not block |
 | 11 | Golden-slice interface scope | Sessions, read paths and Playwright — three of eight Phase 3 groups | **Minimal, except approval inbox and reader view** | **Decided 2026-09-10** — option B |
 
-Decisions 1, 2, 6, 7, 8 and 11 are answered. Phase 1 is complete, **Phase 2 is unblocked**,
-and decision 11 unblocks the rest of Phase 3. The licensor is recorded and `LICENSE` is
-committed. Decisions 3, 4 and 5 shape Pilot scope and stop nothing. Decision 10 is a positioning question with no architectural consequence —
+Decisions 1, 2, 4, 6, 7, 8 and 11 are answered. Phase 1 is complete, **Phase 2 is unblocked**,
+and decisions 11 and 4 together unblock the rest of Phase 3. The licensor is recorded and
+`LICENSE` is committed. **Decision 3 is the only open one that shapes Pilot scope**, and it
+stops nothing. Decision 10 is a positioning question with no architectural consequence —
 the constraints it would rest on are already recorded in
 `docs/architecture/machine-access.md`.
 
@@ -123,6 +124,8 @@ access. That property is what makes this decision cheap.
 
 ## 4 — Fixed workflow or configurable templates in the Pilot
 
+**Decided 2026-09-10 — option A**, by the founder. Template-backed, not customer-editable.
+
 **Context.** `approval-workflows.md` requires that runs bind to an immutable template
 version and a frozen participant set (INV-APR-010, INV-APR-012). That is a structural
 requirement. Whether customers can *edit* templates in the Pilot is a scope question.
@@ -136,11 +139,25 @@ requirement. Whether customers can *edit* templates in the Pilot is a scope ques
 **Recommendation: A.** C is the option to avoid — it is cheaper this month and makes every
 historical approval uninterpretable the first time the workflow is edited.
 
-**Reversibility.** A → B is purely additive. C → anything requires reconstructing what
-each historical run actually ran under, which by then nobody knows.
+**Reversibility.** A → B is purely additive, and **checked rather than asserted** when A was
+chosen. `data-model.md` § *Approval* already carries the authoring shape: `workflow_template`
+has `status` and `active_version_id`, and `workflow_template_version` has `published_at` and
+`published_by` — columns that only mean anything if a template is eventually authored. Both are
+tenant-owned under the § *Every tenant-owned table* convention, and the model has no concept of
+a product-global table, so B changes who writes the rows and not what the rows are. B is an
+editor plus validation against mandated authority (INV-APR-020); it is not a re-model.
 
-**Blocks.** Approval implementation scope and seeding. Not the schema, which is the same
-under A and B.
+**One condition on that, and it belongs in the implementing ticket.** Seeded templates under A
+must be written as **ordinary tenant-owned rows** with `published_at` and `published_by` set —
+not a hard-coded identifier, not a row with authoring columns left null. If seeding takes a
+shortcut the editor would not, then B needs a backfill and A → B stops being additive. This is
+the only way to get the reversibility wrong, so it is an acceptance criterion rather than a note.
+
+C → anything requires reconstructing what each historical run actually ran under, which by then
+nobody knows.
+
+**Blocks.** Was blocking approval implementation scope and seeding — and, through POL-032, the
+approval inbox. Not the schema, which is the same under A and B.
 
 ---
 
@@ -462,6 +479,7 @@ file-centric* is a question that will be asked again.
 | 6 | Licence | 2026-08-24 | PolyForm Shield 1.0.0, and the repository goes public. Licensor: Aksel Costa, personally, pending incorporation | `LICENSE`, committed 2026-08-25 |
 | — | Application language | 2026-08-24 | TypeScript end to end. The founder reviews every agent-written pull request, and their fluency dominates any technical argument | `ADR-0000` |
 | — | Repository visibility | 2026-08-24 | Public. The CI gate list assumes unlimited Actions minutes | `ADR-0000`, and decisions 6 and 8 |
+| 4 | Pilot workflow configurability | 2026-09-10 | **Template-backed, not customer-editable.** One or two seeded template versions per governance profile; runs bind by identifier; no template editor ships. A → B stays additive because the authoring columns already exist and are tenant-owned | Phase 3: the approval group, POL-032 onward |
 | 11 | Golden-slice interface scope | 2026-09-10 | **Minimal, except the approval inbox and reader view**, which follow `information-architecture.md`. The page ordering there is a governance requirement, not finish | Phase 3: the sessions, read-path and Playwright groups |
 | 8 | Product and repository name | 2026-08-25 | **PolicyOffice.** `.eu`, `.ee`, `.io` and the GitHub org are free; `.com` is held by a brand marketplace at roughly €7k and treated as a later option | Phase 2: the licence file, the repository name, package names |
 
