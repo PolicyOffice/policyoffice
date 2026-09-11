@@ -2,13 +2,17 @@
   "name": "@policyoffice/web",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "predev": "node --experimental-strip-types src/startup-check.ts",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "prestart": "node --experimental-strip-types src/startup-check.ts",
     "start": "next start",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@policyoffice/db": "workspace:*",
     "@policyoffice/domain": "workspace:*",
     "next": "^16.3.2",
     "react": "^19.2.8",
