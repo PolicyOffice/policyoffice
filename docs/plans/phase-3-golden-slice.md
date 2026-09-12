@@ -151,8 +151,8 @@ Written one at a time, as the authorization epic was.
 | POL-029 (#117) | Session lifecycle over the existing `0003` schema: issue, resolve, refresh idle, revoke. No routes, no UI | **merged** #122 |
 | POL-030 (#125) | `ADR-0001` § 3's one transaction helper, and the `app_role` connection the application did not have | **merged** #127 |
 | POL-031 (#130) | The request context, and the first capability ever enforced at an entry point | **merged** #133 |
-| **POL-032 (#134)** | Sign-in and sign-out, so a person rather than a test can hold a session | **ready** |
-| POL-033 | The author's minimal path — create, draft, submit | after POL-032 |
+| POL-032 (#134) | Sign-in and sign-out, so a person rather than a test can hold a session | **merged** #136 |
+| **POL-033 (#137)** | The author's path — create, draft, submit. Four capabilities, each enforced separately | **ready** |
 | POL-034 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
 | POL-035 | **The reader view**, built to `information-architecture.md` | after POL-033 |
 | POL-036 | Playwright drives the **full** reference flow with three principals | last |
@@ -252,6 +252,17 @@ migration is attributed to a docs change.
 
 Nothing needs redoing. It is recorded here because someone looking for when this gate arrived
 will not find it by reading pull request titles.
+
+## Waiting on the founder
+
+- **The applied ruleset is one context behind again.** POL-032 added `playwright critical suite` to
+  `.github/rulesets/main.json` — **16 committed, 15 applied**. The job exists and reported green on
+  #136, which is the precondition, so it is safe to apply. Live configuration is not an agent's to
+  change on its own initiative; both previous applications were founder-directed in session.
+
+  ```bash
+  gh api repos/PolicyOffice/policyoffice/rulesets/21949052 --jq '[.rules[]|select(.type=="required_status_checks")|.parameters.required_status_checks[].context]|length'
+  ```
 
 ## Open at the end of the 2026-09-10 session
 
