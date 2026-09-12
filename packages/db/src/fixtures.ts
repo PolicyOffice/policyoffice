@@ -76,6 +76,7 @@ interface CredentialFixture {
   id: string;
   userId: string;
   secretHash: string;
+  params: Readonly<Record<string, string | number | boolean>>;
 }
 
 interface SessionFixture {
@@ -197,6 +198,19 @@ function systemRoleFixtures(prefix: "a" | "b" | "d"): readonly SecurityRoleFixtu
   }));
 }
 
+const ARGON2ID_FIXTURE_PARAMETERS = Object.freeze({
+  algorithm: "argon2id",
+  version: 19,
+  memoryCostKiB: 65_536,
+  timeCost: 3,
+  parallelism: 4,
+  hashLength: 32,
+});
+const TEST_PASSWORD_HASH =
+  "$argon2id$v=19$m=65536,p=4,t=3$cG9saWN5b2ZmaWNlLXRlc3Qh$4dEObDfZbKcTqdHUDjE+qBRVF9OlvjApxAKP9RahUxM";
+const DEVELOPMENT_PASSWORD_HASH =
+  "$argon2id$v=19$m=65536,p=4,t=3$cG9saWN5b2ZmaWNlLWRldiE$0p1llcWXkex0h8UtMfQtXRn5yU5aMbItkAcZ/81tSek";
+
 function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
   const userId = fixtureId(prefix, 1, 1);
   const groupId = fixtureId(prefix, 4, 1);
@@ -215,7 +229,12 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
       },
     ],
     credentials: [
-      { id: fixtureId(prefix, 2, 1), userId, secretHash: `fixture-${prefix}-password-hash` },
+      {
+        id: fixtureId(prefix, 2, 1),
+        userId,
+        secretHash: TEST_PASSWORD_HASH,
+        params: ARGON2ID_FIXTURE_PARAMETERS,
+      },
     ],
     sessions: [{ id: fixtureId(prefix, 3, 1), userId, tokenHash: `fixture-${prefix}-token-hash` }],
     groups: [{ id: groupId, name: "Policy Administrators" }],
@@ -341,7 +360,8 @@ function developmentTenant(): TenantFixture {
       {
         id: fixtureId(prefix, 2, 1),
         userId: users[0]?.id ?? "",
-        secretHash: "fixture-development-password-hash",
+        secretHash: DEVELOPMENT_PASSWORD_HASH,
+        params: ARGON2ID_FIXTURE_PARAMETERS,
       },
     ],
     sessions: [
@@ -566,9 +586,16 @@ async function insertIdentity(
     await sql.query(
       `insert into user_credential (
          tenant_id, id, created_at, updated_at, row_version, user_id, kind, secret_hash, params
-       ) values ($1, $2, $3, $3, 1, $4, 'PASSWORD', $5, '{}'::jsonb)
+       ) values ($1, $2, $3, $3, 1, $4, 'PASSWORD', $5, $6::jsonb)
        on conflict (tenant_id, id) do nothing`,
-      [item.tenant.id, credential.id, fixture.createdAt, credential.userId, credential.secretHash],
+      [
+        item.tenant.id,
+        credential.id,
+        fixture.createdAt,
+        credential.userId,
+        credential.secretHash,
+        credential.params,
+      ],
     );
   }
   for (const session of item.sessions) {

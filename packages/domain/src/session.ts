@@ -76,6 +76,10 @@ export interface RevokeSessionInput extends SessionAuditContext {
   readonly sessionId: string;
 }
 
+export interface RevokeSessionTokenInput extends SessionAuditContext {
+  readonly token: string;
+}
+
 export interface RevokeAllSessionsInput extends SessionAuditContext {
   readonly userId: string;
 }
@@ -321,9 +325,17 @@ export async function verifyPasswordCredential(
     [input.tenantId, input.contactEmail],
   );
   const row = rows[0];
-  if (!row || rows.length !== 1) return null;
+  if (!row || rows.length !== 1) {
+    // Unknown users, deactivated users and users without a PASSWORD credential must pay
+    // one password-hashing cost just as a stored credential pays one verification cost.
+    await verifier.hash(input.password);
+    return null;
+  }
   const params = passwordHashParameters(row.params);
-  if (params === null) return null;
+  if (params === null) {
+    await verifier.hash(input.password);
+    return null;
+  }
 
   const matches = await verifier.verify(input.password, {
     secretHash: row.secret_hash,
@@ -384,6 +396,31 @@ export async function revokeSession(
       where tenant_id = $1::uuid and id = $2::uuid
     returning id, user_id`,
     [input.tenantId, input.sessionId],
+  );
+  const row = rows[0];
+  if (!row || rows.length !== 1) return null;
+  const emittedEvent = await emitAuditEvent(
+    transaction,
+    revocationEvent(input, row, "REVOKE_SESSION"),
+  );
+  return Object.freeze({
+    sessionIds: Object.freeze([row.id]),
+    emittedEvents: Object.freeze([emittedEvent]),
+  });
+}
+
+/** Revoke the bearer session presented at sign-out without exposing its id in the cookie. */
+export async function revokeSessionByToken(
+  transaction: AuditTransaction,
+  input: RevokeSessionTokenInput,
+): Promise<RevokedSessions | null> {
+  validateAuditContext(input);
+  requireText(input.token, "token");
+  const { rows } = await transaction.query<RevokedSessionRow>(
+    `delete from user_session
+      where tenant_id = $1::uuid and token_hash = $2::text
+    returning id, user_id`,
+    [input.tenantId, tokenHash(input.token)],
   );
   const row = rows[0];
   if (!row || rows.length !== 1) return null;

@@ -112,6 +112,28 @@ describe("session domain boundary", () => {
     expect(query.mock.calls[0]?.[0]).not.toContain("audit_event");
   });
 
+  it("INV-AUTH-014: equalises the password work for an unavailable principal", async () => {
+    const verifier: PasswordVerifier = {
+      hash: vi.fn(async (secret: string) => ({
+        secretHash: `fake:${secret}`,
+        params: { algorithm: "fake" },
+      })),
+      verify: vi.fn(async () => false),
+    };
+    const query = vi.fn(async () => ({ rows: [] }));
+
+    await expect(
+      verifyPasswordCredential({ query } as unknown as AuditTransaction, verifier, {
+        tenantId: TENANT,
+        contactEmail: "absent@example.test",
+        password: "not logged",
+      }),
+    ).resolves.toBeNull();
+
+    expect(verifier.hash).toHaveBeenCalledOnce();
+    expect(verifier.verify).not.toHaveBeenCalled();
+  });
+
   it("INV-AUTH-014: contains no retained-session revocation path", () => {
     const source = readFileSync(
       new URL("../packages/domain/src/session.ts", import.meta.url),

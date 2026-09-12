@@ -1,12 +1,15 @@
 import {
   AUTHORIZATION_PRINCIPAL_TYPES,
   resolveSession,
+  verifyPasswordCredential,
   type AuditTransaction,
+  type PasswordVerifier,
   type PrincipalRef,
 } from "../../domain/src/index.js";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool, type Client, type PoolClient } from "pg";
 import type { AuthorizationTransaction } from "./authorization.js";
+import { argon2idPasswordVerifier } from "./argon2id.js";
 import * as schema from "./schema.js";
 
 const DEFAULT_APPLICATION_DATABASE_URL = "postgres://app_role:app_role@localhost:5432/policyoffice";
@@ -23,6 +26,15 @@ export interface SessionTenantContext {
   readonly tenantId: string;
   readonly sessionToken: string;
   readonly instant: Date;
+}
+
+/** The sign-in boundary before a local credential resolves a principal. */
+export interface CredentialTenantContext {
+  readonly tenantId: string;
+  readonly credential: Readonly<{
+    contactEmail: string;
+    password: string;
+  }>;
 }
 
 /**
@@ -95,19 +107,48 @@ function sessionTenantContext(value: unknown): SessionTenantContext {
   });
 }
 
+function credentialTenantContext(value: unknown): CredentialTenantContext {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError("context must be an object");
+  }
+  const input = value as Record<string, unknown>;
+  if (typeof input.tenantId !== "string" || !UUID.test(input.tenantId)) {
+    throw new TypeError("context.tenantId must be a UUID");
+  }
+  if (typeof input.credential !== "object" || input.credential === null) {
+    throw new TypeError("context.credential must be an object");
+  }
+  const credential = input.credential as Record<string, unknown>;
+  if (typeof credential.contactEmail !== "string" || credential.contactEmail.trim().length === 0) {
+    throw new TypeError("context.credential.contactEmail is required");
+  }
+  if (typeof credential.password !== "string" || credential.password.trim().length === 0) {
+    throw new TypeError("context.credential.password is required");
+  }
+  return Object.freeze({
+    tenantId: input.tenantId,
+    credential: Object.freeze({
+      contactEmail: credential.contactEmail,
+      password: credential.password,
+    }),
+  });
+}
+
 function transactionContext(
-  value: TenantContext | SessionTenantContext,
-): TenantContext | SessionTenantContext {
+  value: TenantContext | SessionTenantContext | CredentialTenantContext,
+): TenantContext | SessionTenantContext | CredentialTenantContext {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError("context must be an object");
   }
   const input = value as unknown as Record<string, unknown>;
   const carriesPrincipal = Object.hasOwn(input, "principal");
   const carriesSession = Object.hasOwn(input, "sessionToken") || Object.hasOwn(input, "instant");
-  if (carriesPrincipal === carriesSession) {
-    throw new TypeError("context must carry exactly one of principal or sessionToken and instant");
+  const carriesCredential = Object.hasOwn(input, "credential");
+  if (Number(carriesPrincipal) + Number(carriesSession) + Number(carriesCredential) !== 1) {
+    throw new TypeError("context must carry exactly one of principal, session, or credential");
   }
-  return carriesPrincipal ? tenantContext(input) : sessionTenantContext(input);
+  if (carriesPrincipal) return tenantContext(input);
+  return carriesSession ? sessionTenantContext(input) : credentialTenantContext(input);
 }
 
 function queryHandle(client: ApplicationClient): AuditTransaction {
@@ -144,16 +185,25 @@ export function withTenantTransaction<T>(
   contextInput: TenantContext,
   fn: (transaction: ApplicationTransaction) => Promise<T>,
   connectionSource?: ApplicationConnectionSource,
+  passwordVerifier?: PasswordVerifier,
 ): Promise<T>;
 export function withTenantTransaction<T>(
   contextInput: SessionTenantContext,
   fn: (transaction: ApplicationTransaction) => Promise<T>,
   connectionSource?: ApplicationConnectionSource,
+  passwordVerifier?: PasswordVerifier,
+): Promise<T | null>;
+export function withTenantTransaction<T>(
+  contextInput: CredentialTenantContext,
+  fn: (transaction: ApplicationTransaction) => Promise<T>,
+  connectionSource?: ApplicationConnectionSource,
+  passwordVerifier?: PasswordVerifier,
 ): Promise<T | null>;
 export async function withTenantTransaction<T>(
-  contextInput: TenantContext | SessionTenantContext,
+  contextInput: TenantContext | SessionTenantContext | CredentialTenantContext,
   fn: (transaction: ApplicationTransaction) => Promise<T>,
   connectionSource: ApplicationConnectionSource = applicationPool,
+  passwordVerifier: PasswordVerifier = argon2idPasswordVerifier,
 ): Promise<T | null> {
   const input = transactionContext(contextInput);
   if (typeof fn !== "function") throw new TypeError("fn must be a function");
@@ -174,11 +224,23 @@ export async function withTenantTransaction<T>(
     let context: TenantContext;
     if ("principal" in input) {
       context = input;
-    } else {
+    } else if ("sessionToken" in input) {
       const principal = await resolveSession(queryHandle(client), {
         tenantId: input.tenantId,
         token: input.sessionToken,
         instant: input.instant,
+      });
+      if (principal === null) {
+        await client.query("rollback");
+        transactionOpen = false;
+        return null;
+      }
+      context = Object.freeze({ tenantId: input.tenantId, principal });
+    } else {
+      const principal = await verifyPasswordCredential(queryHandle(client), passwordVerifier, {
+        tenantId: input.tenantId,
+        contactEmail: input.credential.contactEmail,
+        password: input.credential.password,
       });
       if (principal === null) {
         await client.query("rollback");

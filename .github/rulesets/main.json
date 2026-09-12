@@ -31,6 +31,7 @@
           { "context": "unit tests" },
           { "context": "property-based tests" },
           { "context": "integration tests" },
+          { "context": "playwright critical suite" },
           { "context": "tenant-isolation suite" },
           { "context": "authorization matrix" },
           { "context": "audit-event completeness" },
