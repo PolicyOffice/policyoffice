@@ -109,6 +109,11 @@ This is the `git add -A` hazard wearing a different hat — *see `CLAUDE.md` § 
 is worse than the commit version, because nothing looks wrong. The summary reports everything it
 did run as passing, and the crash reads as vitest flake.
 
+**That shared checkout no longer exists** — see § *Where each agent works*. The way this reaches
+you now is a session pointed at `PolicyManagement/` instead of `policyoffice-claude/`, which is
+where Codex's in-progress work lives and is exactly what you would be running against. It happened
+on 2026-09-12.
+
 **So: before quoting a suite count as evidence, reconcile it.** `git status --short` first, and if
 the file count does not match `origin/main` plus whatever the branch adds, the extra files belong
 to the other agent and the run means nothing. A count that cannot be reconciled is not a green

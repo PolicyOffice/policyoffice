@@ -97,14 +97,19 @@ orchestration had broken. It had not — the design was being worked around.
 
 ## Reconcile a suite count before citing it
 
-Codex works in the same checkout, so `vitest`'s globs can collect its half-written test files.
-That produces a run which reports everything it executed as passing while two workers crash in a
-footnote — and it looks exactly like flake.
+`vitest` collects by glob, so a run in a tree that also holds another agent's half-written test
+files reports everything it executed as passing while two workers crash in a footnote — and it looks
+exactly like flake.
 
-Check `git status --short`, and reconcile the file count against `origin/main` plus whatever your
-branch adds. **If it does not add up, the tree is not yours and the run proves nothing.** On
-2026-09-10 this was misdiagnosed as a Node version problem and asserted in two documents before
-being checked; a clean `origin/main` behaves identically on Node 20 and 24.
+That happened on 2026-09-10, in the shared checkout that preceded the worktree split. **Under the
+split it cannot happen from your own worktree.** The way it reaches you now is the one in the next
+section: a session pointed at `PolicyManagement/`, where Codex's in-progress work is exactly what
+you would be running against.
+
+So reconcile the number before citing it. Count the files against `origin/main` plus whatever your
+branch adds. **If it does not add up, the tree is not yours and the run proves nothing** — and that
+is the check that caught it, after the crash had already been misdiagnosed as a Node version problem
+and asserted in two documents. A clean `origin/main` behaves identically on Node 20 and 24.
 
 ## Committing: check which worktree you are in
 
