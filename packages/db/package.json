@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./application-transaction": "./src/application-transaction.ts",
+    "./authorization": "./src/authorization.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",

@@ -1,5 +1,6 @@
 import {
   AUTHORIZATION_PRINCIPAL_TYPES,
+  resolveSession,
   type AuditTransaction,
   type PrincipalRef,
 } from "../../domain/src/index.js";
@@ -15,6 +16,13 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export interface TenantContext {
   readonly tenantId: string;
   readonly principal: PrincipalRef;
+}
+
+/** The request-boundary shape used until its opaque session token resolves a principal. */
+export interface SessionTenantContext {
+  readonly tenantId: string;
+  readonly sessionToken: string;
+  readonly instant: Date;
 }
 
 /**
@@ -66,17 +74,60 @@ function tenantContext(value: unknown): TenantContext {
   });
 }
 
-function transactionHandle(
-  client: ApplicationClient,
-  context: TenantContext,
-): ApplicationTransaction {
+function sessionTenantContext(value: unknown): SessionTenantContext {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError("context must be an object");
+  }
+  const input = value as Record<string, unknown>;
+  if (typeof input.tenantId !== "string" || !UUID.test(input.tenantId)) {
+    throw new TypeError("context.tenantId must be a UUID");
+  }
+  if (typeof input.sessionToken !== "string") {
+    throw new TypeError("context.sessionToken must be a string");
+  }
+  if (!(input.instant instanceof Date) || Number.isNaN(input.instant.valueOf())) {
+    throw new TypeError("context.instant must be a valid Date");
+  }
   return Object.freeze({
-    context,
-    drizzle: drizzle(client, { schema }),
+    tenantId: input.tenantId,
+    sessionToken: input.sessionToken,
+    instant: new Date(input.instant.valueOf()),
+  });
+}
+
+function transactionContext(
+  value: TenantContext | SessionTenantContext,
+): TenantContext | SessionTenantContext {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError("context must be an object");
+  }
+  const input = value as unknown as Record<string, unknown>;
+  const carriesPrincipal = Object.hasOwn(input, "principal");
+  const carriesSession = Object.hasOwn(input, "sessionToken") || Object.hasOwn(input, "instant");
+  if (carriesPrincipal === carriesSession) {
+    throw new TypeError("context must carry exactly one of principal or sessionToken and instant");
+  }
+  return carriesPrincipal ? tenantContext(input) : sessionTenantContext(input);
+}
+
+function queryHandle(client: ApplicationClient): AuditTransaction {
+  return Object.freeze({
     async query<Row extends Record<string, unknown>>(text: string, values?: unknown[]) {
       const result = await client.query(text, values);
       return { rows: result.rows as Row[] };
     },
+  });
+}
+
+function transactionHandle(
+  client: ApplicationClient,
+  context: TenantContext,
+): ApplicationTransaction {
+  const query = queryHandle(client);
+  return Object.freeze({
+    context,
+    drizzle: drizzle(client, { schema }),
+    query: query.query,
   });
 }
 
@@ -89,12 +140,22 @@ function release(client: ApplicationClient): void {
  * Context is validated before a connection is acquired, and the callback is not invoked
  * until the transaction-local tenant setting succeeds.
  */
-export async function withTenantTransaction<T>(
+export function withTenantTransaction<T>(
   contextInput: TenantContext,
   fn: (transaction: ApplicationTransaction) => Promise<T>,
+  connectionSource?: ApplicationConnectionSource,
+): Promise<T>;
+export function withTenantTransaction<T>(
+  contextInput: SessionTenantContext,
+  fn: (transaction: ApplicationTransaction) => Promise<T>,
+  connectionSource?: ApplicationConnectionSource,
+): Promise<T | null>;
+export async function withTenantTransaction<T>(
+  contextInput: TenantContext | SessionTenantContext,
+  fn: (transaction: ApplicationTransaction) => Promise<T>,
   connectionSource: ApplicationConnectionSource = applicationPool,
-): Promise<T> {
-  const context = tenantContext(contextInput);
+): Promise<T | null> {
+  const input = transactionContext(contextInput);
   if (typeof fn !== "function") throw new TypeError("fn must be a function");
 
   const client = await connectionSource.connect();
@@ -104,10 +165,27 @@ export async function withTenantTransaction<T>(
     transactionOpen = true;
     const setting = await client.query<{ application_role: string }>(
       `select set_config('app.tenant_id', $1, true), current_user as application_role`,
-      [context.tenantId],
+      [input.tenantId],
     );
     if (setting.rows[0]?.application_role !== "app_role") {
       throw new Error("application transaction requires app_role");
+    }
+
+    let context: TenantContext;
+    if ("principal" in input) {
+      context = input;
+    } else {
+      const principal = await resolveSession(queryHandle(client), {
+        tenantId: input.tenantId,
+        token: input.sessionToken,
+        instant: input.instant,
+      });
+      if (principal === null) {
+        await client.query("rollback");
+        transactionOpen = false;
+        return null;
+      }
+      context = Object.freeze({ tenantId: input.tenantId, principal });
     }
 
     const result = await fn(transactionHandle(client, context));

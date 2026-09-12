@@ -1,9 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
-import { withTenantTransaction, type TenantContext } from "./application-transaction.js";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+  withTenantTransaction,
+  type ApplicationTransaction,
+  type SessionTenantContext,
+  type TenantContext,
+} from "./application-transaction.js";
 
 const CONTEXT: TenantContext = Object.freeze({
   tenantId: "a0000000-0000-0000-0000-000000000001",
   principal: Object.freeze({ type: "USER", id: "a0000000-0000-0000-0001-000000000001" }),
+});
+const SESSION_CONTEXT: SessionTenantContext = Object.freeze({
+  tenantId: CONTEXT.tenantId,
+  sessionToken: "unknown-session-token",
+  instant: new Date("2026-09-11T09:00:00.000Z"),
 });
 
 type ConnectionSource = NonNullable<Parameters<typeof withTenantTransaction>[2]>;
@@ -21,6 +31,15 @@ function connectionSource(query: (text: string, values?: unknown[]) => Promise<u
 }
 
 describe("the application transaction boundary", () => {
+  it("exposes only authenticated handles to a session-token callback", () => {
+    type SessionOpener = <T>(
+      context: SessionTenantContext,
+      fn: (transaction: ApplicationTransaction) => Promise<T>,
+    ) => Promise<T | null>;
+
+    expectTypeOf(withTenantTransaction).toMatchTypeOf<SessionOpener>();
+  });
+
   it("INV-TEN-004: validates context and sets the tenant before yielding", async () => {
     const statements: string[] = [];
     const { source, release } = connectionSource(async (text) => {
@@ -89,6 +108,27 @@ describe("the application transaction boundary", () => {
       "select set_config('app.tenant_id', $1, true), current_user as application_role",
       "rollback",
     ]);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("INV-AUTH-001: rolls back and does not yield when a session does not resolve", async () => {
+    const statements: string[] = [];
+    const { source, release } = connectionSource(async (text) => {
+      statements.push(text);
+      return {
+        rows: text.includes("set_config") ? [{ application_role: "app_role" }] : [],
+      };
+    });
+    const fn = vi.fn(async () => undefined);
+
+    await expect(withTenantTransaction(SESSION_CONTEXT, fn, source)).resolves.toBeNull();
+    expect(fn).not.toHaveBeenCalled();
+    expect(statements.slice(0, 2)).toEqual([
+      "begin",
+      "select set_config('app.tenant_id', $1, true), current_user as application_role",
+    ]);
+    expect(statements[2]).toContain("from user_session session");
+    expect(statements.at(-1)).toBe("rollback");
     expect(release).toHaveBeenCalledOnce();
   });
 
