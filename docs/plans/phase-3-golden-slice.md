@@ -150,11 +150,22 @@ Written one at a time, as the authorization epic was.
 |---|---|---|
 | POL-029 (#117) | Session lifecycle over the existing `0003` schema: issue, resolve, refresh idle, revoke. No routes, no UI | **merged** #122 |
 | POL-030 (#125) | `ADR-0001` § 3's one transaction helper, and the `app_role` connection the application did not have | **merged** #127 |
-| **POL-031 (#130)** | The request context: a session resolved into a principal-carrying context, and `decide()` called at a real entry point for the first time | **ready** |
-| POL-032 | Sign-in and sign-out, and the author's minimal path — create, draft, submit | after POL-031 |
-| POL-033 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
-| POL-034 | **The reader view**, built to `information-architecture.md` | after POL-032 |
-| POL-035 | Playwright drives the reference flow with three principals | last |
+| POL-031 (#130) | The request context, and the first capability ever enforced at an entry point | **merged** #133 |
+| **POL-032 (#134)** | Sign-in and sign-out, so a person rather than a test can hold a session | **ready** |
+| POL-033 | The author's minimal path — create, draft, submit | after POL-032 |
+| POL-034 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
+| POL-035 | **The reader view**, built to `information-architecture.md` | after POL-033 |
+| POL-036 | Playwright drives the **full** reference flow with three principals | last |
+
+**Split again on 2026-09-12, and this is the last time it should be needed.** POL-032 was going to
+carry sign-in *and* the author's create/draft/submit path. Sign-in alone adds a third input shape to
+the one transaction opener — the same class of boundary change POL-031 made — and bundling three
+authoring routes behind it would hide that in a feature diff. The author path is POL-033.
+
+POL-032 also carries **one** Playwright spec rather than deferring all browser coverage to POL-036:
+sign in, see the register, sign out, register gone. It is the first flow that can be driven end to
+end, and proving the harness works on a two-page flow is cheaper than discovering it does not on a
+six-page one. POL-036 keeps the full three-principal flow.
 
 **Renumbered on 2026-09-10: what was POL-030 became two tickets.** Writing it revealed that the
 request context has a prerequisite nobody had noticed — **`ADR-0001` § 3's transaction helper does
