@@ -37,6 +37,7 @@ export { ARGON2ID_PARAMETERS, argon2idPasswordVerifier } from "./argon2id.js";
 export {
   withTenantTransaction,
   type ApplicationTransaction,
+  type CredentialTenantContext,
   type SessionTenantContext,
   type TenantContext,
 } from "./application-transaction.js";

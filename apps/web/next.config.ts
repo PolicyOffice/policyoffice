@@ -13,6 +13,9 @@ const config = (phase: string): NextConfig => {
     // The domain package is TypeScript source in this workspace; Next compiles it rather
     // than requiring a separate build step in development.
     transpilePackages: ["@policyoffice/db", "@policyoffice/domain"],
+    // Argon2 is a native server-only binding. Keep it outside the webpack bundle so Node
+    // loads the platform build installed for the running server.
+    serverExternalPackages: ["argon2"],
     // Workspace packages use explicit `.js` imports so their TypeScript output runs as
     // native ESM. During a source build, resolve those imports to the corresponding `.ts`
     // modules; emitted JavaScript keeps the production-safe extension unchanged.
@@ -22,6 +25,9 @@ const config = (phase: string): NextConfig => {
         ".mjs": [".mjs", ".mts"],
         ".cjs": [".cjs", ".cts"],
       };
+      // The generic Next external-package pass does not see this transitive import through
+      // the transpiled workspace package, so keep the native binding external explicitly.
+      webpackConfig.externals.push("argon2");
       return webpackConfig;
     },
     // Fail the build on a type error. ADR-0000 trades developer convenience for enforcement

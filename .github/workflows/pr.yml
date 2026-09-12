@@ -140,6 +140,47 @@ jobs:
         # while proving nothing (verification/README.md, finding 2).
         run: pnpm test:integration
 
+  playwright:
+    name: playwright critical suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: policyoffice
+          LANG: C
+          POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d policyoffice"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      MIGRATION_ADMIN_URL: postgres://postgres:postgres@localhost:5432/policyoffice
+      MIGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/policyoffice
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Build the schema and grant development logins
+        run: |
+          pnpm --filter @policyoffice/db migrate
+          pnpm --filter @policyoffice/db dev:credentials
+      - name: Install Chromium and its system dependencies
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Drive the critical sign-in flow
+        run: pnpm test:e2e
+      - name: Preserve screenshots and the browser report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-critical-suite
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: error
+          retention-days: 14
+
   tenant-isolation:
     name: tenant-isolation suite
     runs-on: ubuntu-latest

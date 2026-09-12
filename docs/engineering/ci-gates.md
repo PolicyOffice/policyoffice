@@ -33,7 +33,7 @@ gate — see `CONTRIBUTING.md`.
 | dependency review | **live** | `pr.yml` → `dependency-review` |
 | secret scanning + push protection | **live** | repository setting, enabled 2026-08-30 |
 | CodeQL | **live** | `codeql.yml` |
-| Playwright critical suite (Chromium) | *pending* | there is no user-visible surface to drive |
+| Playwright critical suite (Chromium) | **live** | `pr.yml` → `playwright`; signs in, reads the authorised register, signs out, and proves the session is gone |
 
 ## Scheduled
 
