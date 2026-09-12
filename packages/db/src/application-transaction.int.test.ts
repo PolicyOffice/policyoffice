@@ -104,6 +104,24 @@ describe("the application transaction boundary under forced RLS", () => {
     });
   });
 
+  it("INV-AUTH-001 / INV-TEN-004: resolves a session before yielding the one tenant handle", async () => {
+    const issued = await withTenantTransaction(context(TENANT_A, USER_A), async (transaction) =>
+      issueSession(transaction, {
+        tenantId: TENANT_A,
+        userId: USER_A,
+        userAgentClass: "POL-031 request bootstrap test",
+        instant: INSTANT,
+      }),
+    );
+
+    const observed = await withTenantTransaction(
+      { tenantId: TENANT_A, sessionToken: issued.token, instant: INSTANT },
+      async (transaction) => transaction.context,
+    );
+
+    expect(observed).toEqual(context(TENANT_A, USER_A));
+  });
+
   it("INV-TEN-001 / INV-TEN-002: makes a foreign user indistinguishable from an absent one", async () => {
     await withTenantTransaction(context(TENANT_A, USER_A), async (transaction) => {
       const foreign = await transaction.query<{ id: string }>(
