@@ -28,6 +28,7 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 9 | Human-readable rendering in evidence packs | One line of the pack layout | Ship originals in the Pilot; amend the layout | Open — does not block |
 | 10 | Machine-readable governance positioning | Public positioning and roadmap pressure, not architecture | Build the substrate, hold the claim until the Pilot | Open — does not block |
 | 11 | Golden-slice interface scope | Sessions, read paths and Playwright — three of eight Phase 3 groups | **Minimal, except approval inbox and reader view** | **Decided 2026-09-10** — option B |
+| 12 | How a request finds its customer | The request context, sign-in, and everything downstream | **One installation per customer in the Pilot** | **Decided 2026-09-11** — option A |
 
 Decisions 1, 2, 4, 6, 7, 8 and 11 are answered. Phase 1 is complete, **Phase 2 is unblocked**,
 and decisions 11 and 4 together unblock the rest of Phase 3. The licensor is recorded and
@@ -466,6 +467,50 @@ demonstrations misrepresenting the product in the meantime.
 
 ---
 
+## 12 — How a request finds its customer
+
+**Decided 2026-09-11 — option A**, by the founder, on `#128`. One installation per customer; the
+tenant comes from deployment configuration.
+
+**Why it was a question at all.** POL-030 landed the one transaction helper, and it exposed a
+circular dependency that had been invisible while nothing ran against the database from a process:
+reading a session means querying `user_session`, which is tenant-scoped under forced row-level
+security — so the tenant must already be known. But the session is what identifies the user.
+
+It was specified nowhere. `ADR-0002` says the cookie carries *"an opaque, high-entropy identifier
+and nothing else"*. `information-architecture.md` § *Addresses* lists every public URL and none
+carries a customer segment. The `tenant` table has no host, slug or domain column.
+
+**Under option A the question dissolves** rather than being answered: the process serves exactly one
+customer, so the tenant is known before a request arrives. POL-031 puts it behind a single named
+seam so a later change replaces one function.
+
+**What is deliberately still open.** A shared commercial deployment needs a real answer, and the
+option set is wider than it first appeared:
+
+- **Tenant-specific hostnames** (`wallester.policyoffice.eu`) for organisation discovery and
+  enterprise SSO routing — as **context**, never as the security boundary.
+- **Authentication above the tenant.** Session bootstrap records are arguably *platform* data, not
+  tenant-owned domain data — the same side of the boundary as `tenant` itself, which
+  `data-model.md` already calls *"the one table without `tenant_id` and without RLS — it is the
+  root"*. A platform plane already exists; the session table may simply be on the wrong side of it.
+  This is what ClickUp, Notion, Linear and Atlassian all do, and it is what makes one identity with
+  memberships in several customers possible — an external compliance consultant working across three
+  clients is ordinary in this market, not exotic.
+
+Neither is decided, and neither is needed yet. **`ADR-0002` § 47** — *"Sessions live in the
+tenant-owned schema and are subject to ADR-0001 like everything else"* — is the sentence that
+created the circularity. It is **true under option A** and becomes wrong only in a shared
+deployment, so it keeps its wording until the decision that chooses one, and is amended there rather
+than pre-emptively.
+
+**Reversibility.** High. Public addresses carry no customer segment under any option, so nothing
+published breaks. The Pilot's tenant seam is the same seam a hostname resolver would fill.
+
+**Blocks.** Was blocking POL-031 and everything after it. Now unblocked.
+
+---
+
 ## Decided
 
 The reasoning stays in the numbered section above each decision, because *why we chose
@@ -480,6 +525,7 @@ file-centric* is a question that will be asked again.
 | — | Application language | 2026-08-24 | TypeScript end to end. The founder reviews every agent-written pull request, and their fluency dominates any technical argument | `ADR-0000` |
 | — | Repository visibility | 2026-08-24 | Public. The CI gate list assumes unlimited Actions minutes | `ADR-0000`, and decisions 6 and 8 |
 | 4 | Pilot workflow configurability | 2026-09-10 | **Template-backed, not customer-editable.** One or two seeded template versions per governance profile; runs bind by identifier; no template editor ships. A → B stays additive because the authoring columns already exist and are tenant-owned | Phase 3: the approval group, POL-032 onward |
+| 12 | How a request finds its customer | 2026-09-11 | **One installation per customer in the Pilot.** Tenant from deployment configuration, behind one named seam. Hostnames and platform-scoped authentication are left open for a shared deployment | Phase 3: POL-031 onward |
 | 11 | Golden-slice interface scope | 2026-09-10 | **Minimal, except the approval inbox and reader view**, which follow `information-architecture.md`. The page ordering there is a governance requirement, not finish | Phase 3: the sessions, read-path and Playwright groups |
 | 8 | Product and repository name | 2026-08-25 | **PolicyOffice.** `.eu`, `.ee`, `.io` and the GitHub org are free; `.com` is held by a brand marketplace at roughly €7k and treated as a later option | Phase 2: the licence file, the repository name, package names |
 
