@@ -52,6 +52,76 @@ Review any open PRs.
 Address the review comments on any PRs that have them.
 ```
 
+### Do not let Claude turn you into a message bus
+
+**Corrected 2026-09-10, after a whole session of getting this wrong.** Over one session Claude
+ended nearly every turn with a bespoke multi-paragraph block for the operator to paste into
+Codex: issue numbers, pull request numbers, head shas, and restated ticket content. The founder
+noticed before Claude did and asked whether the orchestration had gone wrong.
+
+It had not. The design above is sound; Claude was working around it.
+
+**Every one of those blocks was one of two things**, and both are defects:
+
+- **Content that was already in the ticket or the review.** Restating it in a prompt duplicates
+  the contract into a channel that is not the contract. If the two ever disagree, nothing says
+  which wins.
+- **Content that was not in the ticket.** Worse. A prompt is not versioned, not reviewable, and
+  invisible to an agent that starts tomorrow with no memory of the conversation. If Codex needs
+  to know something, the cold agent next week needs it too — which means it belongs in the
+  repository. That is the whole argument in § *The agents do not talk to each other*, and
+  handing guidance over verbally is exactly the leak it exists to prevent.
+
+**The operator's lines do not change, and there are three of them.** They contain no numbers.
+`AGENTS.md` § *Picking up work* is what makes that work — Codex selects implementation work by
+the selection rule, and finds review work with `gh pr list --state open`, *"review every PR with
+no review from you since its most recent commit."*
+
+**That includes Claude's own pull requests.** Claude cannot post `Reviewed-commit` on a branch it
+authored (`AGENTS.md` rule 8), and the instinct is to hand the sha to the operator to relay.
+Unnecessary: told *"review any open PRs"*, Codex finds Claude's docs and specification pull
+requests the same way it finds anything else, and computes the head sha itself. **A sha in the
+chat is a smell.** The operator is not a transport.
+
+If Claude finds itself composing a prompt for Codex, the correct move is to fix the ticket, or
+put the finding on the pull request, and then say nothing.
+
+### A full-suite count you cannot reconcile means the tree is not yours
+
+**2026-09-10.** Claude ran `pnpm test` and got:
+
+```
+Test Files  43 passed (45)
+Tests       550 passed (550)
+Errors      2 errors          ← relegated to a footnote
+```
+
+Two worker forks had crashed. Claude diagnosed it as a Node version problem — `.nvmrc` says 24,
+the shell default was 20 — wrote that into two documents, and was wrong. A clean `origin/main`
+gives **identical** results on Node 20 and Node 24: 42 files, 551 tests, no errors.
+
+**The actual cause was Codex's unfinished work in the shared working directory.** Codex was
+mid-implementation on POL-029 in the same checkout. `vitest` collects by glob, so it picked up
+three in-progress test files, two of which crashed their workers because the code under them was
+half-written.
+
+This is the `git add -A` hazard wearing a different hat — *see `CLAUDE.md` § Committing* — and it
+is worse than the commit version, because nothing looks wrong. The summary reports everything it
+did run as passing, and the crash reads as vitest flake.
+
+**That shared checkout no longer exists** — see § *Where each agent works*. The way this reaches
+you now is a session pointed at `PolicyManagement/` instead of `policyoffice-claude/`, which is
+where Codex's in-progress work lives and is exactly what you would be running against. It happened
+on 2026-09-12.
+
+**So: before quoting a suite count as evidence, reconcile it.** `git status --short` first, and if
+the file count does not match `origin/main` plus whatever the branch adds, the extra files belong
+to the other agent and the run means nothing. A count that cannot be reconciled is not a green
+build.
+
+Run `nvm use` anyway — `.nvmrc` and `engines` require Node 24 and pnpm warns on 20 — but do not
+expect it to fix a number that does not add up.
+
 **Landing a pull request.** Usually nothing. Auto-merge is enabled: a pull request merges
 the moment its last required check goes green, and deletes its own branch.
 

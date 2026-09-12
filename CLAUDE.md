@@ -78,20 +78,79 @@ to prevent.
 The tell is any sentence in a ticket asserting what another artefact contains. When you
 write one, go and look.
 
-## Committing: never `git add -A`
+## Never brief Codex through the operator
 
-**Codex works in the same working directory you do.** It is not a separate checkout. So at any
-moment the tree may hold files from a branch it is mid-implementation on, and `git add -A`,
-`git add .` and `git commit -a` will all sweep them into your commit.
+The repository is the only channel between the agents — `running-the-agents.md` § *The agents do
+not talk to each other*. The operator has three fixed lines to type and **needs no issue number,
+pull request number or sha**.
 
-Stage explicit paths. Every time:
+So do not end a turn with a block for them to paste. If Codex needs to know something, it goes
+in the ticket or on the pull request, where it is versioned, reviewable, and still there for an
+agent that starts cold next week. Anything said only in chat is invisible to that agent.
+
+This includes the `Reviewed-commit` for pull requests you authored. Rule 8 stops you posting it;
+it does not make the operator a courier. Codex finds your open pull requests itself with
+`gh pr list --state open` and computes the sha. **A sha in the chat is a smell.**
+
+Done wrong for an entire session on 2026-09-10, until the founder asked whether the
+orchestration had broken. It had not — the design was being worked around.
+
+## Reconcile a suite count before citing it
+
+`vitest` collects by glob, so a run in a tree that also holds another agent's half-written test
+files reports everything it executed as passing while two workers crash in a footnote — and it looks
+exactly like flake.
+
+That happened on 2026-09-10, in the shared checkout that preceded the worktree split. **Under the
+split it cannot happen from your own worktree.** The way it reaches you now is the one in the next
+section: a session pointed at `PolicyManagement/`, where Codex's in-progress work is exactly what
+you would be running against.
+
+So reconcile the number before citing it. Count the files against `origin/main` plus whatever your
+branch adds. **If it does not add up, the tree is not yours and the run proves nothing** — and that
+is the check that caught it, after the crash had already been misdiagnosed as a Node version problem
+and asserted in two documents. A clean `origin/main` behaves identically on Node 20 and 24.
+
+## Committing: check which worktree you are in
+
+**`running-the-agents.md` § *Where each agent works* is the authority**, not your recollection:
+`PolicyManagement/` is Codex's and sits on its feature branch while working;
+`policyoffice-claude/` is yours and stays **detached**, never on a named branch — because
+`gh pr merge --delete-branch` fails if either worktree holds the branch being deleted.
+
+Before the split existed the agents shared one working tree, and both failure modes below actually
+happened. The split fixes the arrangement. **It does not fix a session pointed at the wrong
+directory** — on 2026-09-12 this session was running in `PolicyManagement/`, on Codex's feature
+branch, which is how the 2026-09-10 incident could have repeated after the split was in place.
+
+So, first thing, every session:
+
+```bash
+git rev-parse --show-toplevel   # must end in /policyoffice-claude
+git worktree list
+```
+
+If it does not, **do not create a branch here.** Either work through
+`git -C /path/to/policyoffice-claude`, keeping that worktree detached, or ask for the session to be
+pointed at the right directory. Committing on a detached HEAD and pushing with
+`git push origin HEAD:refs/heads/<branch>` is the normal flow, not a workaround.
+
+**Stage explicit paths anyway.** In your own worktree `git add -A` can no longer sweep up Codex's
+files — separate index, separate HEAD — so the original reason is gone. The remaining one is your
+own mess: reviewing a Tier 2 change means writing probe files and mutating source to check the tests
+actually fail, and `git add -A` will commit a half-reverted mutation without comment.
 
 ```bash
 git add docs/plans/phase-3-golden-slice.md docs/plans/open-decisions.md
 ```
 
-Then read `git status --short` before committing, and treat anything you did not name as a
-signal that Codex is working — not as something to include.
+**Confirm the branch point before opening a pull request.** Two commands, and they catch both
+failure modes at once:
+
+```bash
+git log --oneline origin/main..HEAD    # only your commits
+git diff origin/main HEAD --name-only  # only your files
+```
 
 This is not hypothetical. On 2026-09-09, PR #96 was opened as *"documentation only, Tier 0"*,
 intended to change two files in `docs/plans/`. It landed nine: a migration, a new module, its
@@ -99,6 +158,16 @@ test, an export and two test-file edits — the whole of POL-022, swept out of C
 tree by one `git add -A`. The founder approved it on the Tier 0 description. Nothing unreviewed
 reached `main` only because the same code was independently reviewed on its own pull request an
 hour later, which was luck rather than process.
+
+It happened again on 2026-09-10, and that time there was **no staging mistake at all**: a two-file
+documentation change carried the whole of POL-029 — 11 files, 1,318 lines — because `git checkout -b`
+ran while the shared checkout sat on Codex's branch, so the new branch was cut from its commit
+instead of `main`. The commit was clean; the branch point was not. That is the one the two commands
+above catch, and it is the reason to run them even when the diff looks right.
+
+Both incidents predate the worktree split. Neither is possible from a correctly-pointed
+`policyoffice-claude/`, which is exactly why the first check in this section is *which worktree am I
+in*.
 
 A Tier 0 label that is false is worse than no label. It is the one thing a reviewer is entitled
 to take at face value.
