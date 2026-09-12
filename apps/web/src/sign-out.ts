@@ -3,7 +3,7 @@ import {
   withTenantTransaction,
   type ApplicationTransaction,
 } from "@policyoffice/db/application-transaction";
-import { revokeSessionByToken } from "@policyoffice/domain";
+import { revokeSessionByToken } from "../../../packages/domain/src/index";
 import { clearSessionCookie } from "./session-cookie.js";
 
 export interface SignOutRequest {

@@ -1,5 +1,5 @@
 import { withTenantTransaction } from "@policyoffice/db/application-transaction";
-import { issueSession } from "@policyoffice/domain";
+import { issueSession } from "../../../packages/domain/src/index";
 import { serializeSessionCookie } from "./session-cookie.js";
 
 export interface SignInRequest {
