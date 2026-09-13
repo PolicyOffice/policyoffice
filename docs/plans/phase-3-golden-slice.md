@@ -253,17 +253,6 @@ migration is attributed to a docs change.
 Nothing needs redoing. It is recorded here because someone looking for when this gate arrived
 will not find it by reading pull request titles.
 
-## Waiting on the founder
-
-- **The applied ruleset is one context behind again.** POL-032 added `playwright critical suite` to
-  `.github/rulesets/main.json` — **16 committed, 15 applied**. The job exists and reported green on
-  #136, which is the precondition, so it is safe to apply. Live configuration is not an agent's to
-  change on its own initiative; both previous applications were founder-directed in session.
-
-  ```bash
-  gh api repos/PolicyOffice/policyoffice/rulesets/21949052 --jq '[.rules[]|select(.type=="required_status_checks")|.parameters.required_status_checks[].context]|length'
-  ```
-
 ## Open at the end of the 2026-09-10 session
 
 Nothing here blocks POL-026. Recorded so it is not rediscovered.
