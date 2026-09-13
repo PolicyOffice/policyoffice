@@ -22,6 +22,38 @@ function notFound(): Response {
   return Response.json({ error: "not_found" }, { status: 404, headers: RESPONSE_HEADERS });
 }
 
+/** Authorize the create form itself without accidentally requiring document.read. */
+export function createDocumentFormHandler(
+  options: DocumentRegisterHandlerOptions,
+): (request: DocumentRegisterRequest) => Promise<Response> {
+  const clock = options.clock ?? (() => new Date());
+
+  return async (request) => {
+    if (!request.sessionToken) return notFound();
+    const instant = clock();
+    const response = await withTenantTransaction(
+      { tenantId: options.tenantId, sessionToken: request.sessionToken, instant },
+      async (transaction) => {
+        const context = new AuthzContext({
+          tenantId: options.tenantId,
+          principal: transaction.context.principal,
+          instant,
+          load: authorizationDataLoader(transaction),
+        });
+        const decision = await decide(context, DOCUMENT_REQUIRED_CAPABILITIES.create, {
+          tenantId: options.tenantId,
+          type: "TENANT",
+          id: null,
+        });
+        return decision.allowed
+          ? Response.json({ allowed: true }, { status: 200, headers: RESPONSE_HEADERS })
+          : notFound();
+      },
+    );
+    return response ?? notFound();
+  };
+}
+
 /** The framework-neutral request boundary exercised directly against app_role in tests. */
 export function createDocumentRegisterHandler(
   options: DocumentRegisterHandlerOptions,
@@ -53,8 +85,17 @@ export function createDocumentRegisterHandler(
         });
         if (!decision.allowed) return notFound();
 
+        const createDecision = await decide(context, DOCUMENT_REQUIRED_CAPABILITIES.create, {
+          tenantId: options.tenantId,
+          type: "TENANT",
+          id: null,
+        });
+
         const documents = await listDocumentRegister(transaction, options.tenantId);
-        return Response.json({ documents }, { status: 200, headers: RESPONSE_HEADERS });
+        return Response.json(
+          { documents, canCreate: createDecision.allowed },
+          { status: 200, headers: RESPONSE_HEADERS },
+        );
       },
     );
 

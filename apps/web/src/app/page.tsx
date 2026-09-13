@@ -7,6 +7,7 @@ import { SESSION_COOKIE } from "@/session-cookie";
 export const dynamic = "force-dynamic";
 
 interface DocumentRegisterPayload {
+  readonly canCreate: boolean;
   readonly documents: readonly Readonly<{
     id: string;
     documentCode: string;
@@ -24,11 +25,16 @@ export default async function DocumentRegisterPage() {
     sessionToken: cookieStore.get(SESSION_COOKIE.name)?.value,
   });
   if (!response.ok) redirect("/sign-in");
-  const { documents } = (await response.json()) as DocumentRegisterPayload;
+  const { canCreate, documents } = (await response.json()) as DocumentRegisterPayload;
 
   return (
     <main>
       <h1>Document register</h1>
+      {canCreate ? (
+        <p>
+          <a href="/author/documents/new">Create document</a>
+        </p>
+      ) : null}
       <ul>
         {documents.map((document) => (
           <li key={document.id}>
