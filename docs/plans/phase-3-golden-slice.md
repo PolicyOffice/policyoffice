@@ -157,6 +157,17 @@ Written one at a time, as the authorization epic was.
 | POL-035 | **The reader view**, built to `information-architecture.md` | after POL-033 |
 | POL-036 | Playwright drives the **full** reference flow with three principals | last |
 
+### What comes next, in order
+
+1. **POL-033 (#137)** — the author's path. Ready.
+2. **Decompose the approval subsystem** — a specification job, once POL-033 lands. It is several
+   tickets, not one, and it is the largest unbuilt subsystem in Phase 3. Answer **#92** as part of
+   it, deliberately. The ticket that seeds templates carries the `published_at` / `published_by`
+   criterion from `open-decisions.md` § 4.
+3. **POL-034** the approval inbox, **POL-035** the reader view, **POL-036** the full Playwright flow.
+4. Then the unstarted groups in *The work, in dependency order* below — applicability resolution
+   and attestation, review cases, and evidence packs last.
+
 **Split again on 2026-09-12, and this is the last time it should be needed.** POL-032 was going to
 carry sign-in *and* the author's create/draft/submit path. Sign-in alone adds a third input shape to
 the one transaction opener — the same class of boundary change POL-031 made — and bundling three
@@ -168,11 +179,11 @@ end, and proving the harness works on a two-page flow is cheaper than discoverin
 six-page one. POL-036 keeps the full three-principal flow.
 
 **Renumbered on 2026-09-10: what was POL-030 became two tickets.** Writing it revealed that the
-request context has a prerequisite nobody had noticed — **`ADR-0001` § 3's transaction helper does
-not exist.** `withTenant` is the test harness, named as such in the architecture test; production's
-only connection constructor is *administrative*, and the application has no `app_role` connection
-at all. So every domain function taking an `AuditTransaction` is currently reachable only from
-tests.
+request context had a prerequisite nobody had noticed — **`ADR-0001` § 3's transaction helper did
+not exist.** `withTenant` was the test harness, named as such in the architecture test; production's
+only connection constructor was *administrative*, and the application had no `app_role` connection
+at all. So every domain function taking an `AuditTransaction` was reachable only from tests until
+POL-030 landed the helper (#127).
 
 It is a separate ticket rather than a bigger one because **POL-026 made client construction
 bounded**: `CONNECTION_SITES` holds two entries and its comment says *"Production has one
@@ -182,23 +193,15 @@ POL-030 also closes the first of `ADR-0001`'s two *Still to verify* items — wh
 driven entirely through a caller-supplied handle, which is what makes the one-helper rule
 enforceable at all.
 
-**POL-031 is blocked on #128, and the gap is real rather than an oversight in the ticket.**
-POL-030 landing is what exposed it. The transaction helper takes a tenant and sets it for the
-transaction — correct, and it makes the ordering problem visible: reading a session means querying
-`user_session`, which is tenant-scoped under forced row-level security, so the tenant must already
-be known. The session is what identifies the user. Nothing else in a request carries a customer.
+**POL-031 was blocked on #128, and is resolved.** Landing POL-030 exposed that nothing specified how a
+request finds its customer: reading a session needs the tenant, and the session is what identifies the
+user. The founder chose one installation per customer for the Pilot (`open-decisions.md` § 12), and
+POL-031 landed as #133. Writing it exposed a second gap — the one opener required a principal that
+session resolution produces — settled in #132 by resolving the session *inside* the opener, so no
+pre-authentication handle ever exists.
 
-It is in none of the three places it should be. `ADR-0002` says the cookie carries *"an opaque,
-high-entropy identifier and nothing else"*. `information-architecture.md` § *Addresses* gives every
-public URL and **none carries a customer segment** — while saying URLs are *"a public contract …
-decided before the first route is written rather than falling out of a router's defaults"*. And
-the `tenant` table has no host, slug or domain column.
-
-There is no way to improvise it that does not either put the tenant where `ADR-0002` forbids, or
-open a query path outside row-level security — the one thing `ADR-0001` exists to prevent. #128
-puts it to the founder with a recommendation.
-
-**POL-033 is unblocked.** Approval configurability was answered the same day as decision 4 —
+**POL-034, the approval inbox, is no longer blocked by a decision — it is blocked by unbuilt code.**
+Approval configurability was answered the same day as decision 4 —
 `open-decisions.md` § 4, **option A**: one or two seeded template versions per governance
 profile, runs bind by identifier, no template editor ships. The approval subsystem beneath the
 inbox — `approval_run`, `approval_stage`, `approval_task`, `approval_decision`,
@@ -212,9 +215,9 @@ hard-coded template identifier, or a seeded row with its authoring columns left 
 into a backfill. Those columns already exist in `data-model.md`, so this costs nothing to get
 right and is an acceptance criterion in whichever ticket seeds them.
 
-That ticket sits between POL-032 and POL-033 and is not written yet — the approval subsystem is
-several tickets, not one, and decomposing it is the specification job that follows the request
-context, not this ticket.
+That ticket sits between POL-033 and POL-034 and is not written yet — the approval subsystem is
+several tickets, not one. **Decomposing it is the next specification job once POL-033 lands**, and
+#92 has to be answered as part of it rather than inherited from whatever the implementation does.
 
 ## The work, in dependency order
 
@@ -223,13 +226,13 @@ Not tickets yet — tickets follow the decisions above. This is the shape.
 | Group | What it covers | Blocked by |
 |---|---|---|
 | ~~**Authorization**~~ | The evaluator, grants, the capability matrix and its CI gate | **done** — POL-023…027 |
-| **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | POL-029 **merged**; sign-in is POL-032 |
-| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **unblocked** — decompose after POL-031 |
-| **Audience and attestation** | Applicability resolution, assignment, acknowledgement | Decision 1 |
-| **Read paths** | The register, a version's history, the audit trail as a person can read it | **unblocked** — POL-034 |
-| **Review cases** | Scheduled review, completion, the obligations that survive it | Decision 1 |
+| ~~**Sessions and identity**~~ | Server-side sessions per `ADR-0002`, sign-in, principal resolution | **done** — POL-029, POL-031, POL-032 |
+| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **next** — decompose once POL-033 lands; answer #92 then |
+| **Audience and attestation** | Applicability resolution, assignment, acknowledgement | unstarted — no open decision blocks it |
+| **Read paths** | The register, a version's history, the audit trail as a person can read it | register **done** in POL-031; reader view is POL-035; history and audit views unwritten |
+| **Review cases** | Scheduled review, completion, the obligations that survive it | unstarted — no open decision blocks it |
 | **Evidence packs** | Assembly, the manifest, byte-exact verification outside the application | Everything above |
-| **Playwright** | The flow driven through the interface, carried from Phase 2 | **unblocked** — POL-035 |
+| **Playwright** | The flow driven through the interface, carried from Phase 2 | one spec **landed** in POL-032; the full three-principal flow is POL-036 |
 
 Two items carry forward from Phase 2 with their triggers recorded there rather than repeated
 here: **Neon restore timing**, due before any real data exists, and the **authorization
