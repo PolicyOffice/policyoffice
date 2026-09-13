@@ -1,3 +1,11 @@
+import { cookies } from "next/headers";
+import { notFound, redirect } from "next/navigation";
+import { createVersionFormHandler, type CreateVersionFormPayload } from "@/authoring";
+import { installationTenantId } from "@/installation-tenant";
+import { SESSION_COOKIE } from "@/session-cookie";
+
+export const dynamic = "force-dynamic";
+
 interface DocumentAuthorPageProps {
   readonly params: Promise<Readonly<{ documentId: string }>>;
   readonly searchParams: Promise<Readonly<Record<string, string | string[] | undefined>>>;
@@ -7,12 +15,23 @@ export default async function DocumentAuthorPage({
   params,
   searchParams,
 }: DocumentAuthorPageProps) {
-  const [{ documentId }, query] = await Promise.all([params, searchParams]);
+  const [{ documentId }, query, cookieStore] = await Promise.all([params, searchParams, cookies()]);
+  const sessionToken = cookieStore.get(SESSION_COOKIE.name)?.value;
+  if (!sessionToken) redirect("/sign-in");
+  const response = await createVersionFormHandler({ tenantId: installationTenantId() })({
+    sessionToken,
+    documentId,
+  });
+  if (!response.ok) notFound();
+  const document = (await response.json()) as CreateVersionFormPayload;
 
   return (
     <main>
-      <h1>Document created</h1>
-      <p>Start the first governed version for this document.</p>
+      <h1>Start version</h1>
+      <p>
+        <strong>{document.documentCode}</strong> {document.canonicalTitle} —{" "}
+        {document.lifecycleStatus}
+      </p>
       <form action={`/author/documents/${documentId}/versions`} method="post">
         <label htmlFor="displayLabel">Display label</label>
         <input id="displayLabel" name="displayLabel" />

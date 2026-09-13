@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createContentRevisionHandler,
+  createDraftWorkspaceHandler,
   createDocumentHandler,
   createSubmitContentRevisionHandler,
+  createVersionFormHandler,
   createVersionHandler,
 } from "../../../apps/web/src/authoring.js";
 import {
@@ -176,6 +178,17 @@ describe("the author path request boundaries", () => {
     expect(createResponse.status).toBe(303);
     expect(createResponse.headers.get("location")).toBe(`/author/documents/${CREATED_DOCUMENT}`);
 
+    const versionFormResponse = await createVersionFormHandler({
+      tenantId: TENANT_A,
+      clock: () => REQUEST_INSTANT,
+    })({ sessionToken: token(FULL_AUTHOR), documentId: CREATED_DOCUMENT });
+    expect(versionFormResponse.status).toBe(200);
+    expect(await versionFormResponse.json()).toEqual({
+      documentCode: "POL-033",
+      canonicalTitle: "Author Path Policy",
+      lifecycleStatus: "PLANNED",
+    });
+
     const createVersionBoundary = createVersionHandler({
       tenantId: TENANT_A,
       clock: () => REQUEST_INSTANT,
@@ -193,6 +206,21 @@ describe("the author path request boundaries", () => {
     expect(versionResponse.headers.get("location")).toBe(
       `/author/documents/${CREATED_DOCUMENT}/versions/${CREATED_VERSION}`,
     );
+
+    const draftWorkspace = createDraftWorkspaceHandler({
+      tenantId: TENANT_A,
+      clock: () => REQUEST_INSTANT,
+    });
+    const draftWorkspaceResponse = await draftWorkspace({
+      sessionToken: token(FULL_AUTHOR),
+      documentId: CREATED_DOCUMENT,
+      versionId: CREATED_VERSION,
+    });
+    expect(draftWorkspaceResponse.status).toBe(200);
+    expect(await draftWorkspaceResponse.json()).toEqual({
+      lifecycleState: "DRAFT",
+      canSubmit: true,
+    });
 
     const firstSave = createContentRevisionHandler({
       tenantId: TENANT_A,
@@ -214,23 +242,27 @@ describe("the author path request boundaries", () => {
       sessionToken: token(FULL_AUTHOR),
       documentId: CREATED_DOCUMENT,
       versionId: CREATED_VERSION,
-      contentBytes: new TextEncoder().encode("Second author draft selected for review."),
+      contentBytes: new TextEncoder().encode("Second author draft."),
     });
+    const firstSavedLocation = new URL(firstResponse.headers.get("location") ?? "", "http://local");
+    const secondSavedLocation = new URL(
+      secondResponse.headers.get("location") ?? "",
+      "http://local",
+    );
     expect(firstResponse.status).toBe(303);
-    expect(
-      new URL(firstResponse.headers.get("location") ?? "", "http://local").searchParams.get(
-        "saved",
-      ),
-    ).toBe("1");
-    const savedLocation = new URL(secondResponse.headers.get("location") ?? "", "http://local");
     expect(secondResponse.status).toBe(303);
-    expect(savedLocation.searchParams.get("saved")).toBe("2");
-    expect(savedLocation.searchParams.get("revisionId")).toBe(SECOND_REVISION);
+    expect(firstSavedLocation.searchParams.get("revisionId")).toBe(FIRST_REVISION);
+    expect(secondSavedLocation.searchParams.get("revisionId")).toBe(SECOND_REVISION);
+    expect([...firstSavedLocation.searchParams.keys()].sort()).toEqual([
+      "revisionId",
+      "revisionRowVersion",
+      "versionRowVersion",
+    ]);
 
     const selectedDigest = await asPrincipal(TENANT_A, FULL_AUTHOR, async (transaction) => {
       const { rows } = await transaction.query<
         Record<string, unknown> & { content_digest: string }
-      >(`select content_digest from content_revision where id = $1`, [SECOND_REVISION]);
+      >(`select content_digest from content_revision where id = $1`, [FIRST_REVISION]);
       const row = rows[0];
       if (!row) throw new Error("the selected revision was not persisted");
       return row.content_digest;
@@ -245,11 +277,22 @@ describe("the author path request boundaries", () => {
       sessionToken: token(FULL_AUTHOR),
       documentId: CREATED_DOCUMENT,
       versionId: CREATED_VERSION,
-      revisionId: savedLocation.searchParams.get("revisionId") ?? "",
-      expectedVersionRowVersion: Number(savedLocation.searchParams.get("versionRowVersion")),
-      expectedRevisionRowVersion: Number(savedLocation.searchParams.get("revisionRowVersion")),
+      revisionId: firstSavedLocation.searchParams.get("revisionId") ?? "",
+      expectedVersionRowVersion: Number(firstSavedLocation.searchParams.get("versionRowVersion")),
+      expectedRevisionRowVersion: Number(firstSavedLocation.searchParams.get("revisionRowVersion")),
     });
     expect(submitResponse.status).toBe(303);
+
+    const submittedWorkspaceResponse = await draftWorkspace({
+      sessionToken: token(FULL_AUTHOR),
+      documentId: CREATED_DOCUMENT,
+      versionId: CREATED_VERSION,
+    });
+    expect(submittedWorkspaceResponse.status).toBe(200);
+    expect(await submittedWorkspaceResponse.json()).toEqual({
+      lifecycleState: "IN_REVIEW",
+      canSubmit: true,
+    });
 
     await asPrincipal(TENANT_A, FULL_AUTHOR, async (transaction) => {
       const document = await transaction.query<
@@ -302,10 +345,11 @@ describe("the author path request boundaries", () => {
       ]);
       expect(
         revisions.rows.filter((revision) => revision.submitted_at !== null).map(({ id }) => id),
-      ).toEqual([SECOND_REVISION]);
-      expect(revisions.rows.find(({ id }) => id === SECOND_REVISION)?.content_digest).toBe(
+      ).toEqual([FIRST_REVISION]);
+      expect(revisions.rows.find(({ id }) => id === FIRST_REVISION)?.content_digest).toBe(
         selectedDigest,
       );
+      expect(revisions.rows.find(({ id }) => id === SECOND_REVISION)?.submitted_at).toBeNull();
       expect(events.rows.map(({ event_type }) => event_type).sort()).toEqual([
         "content_revision.created",
         "content_revision.created",
@@ -315,7 +359,7 @@ describe("the author path request boundaries", () => {
       ]);
       expect(
         events.rows.find(({ event_type }) => event_type === "version.submitted")?.safe_after,
-      ).toMatchObject({ contentRevisionId: SECOND_REVISION, contentDigest: selectedDigest });
+      ).toMatchObject({ contentRevisionId: FIRST_REVISION, contentDigest: selectedDigest });
     });
   });
 
@@ -379,6 +423,14 @@ describe("the author path request boundaries", () => {
 
     expect(denied).toEqual(absent);
     expect(invalid).toEqual(absent);
+    expect(
+      await responseShape(
+        await createVersionFormHandler({
+          tenantId: TENANT_A,
+          clock: () => REQUEST_INSTANT,
+        })({ sessionToken: token(NO_START_AUTHOR), documentId: FIXTURE_DOCUMENT_A }),
+      ),
+    ).toEqual(absent);
     await asPrincipal(TENANT_A, FIXTURE_USER_A, async (transaction) => {
       const { rows } = await transaction.query(
         `select id from document_version where tenant_id = $1 and document_variant_id = $2`,
@@ -406,6 +458,18 @@ describe("the author path request boundaries", () => {
 
     expect(denied).toEqual(absent);
     expect(invalid).toEqual(absent);
+    expect(
+      await responseShape(
+        await createDraftWorkspaceHandler({
+          tenantId: TENANT_A,
+          clock: () => REQUEST_INSTANT,
+        })({
+          sessionToken: token(NO_SAVE_AUTHOR),
+          documentId: FIXTURE_DOCUMENT_A,
+          versionId: FIXTURE_VERSION_A,
+        }),
+      ),
+    ).toEqual(absent);
     await asPrincipal(TENANT_A, FIXTURE_USER_A, async (transaction) => {
       const { rows } = await transaction.query(
         `select id from content_revision where tenant_id = $1 and document_version_id = $2`,
@@ -435,6 +499,16 @@ describe("the author path request boundaries", () => {
 
     expect(denied).toEqual(absent);
     expect(invalid).toEqual(absent);
+    const workspaceResponse = await createDraftWorkspaceHandler({
+      tenantId: TENANT_A,
+      clock: () => REQUEST_INSTANT,
+    })({
+      sessionToken: token(NO_SUBMIT_AUTHOR),
+      documentId: FIXTURE_DOCUMENT_A,
+      versionId: FIXTURE_VERSION_A,
+    });
+    expect(workspaceResponse.status).toBe(200);
+    expect(await workspaceResponse.json()).toMatchObject({ canSubmit: false });
     await asPrincipal(TENANT_A, FIXTURE_USER_A, async (transaction) => {
       const version = await transaction.query<
         Record<string, unknown> & { lifecycle_state: string }
@@ -460,7 +534,24 @@ describe("the author path request boundaries", () => {
       tenantId: TENANT_A,
       clock: () => REQUEST_INSTANT,
     });
+    const versionFormBoundary = createVersionFormHandler({
+      tenantId: TENANT_A,
+      clock: () => REQUEST_INSTANT,
+    });
+    const workspaceBoundary = createDraftWorkspaceHandler({
+      tenantId: TENANT_A,
+      clock: () => REQUEST_INSTANT,
+    });
     const responses = await Promise.all([
+      versionFormBoundary({
+        sessionToken: token(FULL_AUTHOR),
+        documentId: FIXTURE_DOCUMENT_B,
+      }),
+      workspaceBoundary({
+        sessionToken: token(FULL_AUTHOR),
+        documentId: FIXTURE_DOCUMENT_B,
+        versionId: FIXTURE_VERSION_B,
+      }),
       createVersionBoundary({
         sessionToken: token(FULL_AUTHOR),
         documentId: FIXTURE_DOCUMENT_B,
@@ -479,6 +570,14 @@ describe("the author path request boundaries", () => {
         sessionToken: token(FULL_AUTHOR),
         documentId: FIXTURE_DOCUMENT_B,
         versionId: FIXTURE_VERSION_B,
+        revisionId: FIXTURE_REVISION_B,
+        expectedVersionRowVersion: 1,
+        expectedRevisionRowVersion: 1,
+      }),
+      submitBoundary({
+        sessionToken: token(FULL_AUTHOR),
+        documentId: FIXTURE_DOCUMENT_A,
+        versionId: FIXTURE_VERSION_A,
         revisionId: FIXTURE_REVISION_B,
         expectedVersionRowVersion: 1,
         expectedRevisionRowVersion: 1,

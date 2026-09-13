@@ -7,6 +7,7 @@ import { authorizationDataLoader } from "@policyoffice/db/authorization";
 import {
   AuthzContext,
   CONTENT_REVISION_REQUIRED_CAPABILITIES,
+  ContentRevisionNotFoundError,
   DOCUMENT_REQUIRED_CAPABILITIES,
   MATERIALITY_CLASSES,
   VERSION_REQUIRED_CAPABILITIES,
@@ -16,6 +17,7 @@ import {
   decide,
   submitContentRevision,
   type Materiality,
+  type VersionLifecycle,
 } from "../../../packages/domain/src/index";
 
 export interface AuthoringHandlerOptions {
@@ -42,11 +44,33 @@ export interface CreateVersionRequest {
   readonly changeSummary: string | null;
 }
 
+export interface CreateVersionFormRequest {
+  readonly sessionToken: string | undefined;
+  readonly documentId: string;
+}
+
 export interface SaveContentRevisionRequest {
   readonly sessionToken: string | undefined;
   readonly documentId: string;
   readonly versionId: string;
   readonly contentBytes: Uint8Array;
+}
+
+export interface DraftWorkspaceRequest {
+  readonly sessionToken: string | undefined;
+  readonly documentId: string;
+  readonly versionId: string;
+}
+
+export interface CreateVersionFormPayload {
+  readonly documentCode: string;
+  readonly canonicalTitle: string;
+  readonly lifecycleStatus: string;
+}
+
+export interface DraftWorkspacePayload {
+  readonly lifecycleState: VersionLifecycle;
+  readonly canSubmit: boolean;
 }
 
 export interface SubmitContentRevisionRequest {
@@ -65,6 +89,16 @@ interface IdRow extends Record<string, unknown> {
 
 interface VersionDocumentRow extends Record<string, unknown> {
   document_id: string;
+}
+
+interface CreateVersionFormRow extends Record<string, unknown> {
+  document_code: string;
+  canonical_title: string;
+  lifecycle_status: string;
+}
+
+interface DraftWorkspaceRow extends Record<string, unknown> {
+  lifecycle_state: VersionLifecycle;
 }
 
 const RESPONSE_HEADERS = Object.freeze({ "cache-control": "no-store" });
@@ -184,18 +218,113 @@ async function versionBelongsToDocument(
   return rows[0]?.document_id === documentId;
 }
 
-async function revisionBelongsToVersion(
-  transaction: ApplicationTransaction,
-  tenantId: string,
-  versionId: string,
-  revisionId: string,
-): Promise<boolean> {
-  const { rows } = await transaction.query<IdRow>(
-    `select id from content_revision
-      where tenant_id = $1::uuid and id = $2::uuid and document_version_id = $3::uuid`,
-    [tenantId, revisionId, versionId],
-  );
-  return rows[0]?.id === revisionId;
+/** Read the document only after making the same decision as the start-version route. */
+export function createVersionFormHandler(
+  options: AuthoringHandlerOptions,
+): (request: CreateVersionFormRequest) => Promise<Response> {
+  const clock = options.clock ?? (() => new Date());
+
+  return async (request) => {
+    if (!request.sessionToken || !UUID.test(request.documentId)) return notFound();
+    const instant = clock();
+    const response = await withTenantTransaction(
+      { tenantId: options.tenantId, sessionToken: request.sessionToken, instant },
+      async (transaction) => {
+        const context = new AuthzContext({
+          tenantId: options.tenantId,
+          principal: transaction.context.principal,
+          instant,
+          load: authorizationDataLoader(transaction),
+        });
+        const decision = await decide(context, VERSION_REQUIRED_CAPABILITIES.create, {
+          tenantId: options.tenantId,
+          type: "DOCUMENT",
+          id: request.documentId,
+        });
+        if (!decision.allowed) return notFound();
+
+        const { rows } = await transaction.query<CreateVersionFormRow>(
+          `select document_code, canonical_title, lifecycle_status
+             from document
+            where tenant_id = $1::uuid and id = $2::uuid`,
+          [options.tenantId, request.documentId],
+        );
+        const document = rows[0];
+        if (!document) return notFound();
+        return Response.json(
+          {
+            documentCode: document.document_code,
+            canonicalTitle: document.canonical_title,
+            lifecycleStatus: document.lifecycle_status,
+          } satisfies CreateVersionFormPayload,
+          { status: 200, headers: RESPONSE_HEADERS },
+        );
+      },
+    );
+    return response ?? notFound();
+  };
+}
+
+/** Read the workspace after the save decision; expose submit only after its own decision. */
+export function createDraftWorkspaceHandler(
+  options: AuthoringHandlerOptions,
+): (request: DraftWorkspaceRequest) => Promise<Response> {
+  const clock = options.clock ?? (() => new Date());
+
+  return async (request) => {
+    if (!request.sessionToken || !UUID.test(request.documentId) || !UUID.test(request.versionId)) {
+      return notFound();
+    }
+    const instant = clock();
+    const response = await withTenantTransaction(
+      { tenantId: options.tenantId, sessionToken: request.sessionToken, instant },
+      async (transaction) => {
+        const context = new AuthzContext({
+          tenantId: options.tenantId,
+          principal: transaction.context.principal,
+          instant,
+          load: authorizationDataLoader(transaction),
+        });
+        const saveDecision = await decide(context, CONTENT_REVISION_REQUIRED_CAPABILITIES.create, {
+          tenantId: options.tenantId,
+          type: "DOCUMENT_VERSION",
+          id: request.versionId,
+        });
+        if (!saveDecision.allowed) return notFound();
+
+        const { rows } = await transaction.query<DraftWorkspaceRow>(
+          `select version.lifecycle_state
+             from document_version version
+             join document_variant variant
+               on variant.tenant_id = version.tenant_id
+              and variant.id = version.document_variant_id
+            where version.tenant_id = $1::uuid and version.id = $2::uuid
+              and variant.document_id = $3::uuid`,
+          [options.tenantId, request.versionId, request.documentId],
+        );
+        const version = rows[0];
+        if (!version) return notFound();
+
+        const submitDecision = await decide(
+          context,
+          CONTENT_REVISION_REQUIRED_CAPABILITIES.submit,
+          {
+            tenantId: options.tenantId,
+            type: "DOCUMENT_VERSION",
+            id: request.versionId,
+          },
+        );
+        return Response.json(
+          {
+            lifecycleState: version.lifecycle_state,
+            canSubmit: submitDecision.allowed,
+          } satisfies DraftWorkspacePayload,
+          { status: 200, headers: RESPONSE_HEADERS },
+        );
+      },
+    );
+    return response ?? notFound();
+  };
 }
 
 /** Create the stable document identity. Authorization is deliberately local to this route. */
@@ -399,9 +528,7 @@ export function createContentRevisionHandler(
           !(request.contentBytes instanceof Uint8Array) ||
           request.contentBytes.byteLength === 0
         ) {
-          return redirect(
-            `/author/documents/${request.documentId}/versions/${request.versionId}?error=invalid`,
-          );
+          return redirect(`/author/documents/${request.documentId}/versions/${request.versionId}`);
         }
 
         const configurationVersionId = await activeConfigurationVersionId(
@@ -423,7 +550,6 @@ export function createContentRevisionHandler(
           sourceChannel: "WEB",
         });
         const params = new URLSearchParams({
-          saved: String(saved.revisionSequence),
           revisionId: saved.id,
           revisionRowVersion: String(saved.rowVersion),
           versionRowVersion: String(saved.versionRowVersion),
@@ -476,12 +602,6 @@ export function createSubmitContentRevisionHandler(
             options.tenantId,
             request.documentId,
             request.versionId,
-          )) ||
-          !(await revisionBelongsToVersion(
-            transaction,
-            options.tenantId,
-            request.versionId,
-            request.revisionId,
           ))
         ) {
           return notFound();
@@ -490,9 +610,7 @@ export function createSubmitContentRevisionHandler(
           !positiveInteger(request.expectedVersionRowVersion) ||
           !positiveInteger(request.expectedRevisionRowVersion)
         ) {
-          return redirect(
-            `/author/documents/${request.documentId}/versions/${request.versionId}?error=invalid`,
-          );
+          return redirect(`/author/documents/${request.documentId}/versions/${request.versionId}`);
         }
 
         const configurationVersionId = await activeConfigurationVersionId(
@@ -500,22 +618,25 @@ export function createSubmitContentRevisionHandler(
           options.tenantId,
           instant,
         );
-        await submitContentRevision(transaction, {
-          tenantId: options.tenantId,
-          documentVersionId: request.versionId,
-          revisionId: request.revisionId,
-          expectedVersionRowVersion: request.expectedVersionRowVersion,
-          expectedRevisionRowVersion: request.expectedRevisionRowVersion,
-          actor: { type: "USER", id: transaction.context.principal.id },
-          configurationVersionId,
-          occurredAt: instant,
-          requestId: idFactory(),
-          correlationId: idFactory(),
-          sourceChannel: "WEB",
-        });
-        return redirect(
-          `/author/documents/${request.documentId}/versions/${request.versionId}?submitted=1`,
-        );
+        try {
+          await submitContentRevision(transaction, {
+            tenantId: options.tenantId,
+            documentVersionId: request.versionId,
+            revisionId: request.revisionId,
+            expectedVersionRowVersion: request.expectedVersionRowVersion,
+            expectedRevisionRowVersion: request.expectedRevisionRowVersion,
+            actor: { type: "USER", id: transaction.context.principal.id },
+            configurationVersionId,
+            occurredAt: instant,
+            requestId: idFactory(),
+            correlationId: idFactory(),
+            sourceChannel: "WEB",
+          });
+        } catch (error) {
+          if (error instanceof ContentRevisionNotFoundError) return notFound();
+          throw error;
+        }
+        return redirect(`/author/documents/${request.documentId}/versions/${request.versionId}`);
       },
     );
     return response ?? notFound();
