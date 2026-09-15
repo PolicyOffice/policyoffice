@@ -10,20 +10,23 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   await loadFixtureSet("test");
   const tenant = buildFixtureSet("test").tenants[0];
   const userId = tenant?.users[0]?.id;
-  if (!tenant || !userId) throw new Error("the browser fixture requires a tenant administrator");
+  const authorRoleId = tenant?.securityRoles.find((role) => role.code === "AUTHOR")?.id;
+  if (!tenant || !userId || !authorRoleId) {
+    throw new Error("the browser fixture requires a tenant administrator and author role");
+  }
   await withTenantTransaction(
     { tenantId: tenant.tenant.id, principal: { type: "USER", id: userId } },
     async (transaction) => {
       await transaction.query(
         `insert into access_grant (
-           tenant_id, id, effect, principal_type, principal_id, capability,
+           tenant_id, id, effect, principal_type, principal_id, security_role_id,
            scope_type, scope_id, validity, granted_by, reason
          ) values (
            $1, 'a0000000-0000-0000-0025-000000000002', 'ALLOW', 'USER', $2,
-           'document.read', 'TENANT', null, tstzrange($3::timestamptz, null, '[)'),
-           $2, 'POL-032 browser fixture'
+           $3, 'TENANT', null, tstzrange($4::timestamptz, null, '[)'),
+           $2, 'POL-033 browser author fixture'
          )`,
-        [tenant.tenant.id, userId, buildFixtureSet("test").createdAt],
+        [tenant.tenant.id, userId, authorRoleId, buildFixtureSet("test").createdAt],
       );
     },
   );
