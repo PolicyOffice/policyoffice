@@ -100,9 +100,41 @@ its users to work around it.
 
 So `mandated_authority` is a structure keyed by materiality, not a single value, and the
 floor rules are unchanged: INV-APR-020 holds for whichever entry applies, an omitted class
-inherits the strictest one stated, and no class may be configured to require nobody. The
-storage was already `jsonb`, so this costs a specification sentence now and a migration
-never.
+inherits from the classes that are stated, and no class may be configured to require nobody —
+both as § *Mandated authority, as data* below defines. The storage was already `jsonb`, so
+this costs a specification sentence now and a migration never.
+
+### Mandated authority, as data
+
+`document_type.mandated_authority` is a JSON object keyed by materiality class, each class naming
+the participants whose approval that class requires.
+
+```json
+{
+  "EDITORIAL": { "requires": [{ "type": "USER", "id": "…" }] },
+  "NON_MATERIAL": { "requires": [{ "type": "USER", "id": "…" }] },
+  "MATERIAL": { "requires": [{ "type": "GOVERNANCE_BODY", "id": "…" }] },
+  "EMERGENCY": { "requires": [{ "type": "GOVERNANCE_BODY", "id": "…" }] }
+}
+```
+
+| Rule | Why |
+|---|---|
+| Keys are `materiality` values, and at least one class is stated | A type mandating nothing cannot express a floor at all |
+| `requires` is a non-empty list of participants, in the same vocabulary a template stage uses (`approval-workflows.md` § *The template, as data*) | INV-APR-020 compares the two directly, so they must not drift into different spellings |
+| No class may state `"requires": []` | *No class may be configured to require nobody* — an empty floor is how a control is removed quietly |
+| Every participant named must exist in the tenant and be active when the mandate is used | A mandate naming a dissolved body is unsatisfiable, and should say so when a template is published rather than when someone submits |
+
+**An omitted class inherits the union of every stated class's requirements.** The phrase this
+chapter used before — *the strictest one stated* — has no meaning once two stated classes name
+different authorities, and choosing between them would invent an ordering the model does not
+have. The union is the only reading that cannot come out weaker than any stated class, which is
+what *strictest* was reaching for, and it fails closed as `AGENTS.md` rule 5 requires.
+
+It can over-require. State `MATERIAL` as the board and `EDITORIAL` as a named user, omit
+`NON_MATERIAL`, and a non-material change then needs both. That is visible, refusable when a
+template is published, and fixed by stating the class. **A seeded profile states every class**
+rather than relying on inheritance.
 
 ## Information classification
 
