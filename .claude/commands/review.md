@@ -74,6 +74,7 @@ Two things follow, and both are yours rather than the operator's:
   the comment. `BLOCKED`, with `independent review` as the only outstanding check, is the
   normal state to review in.
 
-The operator's only remaining job is a pull request **you** authored, which rule 8 forbids
-you to review. That one needs them to post the `Reviewed-commit` comment themselves, and
-nothing else.
+A pull request **you** authored is Codex's to review, not the operator's. Rule 8 forbids you
+to review it, and `AGENTS.md` § *Picking up work* sends Codex to every open pull request
+whose commits it did not write. Leave it pending, say so in your report, and hand nobody a
+sha.
