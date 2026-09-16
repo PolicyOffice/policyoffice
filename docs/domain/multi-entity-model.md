@@ -100,9 +100,9 @@ excludes, over a dated interval.
 **Which version authorised an interval, added 2026-09-08.** A rule interval is opened by the
 submission of the version whose scope it states (`document-lifecycle.md` transition 2 sets
 applicability at submission) and records that version. That is what reconciles this section
-with `versioning.md`, which makes applicability scope **immutable after approval** and requires
-a wrong scope to be corrected by *"a new version with corrected scope"* rather than by
-rewriting in place.
+with `versioning.md`, which freezes applicability scope from **submission** (Decision Request #92)
+and keeps it **immutable after approval** and requires a wrong scope to be corrected by *"a new
+version with corrected scope"* rather than by rewriting in place.
 
 Correcting scope therefore closes the current interval and opens a new one citing the new
 version — the same close-and-append discipline INV-ORG-002 imposes on dated memberships. Two

@@ -327,6 +327,157 @@ describe("applicability provenance and history", () => {
     });
   });
 
+  it("INV-VER-002 / INV-VER-007: submission capture may stamp an already-ended draft rule", async () => {
+    await withTenant(TENANT_A, async (sql) => {
+      const ruleId = "a1000000-0000-0000-0001-000000000002";
+      await sql.query(
+        `insert into applicability_rule (
+           tenant_id, id, document_variant_id, authorised_by_version_id, effect,
+           inheritance_mode, validity
+         ) values (
+           $1, $2, $3, null, 'INCLUDE', 'DEFAULT',
+           tstzrange('2025-01-01', '2026-01-01', '[)')
+         )`,
+        [TENANT_A, ruleId, documentA.baselineVariantId],
+      );
+
+      await sql.query(
+        `update document_version
+            set lifecycle_state = 'IN_REVIEW', row_version = row_version + 1
+          where id = $1`,
+        [documentA.draftVersionId],
+      );
+
+      const { rows } = await sql.query<{
+        authorised_by_version_id: string;
+        row_version: number;
+      }>("select authorised_by_version_id, row_version from applicability_rule where id = $1", [
+        ruleId,
+      ]);
+      expect(rows).toEqual([
+        { authorised_by_version_id: documentA.draftVersionId, row_version: 2 },
+      ]);
+    });
+  });
+
+  it.each([
+    ["effect", "effect = 'EXCLUDE'"],
+    ["legal-entity targets", "legal_entity_ids = array[]::uuid[]"],
+    ["org-unit targets", "org_unit_ids = array[]::uuid[]"],
+    ["jurisdiction targets", "jurisdiction_ids = array[]::uuid[]"],
+    ["group targets", "group_ids = array[]::uuid[]"],
+    ["user targets", "user_ids = array[]::uuid[]"],
+    ["inheritance mode", "inheritance_mode = 'LOCAL_ONLY'"],
+    ["validity start", "validity = tstzrange('2025-01-01', null, '[)')"],
+    ["validity end", "validity = tstzrange(lower(validity), '2027-01-01', '[)')"],
+  ])("INV-VER-002: freezes in-review applicability %s", async (_fact, assignment) => {
+    await withTenant(TENANT_A, async (sql) => {
+      await sql.query(
+        `update document_version
+            set lifecycle_state = 'IN_REVIEW', row_version = row_version + 1
+          where id = $1`,
+        [documentA.draftVersionId],
+      );
+
+      await expect(
+        sql.query(
+          `update applicability_rule
+              set ${assignment}, row_version = row_version + 1
+            where id = $1`,
+          [RULE_A],
+        ),
+      ).rejects.toMatchObject({
+        code: "55000",
+        constraint: "applicability_rule_in_review_immutable",
+      });
+    });
+  });
+
+  it("INV-VER-002: refuses a new applicability rule authorised by an in-review version", async () => {
+    await withTenant(TENANT_A, async (sql) => {
+      await sql.query(
+        `update document_version
+            set lifecycle_state = 'IN_REVIEW', row_version = row_version + 1
+          where id = $1`,
+        [documentA.draftVersionId],
+      );
+
+      await expect(
+        sql.query(
+          `insert into applicability_rule (
+             tenant_id, document_variant_id, authorised_by_version_id, effect,
+             inheritance_mode, validity
+           ) values (
+             $1, $2, $3, 'INCLUDE', 'DEFAULT',
+             tstzrange('2027-01-01', null, '[)')
+           )`,
+          [TENANT_A, documentA.baselineVariantId, documentA.draftVersionId],
+        ),
+      ).rejects.toMatchObject({
+        code: "23514",
+        constraint: "applicability_rule_authority_frozen_in_review",
+      });
+    });
+  });
+
+  it("INV-VER-007: requesting changes reopens applicability facts, intervals and insertion", async () => {
+    await withTenant(TENANT_A, async (sql) => {
+      await sql.query(
+        `update document_version
+            set lifecycle_state = 'IN_REVIEW', row_version = row_version + 1
+          where id = $1`,
+        [documentA.draftVersionId],
+      );
+      await sql.query(
+        `update document_version
+            set lifecycle_state = 'CHANGES_REQUESTED', row_version = row_version + 1
+          where id = $1`,
+        [documentA.draftVersionId],
+      );
+
+      await sql.query(
+        `update applicability_rule
+            set effect = 'EXCLUDE',
+                validity = tstzrange(lower(validity), '2027-01-01', '[)'),
+                row_version = row_version + 1
+          where id = $1`,
+        [RULE_A],
+      );
+
+      const newRuleId = "a1000000-0000-0000-0001-000000000003";
+      await sql.query(
+        `insert into applicability_rule (
+           tenant_id, id, document_variant_id, authorised_by_version_id, effect,
+           inheritance_mode, validity
+         ) values (
+           $1, $2, $3, $4, 'INCLUDE', 'DEFAULT',
+           tstzrange('2027-01-01', null, '[)')
+         )`,
+        [TENANT_A, newRuleId, documentA.baselineVariantId, documentA.draftVersionId],
+      );
+
+      const { rows } = await sql.query<{
+        id: string;
+        effect: string;
+        valid_until: Date | null;
+      }>(
+        `select id, effect, upper(validity) as valid_until
+           from applicability_rule
+          where id = any($1::uuid[])
+          order by id`,
+        [[RULE_A, newRuleId]],
+      );
+      expect(rows).toEqual([
+        {
+          id: RULE_A,
+          effect: "EXCLUDE",
+          valid_until: new Date("2027-01-01T00:00:00.000Z"),
+        },
+        { id: newRuleId, effect: "INCLUDE", valid_until: null },
+      ]);
+    });
+  });
+
   it("INV-VER-007: rejects provenance from a version of another variant", async () => {
     await withTenant(TENANT_A, async (sql) => {
       const otherVariant = "a1000000-0000-0000-0002-000000000001";
@@ -392,6 +543,27 @@ describe("applicability provenance and history", () => {
           where id = $1`,
         [documentA.draftVersionId],
       );
+
+      await sql.query("savepoint before_approved_insert");
+      try {
+        await sql.query(
+          `insert into applicability_rule (
+             tenant_id, document_variant_id, authorised_by_version_id, effect,
+             inheritance_mode, validity
+           ) values (
+             $1, $2, $3, 'INCLUDE', 'DEFAULT',
+             tstzrange('2028-01-01', null, '[)')
+           )`,
+          [TENANT_A, documentA.baselineVariantId, documentA.draftVersionId],
+        );
+        expect.unreachable("approved version unexpectedly authorised a new applicability rule");
+      } catch (error) {
+        expect(error).toMatchObject({
+          code: "23514",
+          constraint: "applicability_rule_authority_mutable",
+        });
+        await sql.query("rollback to savepoint before_approved_insert");
+      }
 
       await sql.query("savepoint before_approved_rewrite");
       try {

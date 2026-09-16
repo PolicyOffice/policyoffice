@@ -68,6 +68,10 @@ When changes are requested, the frozen revision stays frozen and the author's ne
 creates revision *n+1*. The trail therefore shows what was submitted, what was said about
 it, and what was submitted next — which is precisely the sequence an auditor asks for.
 
+Applicability scope freezes at the same moment (Decision Request #92). While a candidate is
+in review, the rules stating whom it will govern cannot change, end or be added to;
+requesting changes reopens them along with the content.
+
 ## What immutability means after approval
 
 > **INV-VER-003 — Normative content of an approved, published, effective, superseded or
