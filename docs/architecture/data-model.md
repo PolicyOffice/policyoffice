@@ -349,7 +349,7 @@ database.
 | Table | Columns |
 |---|---|
 | `configuration_version` | `sequence`, `effective_from`, `changed_by`, `change_reason`, `weakening boolean`, `payload_digest`. `unique (tenant_id, sequence)` |
-| `document_type` | `code`, `name`, `rank`, `mandated_authority jsonb`, `default_workflow_template_id`, `default_review_rule jsonb`, `requires_attestation_by_default`, `mandated_by_document_version_id`, `status`. `unique (tenant_id, code)`, `unique (tenant_id, rank)` |
+| `document_type` | `code`, `name`, `rank`, `mandated_authority jsonb`, `default_workflow_template_id`, `default_review_rule jsonb`, `requires_attestation_by_default`, `mandated_by_document_version_id`, `status`. `unique (tenant_id, code)`, `unique (tenant_id, rank)`. `mandated_authority` has the shape `document-taxonomy.md` § *Mandated authority, as data* specifies |
 | `information_classification` | `code`, `name`, `rank`, `handling_instructions`, `externally_disclosable boolean`, `status`. `unique (tenant_id, code)`, `unique (tenant_id, rank)`. Referenced by `document_version.classification_id`; referenced by no authorization structure at all (INV-AUTH-019) |
 | `attestation_statement` | `statement_key`, `version_sequence`, `locale`, `body`, `created_by`. `unique (tenant_id, statement_key, version_sequence, locale)`, `revoke update` |
 | `retention_rule` | `record_class`, `duration interval`, `anchor`, `disposition`. `unique (tenant_id, record_class)` |
@@ -539,7 +539,7 @@ create trigger approval_decision_resolution_date_valid
 | Table | Columns |
 |---|---|
 | `workflow_template` | `name`, `purpose`, `active_version_id`, `status` |
-| `workflow_template_version` | `workflow_template_id`, `version_sequence`, `stages jsonb`, `separation_of_duties_rules jsonb`, `published_at`, `published_by`. `revoke update` — INV-APR-010 |
+| `workflow_template_version` | `workflow_template_id`, `version_sequence`, `stages jsonb`, `separation_of_duties_rules jsonb`, `published_at`, `published_by`. `revoke update` — INV-APR-010. `stages` has the shape `approval-workflows.md` § *The template, as data* specifies |
 | `approval_run` | `content_revision_id`, `workflow_template_version_id`, `resolved_participants jsonb`, `status run_status`, `started_at`, `completed_at`, `cancelled_reason`, `configuration_version_id`. `resolved_participants` is frozen at start — INV-APR-012 |
 | `approval_stage` | `approval_run_id`, `stage_order`, `completion_rule`, `threshold`, `status`, `due_at`, `completed_at`. `unique (tenant_id, approval_run_id, stage_order)` |
 | `approval_task` | `approval_stage_id`, `participant_type`, `participant_id`, `status`, `assigned_at`, `due_at`, `delegated_from_user_id` |

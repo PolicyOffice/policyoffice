@@ -116,6 +116,59 @@ resolution, not five clicks. `document-taxonomy.md` specifies the second in full
 > **INV-APR-022 — Where a resolution date is recorded, it may precede `recorded_at` but
 > never precedes submission of the revision it approves.**
 
+### The template, as data
+
+`workflow_template_version.stages` is the stored form of everything above: a JSON array, in
+execution order, with one object per stage.
+
+```json
+[
+  {
+    "order": 1,
+    "name": "Compliance review",
+    "completionRule": "ALL",
+    "participants": [{ "type": "USER", "id": "…" }]
+  },
+  {
+    "order": 2,
+    "name": "Management Board",
+    "completionRule": "BODY_RESOLUTION",
+    "participants": [{ "type": "GOVERNANCE_BODY", "id": "…" }]
+  }
+]
+```
+
+| Field | Rule |
+|---|---|
+| `order` | Starts at 1 and increases by exactly one. It becomes `approval_stage.stage_order`, and INV-APR-008 runs the stages in it |
+| `name` | What the stage is called in the inbox and in evidence. Required, and free text — it is the tenant's vocabulary, not ours |
+| `completionRule` | One of the `completion_rule` values. `AT_LEAST_N` additionally carries `threshold`: an integer above one and no greater than the number of participants. Every other rule carries none |
+| `participants` | One entry per task the stage creates, becoming `approval_task.participant_type` and `participant_id`. Never empty, and a participant appears at most once in a stage |
+
+A participant appearing twice in one stage would let a single principal count twice toward
+`AT_LEAST_N`, which is the quorum equivalent of counting a vote twice. Across stages it is
+ordinary: Legal reviews, and the board later approves.
+
+`participants` is a list even where the Pilot permits only one, because the tasks of a stage
+are what INV-APR-012 freezes at run start, and a shape that cannot hold two of them could not
+express `AT_LEAST_N` at all without a migration.
+
+Two pairings are structural rather than configuration:
+
+- A `GOVERNANCE_BODY` participant is satisfiable only by `BODY_RESOLUTION`, and
+  `BODY_RESOLUTION` takes exactly one `GOVERNANCE_BODY` participant and nothing else. A body
+  decides as an institution or not at all (INV-APR-021).
+- `ALL`, `ANY_ONE` and `AT_LEAST_N` take `USER`, `ROLE_AT_SCOPE` or `GROUP` participants, never
+  a body.
+
+A template version states participants; it never stores who they resolve to. Resolution happens
+once, at `approval_run.started`, and the resolved set is frozen on the run (INV-APR-012) — which
+is why editing a group in 2028 cannot change what a 2026 run meant.
+
+`separation_of_duties_rules` is an empty array until § *Separation of duties* is built. No stage
+carries a due date yet: `approval_stage.due_at` stays null until reminders and escalation exist,
+and INV-APR-002 means a due date could never produce an approval regardless.
+
 ### The floor under every template
 
 > **INV-APR-020 — A workflow may add approval requirements beyond its Document Type's
@@ -129,6 +182,30 @@ that records which Governing Framework version justified it.
 
 This is what makes the taxonomy load-bearing rather than decorative. Without it, an
 administrator can defeat the organisation's own constitution by editing a template.
+
+**What "satisfies" means, precisely.** A template version satisfies a Document Type's mandated
+authority for a materiality class when every requirement in that class's effective set — stated,
+or inherited as `document-taxonomy.md` § *Mandated authority, as data* defines — is **bound** by
+some stage: a stage naming that exact participant, which cannot complete without that
+participant's own decision.
+
+| Stage rule | Binds its participants |
+|---|---|
+| `BODY_RESOLUTION` | Yes — the one body it names |
+| `ALL` | Yes — every participant, since each one's decision is needed |
+| `AT_LEAST_N` | Only when `threshold` equals the number of participants, which is `ALL` by another name |
+| `ANY_ONE` | No — someone else can satisfy the stage, so nobody in it is required |
+
+That distinction is the whole point. Without it a workflow could *appear* to include the
+Management Board while an `ANY_ONE` stage lets any single reviewer complete it, and the floor
+would be decorative. Extra stages and extra participants are always permitted: INV-APR-020 is a
+floor, not an equality.
+
+The check runs twice. When a template version is published, against every Document Type whose
+`default_workflow_template_id` names it, for every materiality class — a failure refuses the
+publication. And again at `approval_run.started`, for that version's own materiality class, since
+the type's configuration can change in between — a failure refuses the submission and names the
+requirement that is unmet.
 
 ## Decisions
 
@@ -238,11 +315,31 @@ configure that deliberately, and their evidence records that this is how they go
 
 ## Pilot scope
 
-Whether the Pilot ships a single fixed workflow or configurable templates is an open
-decision recorded in `docs/plans/open-decisions.md`.
+**Decided 2026-09-10 — `open-decisions.md` § 4, option A.** Each governance profile seeds one or
+two template versions, runs bind to them by identifier, and no template editor ships in the Pilot.
+Seeded template versions are ordinary tenant-owned rows with `published_at` and `published_by`
+set, exactly as an editor would write them, so adding the editor later is additive rather than a
+backfill.
 
-The distinction affects how much of this chapter is *exercised* in the Pilot. It affects
-none of it structurally: even a fixed workflow is stored as a template version, runs
-against a frozen participant set, and is bound to a run by identifier — because
-retrofitting that later means rewriting every historical approval's interpretation, which
-is precisely what INV-APR-010 and INV-APR-012 exist to prevent.
+What the Pilot *exercises* is a subset, following `scope-and-roadmap.md` § *Controlled approval*.
+It affects none of this chapter structurally: even a seeded workflow is stored as a template
+version, runs against a frozen participant set, and is bound to a run by identifier — because
+retrofitting that later means rewriting every historical approval's interpretation, which is
+precisely what INV-APR-010 and INV-APR-012 exist to prevent.
+
+| | Pilot | Commercial V1 |
+|---|---|---|
+| Stages | Serial, one participant each | Parallel tasks within a stage |
+| Completion rules | `ALL` over that one participant, and `BODY_RESOLUTION` | `ANY_ONE` and `AT_LEAST_N` as well |
+| Participant kinds | `USER` and `GOVERNANCE_BODY` | `ROLE_AT_SCOPE` and `GROUP` as well |
+| Decisions | `APPROVE`, `REQUEST_CHANGES`, `REJECT`, body resolutions included | Unchanged |
+| `separation_of_duties_rules` | `[]` | Configured and enforced (INV-APR-011) |
+| Delegation, reassignment, reminders, escalation | None | All four |
+
+`ANY_ONE` is excluded from the Pilot rather than allowed over a single participant, where it would
+mean the same thing as `ALL`: two spellings of one arrangement, one of which can never satisfy a
+mandated authority, is a trap for whoever seeds the next profile.
+
+The subset is a restriction on what a seeded template may contain, not a second shape. A Pilot
+template is a valid V1 template, and the validation that refuses `ANY_ONE` today is the one that
+stops refusing it when parallel tasks arrive.
