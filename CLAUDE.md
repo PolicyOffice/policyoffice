@@ -78,6 +78,41 @@ to prevent.
 The tell is any sentence in a ticket asserting what another artefact contains. When you
 write one, go and look.
 
+### Before filing: prove every acceptance criterion can be met
+
+The rule above is necessary and was not sufficient. In Phase 3 every Decision Request raised
+against a ticket — #120, #132 and #139 — was a defect in the ticket, and one more was caught only
+in review. All four were written after that rule existed, by the agent that wrote it. So the rule
+is now a **pass over the finished draft**, run before `gh issue create` and again before any
+amendment:
+
+1. **Each criterion against the ticket's own facts.** For every acceptance criterion, name the
+   tables, counts and mappings in the same ticket it depends on, and check it can be met given
+   them. POL-033 listed four routes resting on three distinct capabilities, then required each
+   denial case to hold *"the other three"* — impossible, and written in the same ticket as the
+   table that made it so (#139).
+2. **Each criterion against the machinery that has to satisfy it** — the type system, an existing
+   gate, an accepted ADR. POL-031 required a handle to *"fail to compile"* when passed where
+   `{ query }` is expected; branding the source never blocks structural assignability, which `tsc`
+   confirms in a minute. The same draft required a second transaction opener that `ADR-0001` § 3
+   forbids (#132).
+3. **The Goal against the criteria.** The Goal is what the criteria must jointly prove. If it
+   claims more, a criterion is missing or the Goal overstates. POL-027's Goal was *"deleting any
+   part of it fails the build"*; its five cases left two conjuncts deletable, and POL-028 existed
+   only to finish the sentence.
+4. **Every claim about another artefact, opened** — the section above. POL-029 said revocation
+   sets `revoked_at` and never deletes, contradicting `ADR-0002`, `data-model.md` and the trigger
+   in `0003` at once (#120).
+5. **Nothing that forecloses challenge.** Never write *"decided here so it is not re-litigated"*,
+   or anything else telling the implementer not to object. The implementer's Decision Request is
+   the safety net under items 1–4, and that sentence, in POL-031's first draft, tried to remove
+   it. Propose the design, and say that a contradiction means a Decision Request rather than a
+   workaround.
+
+**Say in the ticket what the pass checked, specifically.** *"Verified: `createContentRevision`
+takes `contentBytes`; nothing wires object storage"* is evidence a reviewer can falsify.
+*"Verified against the spec"* is not.
+
 ## Never brief Codex through the operator
 
 The repository is the only channel between the agents — `running-the-agents.md` § *The agents do

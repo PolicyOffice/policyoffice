@@ -53,8 +53,13 @@ Decision Request.
 8. **Never record a review of your own work.** The `independent review` status is set by a
    `Reviewed-commit: <sha>` comment, and it is the one merge condition that is not
    automated. Posting it on your own pull request would unblock your own merge and defeat
-   the only gate a machine cannot check. Leave it pending; the reviewing agent posts it.
-   This is the whole reason the two-agent split exists — see *Agent lanes* below.
+   the only gate a machine cannot check. Leave it pending; the **other agent** posts it.
+   **"Your own" means your own agent, not the account.** Both agents authenticate as the
+   founder's GitHub account, so authorship on GitHub cannot separate them; what decides it
+   is which agent wrote the commits. Claude reviews what Codex implemented, and Codex
+   reviews what Claude authored — specifications, ADRs, tickets, process documents. Neither
+   waits for the founder. This is the whole reason the two-agent split exists — see *Agent
+   lanes* below.
 
 ## Working rules
 
@@ -106,7 +111,10 @@ gh issue edit <n> --add-label in-progress
 ```
 
 For review work, `gh pr list --state open` — review every PR with no review from you since
-its most recent commit.
+its most recent commit. **That includes pull requests the other agent authored.** A pull
+request whose commits you did not write is yours to review, whatever the account on it says
+(rule 8). The risk tier sets how deep the review goes, never whether the `Reviewed-commit`
+comment is needed: without that comment nothing merges at all, Tier 0 included.
 
 The operator should never need to know an issue number. If they do, the backlog is not
 selectable and that is a defect in the tickets.
@@ -134,8 +142,8 @@ redefined the product is not.
 
 | Agent | Owns |
 |---|---|
-| **Claude Code** | Specification, ADRs, ticket authoring, architecture, hard debugging, PR review |
-| **Codex** | Implementation, tests, CI fixes, responding to review comments |
+| **Claude Code** | Specification, ADRs, ticket authoring, architecture, hard debugging, review of Codex's pull requests |
+| **Codex** | Implementation, tests, CI fixes, responding to review comments, review of Claude's pull requests |
 | **CI** | The merge gate. Deterministic. No AI in the required-check path. |
 | **Founder** | Product decisions, milestone acceptance |
 

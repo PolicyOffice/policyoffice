@@ -27,7 +27,9 @@ and no `decision-required` label. GitHub merges automatically once those hold.
 second human approval would be theatre, and creating a second account to supply it would
 be dishonest. What this check actually records is narrower and true: **an agent other
 than the one that wrote the change reviewed the diff against the product specification,
-and the review is visible in the PR conversation.** Codex implements; Claude reviews.
+and the review is visible in the PR conversation.** Codex implements and Claude reviews;
+where Claude authors the change — specification, tickets, process — Codex reviews it. One
+rule in both directions: the agent that wrote the diff never records its review.
 
 Correctness is decided by the deterministic pipeline — compilers, tests, migrations,
 static analysis, Playwright — not by any agent's approval. No AI is in the required-check
@@ -75,22 +77,24 @@ The check compares that sha to the pull request's head. Push a new commit and th
 sha no longer matches, the check returns to pending, and code nobody has read cannot merge
 behind a stale approval. That property is the entire point.
 
-**The implementer never posts it.** Recording a review of your own pull request is
-prohibited (`AGENTS.md` rule 8). It is the one merge condition a machine cannot verify,
-which is exactly why it depends on discipline rather than on a check — and why breaking it
-is a process failure rather than a shortcut. If your pull request is blocked on this
-status, it is waiting for someone else, and that is the system working.
+**The author never posts it.** Recording a review of your own pull request is prohibited
+(`AGENTS.md` rule 8). It is the one merge condition a machine cannot verify, which is
+exactly why it depends on discipline rather than on a check — and why breaking it is a
+process failure rather than a shortcut. If your pull request is blocked on this status it is
+waiting for the other agent — Claude for what Codex implemented, Codex for what Claude
+authored — and that is the system working. It is not waiting for the founder.
 
 **What it does not assert.** It is not a human approval, and it is not cryptographic proof
 that a different party reviewed the diff. Both agents in this project authenticate as the
 same GitHub account, so GitHub cannot distinguish the implementer from the reviewer, and
 this repository will not create a second account to manufacture an appearance of one.
 
-The independence that matters is real but procedural: the implementing agent is Codex and
-the reviewing agent is Claude Code, they run in separate sessions with separate context,
-and a model reviewing its own output catches its own misreading of a specification far less
-reliably than an independent pass does. That is why the two passes exist. The check records
-that the second pass happened; it does not prove it.
+The independence that matters is real but procedural: the agent that wrote a change never
+records its review — Claude reviews what Codex implements, Codex reviews what Claude authors
+— they run in separate sessions with separate context, and a model reviewing its own output
+catches its own misreading of a specification far less reliably than an independent pass
+does. That is why the two passes exist. The check records that the second pass happened; it
+does not prove it.
 
 **Why not require a GitHub review approval instead.** Because the only account that could
 give one belongs to the founder, and the merge policy is explicitly that nobody clicks

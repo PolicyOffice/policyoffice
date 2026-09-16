@@ -40,11 +40,16 @@ Codex lists open issues labelled `ready`, skips any with unmet dependencies or w
 already in progress, claims the lowest-numbered one that remains, reads the spec sections
 it cites, implements, tests and opens a pull request.
 
-**Getting a review.** In a Claude session:
+**Getting a review.** The same sentence, to whichever agent did not write the work — in a
+Claude session for anything Codex implemented, and in Codex for anything Claude authored,
+which means specifications, tickets and process documents:
 
 ```text
 Review any open PRs.
 ```
+
+Neither needs a number. Each lists the open pull requests itself and skips the ones whose
+commits it wrote (`AGENTS.md` rule 8).
 
 **Fixing review comments.** Back in Codex:
 
@@ -72,7 +77,8 @@ It had not. The design above is sound; Claude was working around it.
   repository. That is the whole argument in § *The agents do not talk to each other*, and
   handing guidance over verbally is exactly the leak it exists to prevent.
 
-**The operator's lines do not change, and there are three of them.** They contain no numbers.
+**The operator's lines do not change, and there are three of them** — one of which, *"Review
+any open PRs"*, is typed to whichever agent did not write the work. They contain no numbers.
 `AGENTS.md` § *Picking up work* is what makes that work — Codex selects implementation work by
 the selection rule, and finds review work with `gh pr list --state open`, *"review every PR with
 no review from you since its most recent commit."*
@@ -174,12 +180,13 @@ Two mechanical details, both learned the hard way and neither obvious:
 head sha. For **Codex's** pull requests Claude posts it after reviewing, and the merge
 follows on its own — you do nothing.
 
-For a pull request **Claude authored** — documentation, tickets, fixes to its own earlier
-work — it may not review itself (`AGENTS.md` rule 8), so it needs you:
+For a pull request **Claude authored** — a specification, a ticket, a process document — it
+may not review itself (`AGENTS.md` rule 8), so **Codex** reviews it and posts the sign-off,
+and the merge follows on its own. You do nothing there either.
 
-```bash
-gh pr comment <n> --body 'Reviewed-commit: <full 40-character sha>'
-```
+**Corrected 2026-09-16.** This said the sign-off was yours. It left specification pull
+requests waiting on you indefinitely, which is exactly what happened, and it contradicted
+`CLAUDE.md` and § *Do not let Claude turn you into a message bus* above.
 
 That is the whole of it. The merge happens by itself afterwards. There is no
 `gh pr merge` step any more; if you find yourself typing one, something upstream is wrong
