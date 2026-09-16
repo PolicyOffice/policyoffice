@@ -20,7 +20,7 @@ to merge is.
 | Actor | Owns | Share of volume |
 |---|---|---|
 | **Claude Code** | Specification, ADRs, ticket authoring, architecture, hard debugging, PR review | ~20% |
-| **Codex** | Implementation, tests, CI fixes, review-comment fixes | ~80% |
+| **Codex** | Implementation, tests, CI fixes, review-comment fixes, review of Claude's pull requests | ~80% |
 | **CI** | The merge gate. Deterministic. No AI in the required-check path. | every PR |
 | **Founder** | Product decisions, milestone acceptance | decisions only |
 
@@ -77,11 +77,16 @@ or agent recording `Reviewed-commit: <sha>`. Auto-merge does not skip that; it r
 clicking that used to follow it.
 
 Which leaves the founder with **two touchpoints for implementation work** — starting Codex,
-and asking Claude to review — plus answering Decision Requests.
+and asking an agent to review — plus answering Decision Requests.
 
-The exception is a pull request Claude *authored*: rule 8 forbids recording a review of your
-own work, so those need a second party. Today that is the founder, and it is one comment
-rather than two commands.
+A pull request Claude *authored* — a specification, a ticket, a process document — runs the
+same loop in the other direction: rule 8 forbids recording a review of your own work, so
+**Codex reviews it and records the sign-off**, exactly as Claude does for Codex's work.
+
+**Corrected 2026-09-16.** This paragraph used to name that second party as the founder. That
+made every specification pull request wait on the one person the workflow exists to keep out
+of the loop, and it duly happened: three sat unreviewed, one of them for four days, while
+each agent believed the other had it. The loop only closes if it closes in both directions.
 
 The trade this makes, stated plainly: work now lands without anyone watching it. The pull
 request page becomes the record rather than a terminal. That is the intended design, and it
