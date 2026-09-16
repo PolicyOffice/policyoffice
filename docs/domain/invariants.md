@@ -128,6 +128,13 @@ to an empty interval at `effective_from`; an Effective version is closed at the 
 transaction instant. The narrow withdrawal transition is the exception, not a general
 right to edit effectivity.
 
+**Scope freezes at submission, 2026-09-16.** Decision Request #92 extended INV-VER-002's
+snapshot to applicability scope. From `DRAFT → IN_REVIEW` until changes are requested, no
+rule authorised by the candidate may change, end or be added, because approvers must not
+review a moving target. Requesting changes terminates the snapshot and reopens scope, as it
+does content. From approval onward INV-VER-007 applies unchanged: an approved rule may only
+be ended.
+
 ## INV-EFF — Effectivity and supersession
 
 | ID | Invariant | Why it matters | Test | Phase |
