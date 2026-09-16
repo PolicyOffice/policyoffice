@@ -54,7 +54,7 @@ is whether the records left behind can be assembled into proof by the system its
 | SSO and SCIM | Local users and groups prove the loop. Enterprise identity is a procurement requirement, not a governance one |
 | Retention and legal hold | Nothing is old enough to dispose of. Record classes are assigned from day one |
 | Public API and webhooks | Internal contracts are designed; the public surface waits for someone to integrate |
-| Template editing UI | Templates exist and runs bind to them. Whether customers can edit them is open decision 4 |
+| Template editing UI | Templates exist and runs bind to them, seeded per governance profile. Decision 4, decided 2026-09-10: template-backed, not customer-editable, so no editor ships in the Pilot |
 | Dynamic attestation audiences | Snapshot audiences produce evidence that explains itself |
 | Break-glass elevation | No production customer data to break glass into yet |
 
@@ -115,10 +115,11 @@ explicitly not a commitment to build it.
 | 2 — Authoring model | Drafting, comparison, materiality warnings, rendering | **Decided** — file-centric. Drafting means uploading a controlled file; comparison and warnings run over extracted text |
 | 7 — Data residency | Every infrastructure choice | **Decided** — one EU region, complete |
 | 3 — `Space` semantics | Register navigation only | Open |
-| 4 — Workflow configurability | Whether the Pilot ships a template editor | Open |
-| 5 — Applicability complexity | Campaign audience and register filtering in the Pilot | Open |
+| 4 — Workflow configurability | Whether the Pilot ships a template editor | **Decided 2026-09-10** — template-backed, not customer-editable; no editor in the Pilot |
+| 5 — Applicability complexity | Campaign audience and register filtering in the Pilot | **Decided 2026-09-08** — explicit audience lists |
 
 The three that blocked architecture were answered on 2026-08-24 and the Pilot scope above
-reflects them. The Pilot scope for the remaining three assumes their stated recommendation
-in `docs/plans/open-decisions.md`; where the founder decides otherwise, this chapter
-changes with it — the invariants do not.
+reflects them. Decisions 4 and 5 were answered in September, so this chapter states their
+outcome rather than their recommendation. **Decision 3 is the only one still open**, and it
+shapes register navigation alone; where the founder decides it, this chapter changes with
+it — the invariants do not.

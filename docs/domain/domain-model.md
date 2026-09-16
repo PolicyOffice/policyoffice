@@ -872,10 +872,15 @@ in `docs/plans/open-decisions.md`:
 | `ContentRevision.content_ref` | **File-centric.** The uploaded controlled file is the governed artefact and the thing hashed. See `versioning.md` |
 | `LegalEntity` | **Schema-complete, behaviour-minimal.** The entity, org unit and membership tables exist from the first migration; one entity is seeded per tenant; hierarchy resolution arrives in V1 |
 
-Three remain open. None of them blocks the physical model, and none changes an invariant.
+Two more were answered in September, and neither changed an invariant or the physical model:
+
+| Area | Decided |
+|---|---|
+| `WorkflowTemplate` | **Template-backed, not customer-editable** (2026-09-10). Templates are seeded per governance profile and runs bind to them by identifier; no editor ships in the Pilot. `approval-workflows.md` § *The template, as data* fixes their stored shape |
+| `ApplicabilityRule` | **Explicit audience lists** (2026-09-08). Applicability names org units, groups or users directly in the Pilot |
+
+One remains open. It blocks nothing in the physical model and changes no invariant.
 
 | Area | What is undecided | What it affects |
 |---|---|---|
 | `Space` | One Space per tenant, or many | Register navigation and default ownership. Not authorization, and not applicability — those are settled |
-| `WorkflowTemplate` | Fixed workflow or configurable templates in the Pilot | Whether a template editor ships, not whether templates exist |
-| `ApplicabilityRule` | Explicit audience lists, or rules | The complexity of the Pilot's resolution path |
