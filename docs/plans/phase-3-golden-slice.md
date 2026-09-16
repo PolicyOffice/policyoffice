@@ -152,17 +152,18 @@ Written one at a time, as the authorization epic was.
 | POL-030 (#125) | `ADR-0001` § 3's one transaction helper, and the `app_role` connection the application did not have | **merged** #127 |
 | POL-031 (#130) | The request context, and the first capability ever enforced at an entry point | **merged** #133 |
 | POL-032 (#134) | Sign-in and sign-out, so a person rather than a test can hold a session | **merged** #136 |
-| POL-033 (#137) | The author's path — create, draft, submit. Four capabilities, each enforced separately | **merged** #141 |
+| POL-033 (#137) | The author's path — create, draft, submit. Four route-level checks over three distinct capabilities, because `document.edit_draft` covers both starting a version and saving a revision (#139) | **merged** #141 |
 | POL-034 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
 | POL-035 | **The reader view**, built to `information-architecture.md` | POL-033 has landed; in the reference flow it follows approval, since nothing becomes effective without it |
 | POL-036 | Playwright drives the **full** reference flow with three principals | last |
 
 ### What comes next, in order
 
-1. **POL-037 (#142)** — applicability scope freezes at submission. Ready. Decision Request #92,
-   decided by the founder on 2026-09-16, and independent of everything below.
-2. **The approval subsystem**, decomposed below. Its next ticket, POL-038, cannot be written until
-   the template stage shape and the mandated-authority structure are specified.
+1. **POL-038 (#146)** — workflow templates and the mandated authority they must satisfy. Ready: the
+   shapes it rests on were specified and merged on 2026-09-16.
+2. **The rest of the approval subsystem**, decomposed below — POL-039 runs, POL-040 approver
+   decisions, POL-041 body resolutions, POL-042 approvers who can no longer act. Each is written
+   after the one before it lands.
 3. **POL-034** the approval inbox, **POL-035** the reader view, **POL-036** the full Playwright flow.
 4. Then the unstarted groups in *The work, in dependency order* below — applicability resolution
    and attestation, review cases, and evidence packs last.
@@ -214,8 +215,8 @@ Commercial V1, under § *Configurable workflows*. Written one ticket at a time:
 
 | | What | Status |
 |---|---|---|
-| **POL-037 (#142)** | Applicability scope freezes at submission — Decision Request #92 | **ready** |
-| POL-038 | Templates and mandated authority as data: `workflow_template` and `workflow_template_version`, versions immutable (INV-APR-010), the Pilot stage shape, `mandated_authority` as a structure, the INV-APR-020 floor checked when a template version is published, and seeded templates as ordinary tenant-owned rows | needs the stage and mandate shapes specified |
+| POL-037 (#142) | Applicability scope freezes at submission — Decision Request #92 | **merged** #144 |
+| **POL-038 (#146)** | Templates and mandated authority as data: `workflow_template` and `workflow_template_version`, versions immutable (INV-APR-010), the Pilot stage shape, `mandated_authority` as a structure, the INV-APR-020 floor checked when a template version is published, and seeded templates as ordinary tenant-owned rows | **ready** |
 | POL-039 | Runs start at submission: participants resolved and frozen (INV-APR-012), the mandate checked again at run start (INV-APR-020), `approval_run.started`, `approval_stage.started`, `approval_task.assigned` | after POL-038 |
 | POL-040 | Approver decisions — `APPROVE`, `REQUEST_CHANGES`, `REJECT` (INV-APR-001, INV-APR-007), serial stages (INV-APR-008), completion exactly once (INV-APR-009), changes ending the snapshot and resubmission opening a fresh run (INV-APR-003, INV-APR-004). `0010` lets `IN_REVIEW → APPROVED` happen without any run today; this closes it | after POL-039 |
 | POL-041 | Body resolutions — `BODY_RESOLUTION`, `body.act_for` (INV-APR-023), the body distinguished from its recorder (INV-APR-021), no resolution date before submission (INV-APR-022), evidence fields per configuration (INV-APR-024) | after POL-040 |
@@ -223,15 +224,16 @@ Commercial V1, under § *Configurable workflows*. Written one ticket at a time:
 
 POL-034, the inbox, follows POL-040 for individual approvers and POL-041 for bodies.
 
+**The stage shape and the mandated-authority structure were specified on 2026-09-16**, in
+`approval-workflows.md` § *The template, as data* and § *The floor under every template*, and
+`document-taxonomy.md` § *Mandated authority, as data*. A stage binds a participant only when it
+cannot complete without that participant's own decision, which is what makes INV-APR-020's floor
+checkable; an omitted materiality class inherits the union of every stated class's requirements,
+which is what *"the strictest one stated"* could not mean once two classes name different
+authorities. POL-038 (#146) is written against them.
+
 **Still to specify, each before the ticket it affects:**
 
-- **The stage shape and the mandated-authority structure — before POL-038.** `approval-workflows.md`
-  describes stages in prose and `data-model.md` stores them as `stages jsonb`;
-  `document-taxonomy.md` makes `mandated_authority` *"a structure keyed by materiality"* without
-  fixing it. The fixtures hold placeholders — `{ "MATERIAL": { "kind": "NAMED_USER" } }` names no
-  user, and `NAMED_USER` is not one of the four participant kinds — so the INV-APR-020 floor has
-  nothing it could compare. *"An omitted class inherits the strictest one stated"* is also undefined
-  when two stated classes name different authorities.
 - **Reviewer stages — before any template uses one.** The glossary's Reviewer *"may request
   changes"* and *"cannot satisfy an approval requirement"*, and `authorization-model.md` gives the
   Reviewer role tasks in a run — but no capability that can decide anything; `document.approve` is
