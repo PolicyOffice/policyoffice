@@ -1,4 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  MATERIALITY_CLASSES,
+  findUnmetMandateRequirement,
+  parseMandatedAuthority,
+  parseSeparationOfDutiesRules,
+  parseWorkflowStages,
+} from "../../domain/src/index.js";
 import { withAppRole, withTenant } from "@policyoffice/testing";
 import {
   buildFixtureSet,
@@ -172,6 +179,73 @@ describe("reference, development and test fixtures", () => {
             `select count(*)::int as count from ${quotedIdentifier(table)}`,
           );
           expect(rows[0]?.count, `${table} for ${tenantId}`).toBeGreaterThan(0);
+        }
+      });
+    }
+  });
+
+  it("INV-APR-010 / INV-APR-020: seeds published templates and valid type mandates", async () => {
+    for (const item of fixture.tenants) {
+      await withTenant(item.tenant.id, async (sql) => {
+        const activeParticipants = {
+          userIds: new Set(item.users.map((user) => user.id)),
+          governanceBodyIds: new Set([item.governanceBody.id]),
+        };
+        const { rows: versions } = await sql.query<{
+          template_id: string;
+          active_version_id: string;
+          version_id: string;
+          stages: unknown;
+          separation_of_duties_rules: unknown;
+          published_at: Date;
+          published_by: string;
+        }>(`
+          select template.id as template_id,
+                 template.active_version_id,
+                 version.id as version_id,
+                 version.stages,
+                 version.separation_of_duties_rules,
+                 version.published_at,
+                 version.published_by
+            from workflow_template template
+            join workflow_template_version version
+              on version.tenant_id = template.tenant_id
+             and version.id = template.active_version_id
+             and version.workflow_template_id = template.id
+        `);
+        expect(versions).toHaveLength(1);
+        expect(versions[0]).toMatchObject({
+          template_id: item.workflowTemplate.id,
+          active_version_id: item.workflowTemplate.versionId,
+          version_id: item.workflowTemplate.versionId,
+          published_at: new Date(fixture.createdAt),
+          published_by: item.workflowTemplate.publishedBy,
+        });
+        const stages = parseWorkflowStages(versions[0]?.stages, activeParticipants);
+        parseSeparationOfDutiesRules(versions[0]?.separation_of_duties_rules);
+
+        const { rows: documentTypes } = await sql.query<{
+          id: string;
+          default_workflow_template_id: string;
+          mandated_authority: unknown;
+        }>(
+          `select id, default_workflow_template_id, mandated_authority
+             from document_type
+            order by rank`,
+        );
+        expect(documentTypes).toHaveLength(item.documentTypes.length);
+        for (const documentType of documentTypes) {
+          expect(documentType.default_workflow_template_id).toBe(item.workflowTemplate.id);
+          const mandate = parseMandatedAuthority(
+            documentType.mandated_authority,
+            activeParticipants,
+          );
+          for (const materiality of MATERIALITY_CLASSES) {
+            expect(
+              findUnmetMandateRequirement(stages, mandate, materiality),
+              `${documentType.id} ${materiality}`,
+            ).toBeUndefined();
+          }
         }
       });
     }

@@ -84,6 +84,35 @@ export {
 } from "./configuration.js";
 
 export {
+  WORKFLOW_COMPLETION_RULES,
+  WORKFLOW_PARTICIPANT_TYPES,
+  WORKFLOW_TEMPLATE_REQUIRED_CAPABILITIES,
+  WorkflowConfigurationNotFoundError,
+  WorkflowMandateUnsatisfiedError,
+  WorkflowTemplateValidationError,
+  assignWorkflowTemplateToDocumentType,
+  effectiveMandateRequirements,
+  findUnmetMandateRequirement,
+  parseMandatedAuthority,
+  parseSeparationOfDutiesRules,
+  parseWorkflowStages,
+  publishWorkflowTemplateVersion,
+  type ActiveWorkflowParticipants,
+  type AssignWorkflowTemplateInput,
+  type AssignedWorkflowTemplate,
+  type MandatedAuthority,
+  type MaterialityClass,
+  type PublishWorkflowTemplateVersionInput,
+  type PublishedWorkflowTemplateVersion,
+  type UnmetMandateRequirement,
+  type WorkflowCompletionRule,
+  type WorkflowParticipant,
+  type WorkflowParticipantType,
+  type WorkflowStage,
+  type WorkflowTemplateValidationCode,
+} from "./workflow-template.js";
+
+export {
   CANONICALISATION_SCHEMA_VERSION,
   InvalidCanonicalManifestError,
   buildCanonicalManifest,

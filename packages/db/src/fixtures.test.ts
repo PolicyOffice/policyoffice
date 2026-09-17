@@ -28,10 +28,21 @@ describe("deterministic fixtures", () => {
     const [alpha, beta] = buildFixtureSet("test").tenants;
     expect(alpha?.tenant.governanceProfileCode).toBe("ESSENTIAL");
     expect(beta?.tenant.governanceProfileCode).toBe("ESSENTIAL");
-    expect(alpha?.documentTypes[0]).toEqual({
-      ...beta?.documentTypes[0],
-      id: alpha?.documentTypes[0]?.id,
-    });
+    const {
+      id: alphaTypeId,
+      mandatedAuthority: alphaMandate,
+      ...alphaType
+    } = alpha?.documentTypes[0] ?? ({} as never);
+    const {
+      id: betaTypeId,
+      mandatedAuthority: betaMandate,
+      ...betaType
+    } = beta?.documentTypes[0] ?? ({} as never);
+    expect(alphaType).toEqual(betaType);
+    expect(alphaTypeId).not.toBe(betaTypeId);
+    expect(alphaMandate).not.toEqual(betaMandate);
+    expect(JSON.stringify(alphaMandate)).toContain(alpha?.users[0]?.id);
+    expect(JSON.stringify(betaMandate)).toContain(beta?.users[0]?.id);
     expect(alpha?.documentTypes[0]?.id).not.toBe(beta?.documentTypes[0]?.id);
     expect(alpha?.classifications[0]?.id).not.toBe(beta?.classifications[0]?.id);
     expect(JSON.stringify([alpha, beta])).not.toMatch(/profile(Id|VersionId)/);
