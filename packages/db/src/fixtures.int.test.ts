@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  MATERIALITY_CLASSES,
+  findUnmetMandateRequirement,
   parseMandatedAuthority,
   parseSeparationOfDutiesRules,
   parseWorkflowStages,
@@ -219,21 +221,31 @@ describe("reference, development and test fixtures", () => {
           published_at: new Date(fixture.createdAt),
           published_by: item.workflowTemplate.publishedBy,
         });
-        parseWorkflowStages(versions[0]?.stages, activeParticipants);
+        const stages = parseWorkflowStages(versions[0]?.stages, activeParticipants);
         parseSeparationOfDutiesRules(versions[0]?.separation_of_duties_rules);
 
         const { rows: documentTypes } = await sql.query<{
+          id: string;
           default_workflow_template_id: string;
           mandated_authority: unknown;
         }>(
-          `select default_workflow_template_id, mandated_authority
+          `select id, default_workflow_template_id, mandated_authority
              from document_type
             order by rank`,
         );
         expect(documentTypes).toHaveLength(item.documentTypes.length);
         for (const documentType of documentTypes) {
           expect(documentType.default_workflow_template_id).toBe(item.workflowTemplate.id);
-          parseMandatedAuthority(documentType.mandated_authority, activeParticipants);
+          const mandate = parseMandatedAuthority(
+            documentType.mandated_authority,
+            activeParticipants,
+          );
+          for (const materiality of MATERIALITY_CLASSES) {
+            expect(
+              findUnmetMandateRequirement(stages, mandate, materiality),
+              `${documentType.id} ${materiality}`,
+            ).toBeUndefined();
+          }
         }
       });
     }

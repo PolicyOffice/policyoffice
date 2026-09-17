@@ -1,7 +1,10 @@
 import type { Client } from "pg";
 import {
+  MATERIALITY_CLASSES,
+  WorkflowMandateUnsatisfiedError,
   buildCanonicalManifest,
   digestCanonicalManifest,
+  findUnmetMandateRequirement,
   parseMandatedAuthority,
   parseSeparationOfDutiesRules,
   parseWorkflowStages,
@@ -862,6 +865,22 @@ async function insertOrganization(
 }
 
 async function insertConfiguration(sql: Client, item: TenantFixture): Promise<void> {
+  const activeParticipants = {
+    userIds: new Set(item.users.map((user) => user.id)),
+    governanceBodyIds: new Set([item.governanceBody.id]),
+  };
+  const stages = parseWorkflowStages(item.workflowTemplate.stages, activeParticipants);
+  const separationRules = parseSeparationOfDutiesRules(
+    item.workflowTemplate.separationOfDutiesRules,
+  );
+  for (const documentType of item.documentTypes) {
+    const mandate = parseMandatedAuthority(documentType.mandatedAuthority, activeParticipants);
+    for (const materiality of MATERIALITY_CLASSES) {
+      const unmet = findUnmetMandateRequirement(stages, mandate, materiality);
+      if (unmet) throw new WorkflowMandateUnsatisfiedError(documentType.id, unmet);
+    }
+  }
+
   const existing = await sql.query<{ id: string }>(
     "select id from configuration_version where id = $1",
     [item.configuration.id],
@@ -882,18 +901,6 @@ async function insertConfiguration(sql: Client, item: TenantFixture): Promise<vo
       correlationId: item.configuration.correlationId,
       sourceChannel: "IMPORT",
     });
-  }
-
-  const activeParticipants = {
-    userIds: new Set(item.users.map((user) => user.id)),
-    governanceBodyIds: new Set([item.governanceBody.id]),
-  };
-  const stages = parseWorkflowStages(item.workflowTemplate.stages, activeParticipants);
-  const separationRules = parseSeparationOfDutiesRules(
-    item.workflowTemplate.separationOfDutiesRules,
-  );
-  for (const documentType of item.documentTypes) {
-    parseMandatedAuthority(documentType.mandatedAuthority, activeParticipants);
   }
 
   await sql.query(
