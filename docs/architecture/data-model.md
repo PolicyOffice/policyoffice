@@ -183,6 +183,10 @@ create type completion_rule      as enum ('ALL','ANY_ONE','AT_LEAST_N','BODY_RES
 create type approval_decision_kind as enum ('APPROVE','REQUEST_CHANGES','REJECT');
 create type run_status           as enum ('RUNNING','BLOCKED','COMPLETED','CHANGES_REQUESTED',
                                           'REJECTED','CANCELLED');
+create type approval_stage_status as enum ('PENDING','IN_PROGRESS','COMPLETED','BLOCKED',
+                                          'CANCELLED');
+create type approval_task_status as enum ('PENDING','DECIDED','REASSIGNED','UNRESOLVABLE',
+                                          'CANCELLED');
 
 create type review_outcome       as enum ('NO_CHANGE','CHANGE_REQUIRED','SCOPE_CHANGE_REQUIRED',
                                           'RETIREMENT_RECOMMENDED');
@@ -541,9 +545,9 @@ create trigger approval_decision_resolution_date_valid
 |---|---|
 | `workflow_template` | `name`, `purpose`, `active_version_id`, `status` |
 | `workflow_template_version` | `workflow_template_id`, `version_sequence`, `stages jsonb`, `separation_of_duties_rules jsonb`, `published_at`, `published_by`. `revoke update` — INV-APR-010. `stages` has the shape `approval-workflows.md` § *The template, as data* specifies |
-| `approval_run` | `content_revision_id`, `workflow_template_version_id`, `resolved_participants jsonb`, `status run_status`, `started_at`, `completed_at`, `cancelled_reason`, `configuration_version_id`. `resolved_participants` is frozen at start — INV-APR-012 |
-| `approval_stage` | `approval_run_id`, `stage_order`, `completion_rule`, `threshold`, `status`, `due_at`, `completed_at`. `unique (tenant_id, approval_run_id, stage_order)` |
-| `approval_task` | `approval_stage_id`, `participant_type`, `participant_id`, `status`, `assigned_at`, `due_at`, `delegated_from_user_id` |
+| `approval_run` | `content_revision_id`, `workflow_template_version_id`, `resolved_participants jsonb`, `status run_status`, `started_at`, `completed_at`, `cancelled_reason`, `configuration_version_id`. `resolved_participants` is frozen at start — INV-APR-012 — and has the shape `approval-workflows.md` § *The run, as data* specifies. `unique (tenant_id, content_revision_id)`: one run per candidate |
+| `approval_stage` | `approval_run_id`, `stage_order`, `completion_rule`, `threshold`, `status approval_stage_status`, `due_at`, `completed_at`. `unique (tenant_id, approval_run_id, stage_order)` |
+| `approval_task` | `approval_stage_id`, `participant_type approval_participant_type`, `participant_id`, `status approval_task_status`, `assigned_at`, `due_at`, `delegated_from_user_id` |
 
 ## Review
 
