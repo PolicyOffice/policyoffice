@@ -29,11 +29,12 @@ Nothing here is decided by an agent. Nothing here stalls unrelated work either.
 | 10 | Machine-readable governance positioning | Public positioning and roadmap pressure, not architecture | Build the substrate, hold the claim until the Pilot | Open — does not block |
 | 11 | Golden-slice interface scope | Sessions, read paths and Playwright — three of eight Phase 3 groups | **Minimal, except approval inbox and reader view** | **Decided 2026-09-10** — option B |
 | 12 | How a request finds its customer | The request context, sign-in, and everything downstream | **One installation per customer in the Pilot** | **Decided 2026-09-11** — option A |
+| 13 | Resource for `document.create` | Nothing today; every later create route | Decide against the owning `ORG_UNIT` | Open — does not block |
 
-Decisions 1, 2, 4, 6, 7, 8 and 11 are answered. Phase 1 is complete, **Phase 2 is unblocked**,
-and decisions 11 and 4 together unblock the rest of Phase 3. The licensor is recorded and
-`LICENSE` is committed. **Decision 3 is the only open one that shapes Pilot scope**, and it
-stops nothing. Decision 10 is a positioning question with no architectural consequence —
+Decisions 1, 2, 4, 5, 6, 7, 8, 11 and 12 are answered. Phase 1 is complete, **Phase 2 is
+unblocked**, and decisions 11 and 4 together unblock the rest of Phase 3. The licensor is
+recorded and `LICENSE` is committed. **Decisions 3 and 13 are the open ones that shape Pilot
+scope**, and neither stops anything. Decision 10 is a positioning question with no architectural consequence —
 the constraints it would rest on are already recorded in
 `docs/architecture/machine-access.md`.
 
@@ -508,6 +509,50 @@ than pre-emptively.
 published breaks. The Pilot's tenant seam is the same seam a hostname resolver would fill.
 
 **Blocks.** Was blocking POL-031 and everything after it. Now unblocked.
+
+---
+
+## 13 — What resource `document.create` is decided against
+
+**Found on 2026-09-17**, while reviewing POL-038. It blocks nothing and is recorded here so it
+is not found a third time.
+
+**The fact.** `apps/web/src/authoring.ts` decides `document.create` against
+`{ type: "TENANT", id: null }`. The save-draft route beside it decides against
+`DOCUMENT_VERSION`, naming the version it writes into, because that version exists by then. At
+create time the Document does not exist yet, so the route must name something else, and it names
+the tenant.
+
+**Why that is a decision rather than an implementation detail.** `AUTHORIZATION_SCOPE_TYPES`
+includes `ORG_UNIT`, and INV-AUTH-017 makes grant inheritance follow administrative containment —
+owning org unit, legal entity, tenant. A grant sitting on one org unit therefore does not reach a
+`TENANT` resource, so an Author scoped to a unit cannot create a Document at all, not even inside
+their own unit. Only a tenant-wide Author can create. `authorization-model.md` lists
+`document.create` with a description and a tier and never says what it is decided against, so the
+code contradicts nothing; the specification is silent.
+
+**The options.**
+
+- **A — keep `TENANT`.** Creation is a tenant-wide privilege; org-unit Authors draft and submit
+  but never create. It is what ships today.
+- **B — decide against the owning `ORG_UNIT`** named in the submitted form, so a scoped Author
+  creates within their unit and nowhere else.
+- **C — accept either** the tenant grant or a grant on the named owning unit.
+
+**Recommendation: B**, and record it by giving `authorization-model.md`'s capability table a
+resource column. An authorization model carrying an `ORG_UNIT` scope type that no capability is
+ever decided against has a scope it does not use, and the next person writing a create route will
+face this same silence.
+
+**What follows from choosing it.** One `decide` call changes, and the fixtures' author grant has
+to match whichever resource is chosen. The wider reason to answer it once is that every later
+create route — review cases, campaigns, evidence packs — asks the same question.
+
+**Reversibility.** High while the only creator is a seeded fixture principal. It falls once real
+customers hold grants: widening from `ORG_UNIT` to `TENANT` is invisible, narrowing takes
+capability away from people who had it.
+
+**Blocks.** Nothing. POL-039 onward do not create Documents.
 
 ---
 
