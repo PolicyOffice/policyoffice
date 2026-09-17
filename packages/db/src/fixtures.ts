@@ -32,6 +32,20 @@ export type FixtureKind = "development" | "test";
  */
 export const REFERENCE_ENUM_VALUES = Object.freeze({
   approval_participant_type: Object.freeze(["USER", "ROLE_AT_SCOPE", "GROUP", "GOVERNANCE_BODY"]),
+  approval_stage_status: Object.freeze([
+    "PENDING",
+    "IN_PROGRESS",
+    "COMPLETED",
+    "BLOCKED",
+    "CANCELLED",
+  ]),
+  approval_task_status: Object.freeze([
+    "PENDING",
+    "DECIDED",
+    "REASSIGNED",
+    "UNRESOLVABLE",
+    "CANCELLED",
+  ]),
   app_user_status: Object.freeze(["INVITED", "ACTIVE", "DEACTIVATED"]),
   capability: AUTHORIZATION_CAPABILITIES,
   completion_rule: Object.freeze(["ALL", "ANY_ONE", "AT_LEAST_N", "BODY_RESOLUTION"]),
@@ -48,6 +62,14 @@ export const REFERENCE_ENUM_VALUES = Object.freeze({
   legal_entity_status: Object.freeze(["ACTIVE", "DORMANT", "CLOSED"]),
   materiality: Object.freeze(["EDITORIAL", "NON_MATERIAL", "MATERIAL", "EMERGENCY"]),
   org_unit_status: Object.freeze(["ACTIVE", "INACTIVE"]),
+  run_status: Object.freeze([
+    "RUNNING",
+    "BLOCKED",
+    "COMPLETED",
+    "CHANGES_REQUESTED",
+    "REJECTED",
+    "CANCELLED",
+  ]),
   scope_type: AUTHORIZATION_SCOPE_TYPES,
   space_status: Object.freeze(["ACTIVE", "ARCHIVED"]),
   tenant_status: Object.freeze(["ACTIVE", "SUSPENDED", "CLOSED"]),
@@ -162,6 +184,12 @@ interface DocumentFixture {
   contentAttachmentId: string;
   applicabilityRuleId: string;
   alignmentObligationId: string;
+  approvalVariantId: string;
+  approvalVersionId: string;
+  approvalRevisionId: string;
+  approvalRunId: string;
+  approvalStageIds: readonly [string, string];
+  approvalTaskId: string;
   documentCode: string;
   canonicalTitle: string;
   documentTypeId: string;
@@ -375,6 +403,12 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
         contentAttachmentId: fixtureId(prefix, 22, 1),
         applicabilityRuleId: fixtureId(prefix, 23, 1),
         alignmentObligationId: fixtureId(prefix, 24, 1),
+        approvalVariantId: fixtureId(prefix, 29, 1),
+        approvalVersionId: fixtureId(prefix, 30, 1),
+        approvalRevisionId: fixtureId(prefix, 31, 1),
+        approvalRunId: fixtureId(prefix, 32, 1),
+        approvalStageIds: [fixtureId(prefix, 33, 1), fixtureId(prefix, 33, 2)],
+        approvalTaskId: fixtureId(prefix, 34, 1),
         documentCode: "POL-001",
         canonicalTitle: `${name} Policy Framework`,
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -552,6 +586,12 @@ function developmentTenant(): TenantFixture {
         contentAttachmentId: fixtureId(prefix, 22, 1),
         applicabilityRuleId: fixtureId(prefix, 23, 1),
         alignmentObligationId: fixtureId(prefix, 24, 1),
+        approvalVariantId: fixtureId(prefix, 29, 1),
+        approvalVersionId: fixtureId(prefix, 30, 1),
+        approvalRevisionId: fixtureId(prefix, 31, 1),
+        approvalRunId: fixtureId(prefix, 32, 1),
+        approvalStageIds: [fixtureId(prefix, 33, 1), fixtureId(prefix, 33, 2)],
+        approvalTaskId: fixtureId(prefix, 34, 1),
         documentCode: "POL-001",
         canonicalTitle: "Policy Management Policy",
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -1138,6 +1178,152 @@ async function insertDocuments(
         attachmentDigest,
       ],
     );
+
+    // A separate in-review variant keeps the ordinary authoring fixture in DRAFT while
+    // populating the approval subsystem with a coherent running example.
+    const existingApproval = await sql.query<{ id: string }>(
+      "select id from approval_run where id = $1",
+      [document.approvalRunId],
+    );
+    if (existingApproval.rows.length === 0) {
+      const approvalUser = item.users.find(({ id }) => id === item.workflowTemplate.publishedBy);
+      if (!approvalUser) {
+        throw new Error(`fixture tenant ${item.tenant.id} has no workflow participant user`);
+      }
+      const approvalBodyBytes = new TextEncoder().encode(
+        `${document.canonicalTitle}\n\nSubmitted approval fixture.`,
+      );
+      const approvalBodyDigest = sha256Digest(approvalBodyBytes);
+      const approvalManifest = buildCanonicalManifest({
+        contentRevisionId: document.approvalRevisionId,
+        contentParts: [{ partId: "body", mediaType: "text/plain", digest: approvalBodyDigest }],
+        attachments: [],
+      });
+      const canonicalApprovalManifest = serializeCanonicalManifest(approvalManifest);
+      await sql.query(
+        `insert into document_variant (
+         tenant_id, id, created_at, updated_at, row_version, document_id,
+         variant_type, source_variant_id, locale, status
+       ) values ($1, $2, $3, $3, 1, $4, 'SUPPLEMENT', $5, null, 'ACTIVE')
+       on conflict (tenant_id, id) do nothing`,
+        [
+          item.tenant.id,
+          document.approvalVariantId,
+          fixture.createdAt,
+          document.id,
+          document.baselineVariantId,
+        ],
+      );
+      await sql.query(
+        `insert into document_version (
+         tenant_id, id, created_at, updated_at, row_version, document_variant_id,
+         version_sequence, display_label, lifecycle_state, document_type_id, title,
+         classification_id, materiality, change_summary, configuration_version_id
+       ) values ($1, $2, $3, $3, 1, $4, 1, '1.0-supplement', 'DRAFT', $5, $6, $7,
+                 'MATERIAL', 'Submitted fixture under approval', $8)
+       on conflict (tenant_id, id) do nothing`,
+        [
+          item.tenant.id,
+          document.approvalVersionId,
+          fixture.createdAt,
+          document.approvalVariantId,
+          document.documentTypeId,
+          `${document.canonicalTitle} — supplement`,
+          classification.id,
+          item.configuration.id,
+        ],
+      );
+      await sql.query(
+        `insert into content_revision (
+         tenant_id, id, created_at, updated_at, row_version, document_version_id,
+         revision_sequence, content_ref, canonical_manifest,
+         canonicalisation_schema_version, content_digest, created_by, submitted_at
+       ) values ($1, $2, $3, $3, 1, $4, 1, $5, $6::jsonb, 1, $7, $8, $3)
+       on conflict (tenant_id, id) do nothing`,
+        [
+          item.tenant.id,
+          document.approvalRevisionId,
+          fixture.createdAt,
+          document.approvalVersionId,
+          objectReference(approvalBodyDigest),
+          JSON.stringify(canonicalApprovalManifest),
+          digestCanonicalManifest(approvalManifest),
+          approvalUser.id,
+        ],
+      );
+      await sql.query(
+        `update document_version
+          set lifecycle_state = 'IN_REVIEW', row_version = row_version + 1
+        where id = $1 and lifecycle_state = 'DRAFT'`,
+        [document.approvalVersionId],
+      );
+      const resolvedParticipants = [
+        {
+          order: 1,
+          participants: [
+            { type: "USER", id: approvalUser.id, displayName: approvalUser.displayName },
+          ],
+        },
+        {
+          order: 2,
+          participants: [
+            {
+              type: "GOVERNANCE_BODY",
+              id: item.governanceBody.id,
+              displayName: item.governanceBody.name,
+            },
+          ],
+        },
+      ];
+      await sql.query(
+        `insert into approval_run (
+         tenant_id, id, created_at, updated_at, row_version, content_revision_id,
+         workflow_template_version_id, resolved_participants, status, started_at,
+         completed_at, cancelled_reason, configuration_version_id
+       ) values ($1, $2, $3, $3, 1, $4, $5, $6::jsonb, 'RUNNING', $3, null, null, $7)
+       on conflict (tenant_id, id) do nothing`,
+        [
+          item.tenant.id,
+          document.approvalRunId,
+          fixture.createdAt,
+          document.approvalRevisionId,
+          item.workflowTemplate.versionId,
+          JSON.stringify(resolvedParticipants),
+          item.configuration.id,
+        ],
+      );
+      await sql.query(
+        `insert into approval_stage (
+         tenant_id, id, created_at, updated_at, row_version, approval_run_id,
+         stage_order, completion_rule, threshold, status, due_at, completed_at
+       ) values
+         ($1, $2, $4, $4, 1, $5, 1, 'ALL', null, 'IN_PROGRESS', null, null),
+         ($1, $3, $4, $4, 1, $5, 2, 'BODY_RESOLUTION', null, 'PENDING', null, null)
+       on conflict (tenant_id, id) do nothing`,
+        [
+          item.tenant.id,
+          document.approvalStageIds[0],
+          document.approvalStageIds[1],
+          fixture.createdAt,
+          document.approvalRunId,
+        ],
+      );
+      await sql.query(
+        `insert into approval_task (
+         tenant_id, id, created_at, updated_at, row_version, approval_stage_id,
+         participant_type, participant_id, status, assigned_at, due_at,
+         delegated_from_user_id
+       ) values ($1, $2, $3, $3, 1, $4, 'USER', $5, 'PENDING', $3, null, null)
+       on conflict (tenant_id, id) do nothing`,
+        [
+          item.tenant.id,
+          document.approvalTaskId,
+          fixture.createdAt,
+          document.approvalStageIds[0],
+          approvalUser.id,
+        ],
+      );
+    }
   }
 }
 
@@ -1212,6 +1398,9 @@ export async function loadFixtureSet(
 const DELETE_ORDER = [
   "audit_event",
   "tenant_event_sequence",
+  "approval_task",
+  "approval_stage",
+  "approval_run",
   "access_grant",
   "security_role",
   "alignment_obligation",
