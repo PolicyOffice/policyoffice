@@ -205,9 +205,9 @@ time it is right.
 Contamination is not hypothetical either. On 2026-09-09, PR #96 was opened as *"documentation
 only, Tier 0"*, intended to change two files in `docs/plans/`. It landed nine: a migration, a new
 module, its test, an export and two test-file edits — the whole of POL-022, swept out of Codex's
-working tree by one `git add -A`. The founder approved it on the Tier 0 description. Nothing unreviewed
-reached `main` only because the same code was independently reviewed on its own pull request an
-hour later, which was luck rather than process.
+working tree by one `git add -A`. The founder approved it on the Tier 0 description. Nothing
+unreviewed reached `main` only because the same code was independently reviewed on its own pull
+request an hour later, which was luck rather than process.
 
 It happened again on 2026-09-10, and that time there was **no staging mistake at all**: a two-file
 documentation change carried the whole of POL-029 — 11 files, 1,318 lines — because `git checkout -b`
