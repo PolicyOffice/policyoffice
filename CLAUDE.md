@@ -195,9 +195,10 @@ only way to tell that false alarm from real contamination was to ask GitHub what
 actually contained.
 
 `origin/main...HEAD` diffs from the merge base instead, which is what the pull request itself
-shows. It still catches the failure this section exists for: a branch cut from Codex's moves the
-merge base back to where that branch left `main`, so its files appear. The `git log` line needs no
-such fix — commits on `HEAD` that are not on `main` is already the right question.
+shows. It still catches the failure this section exists for: a branch cut from Codex's feature
+branch moves the merge base back to where that branch left `main`, so its files appear. The
+`git log` line needs no such fix — commits on `HEAD` that are not on `main` is already the right
+question.
 
 **A check that cries wolf is worse than no check**, because it teaches you to wave through the one
 time it is right.
