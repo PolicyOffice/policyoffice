@@ -125,6 +125,9 @@ export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
 /** Production transitions that currently emit through the sole write path. */
 export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
+  "approval_run.started",
+  "approval_stage.started",
+  "approval_task.assigned",
   "content_revision.created",
   "configuration.changed",
   "document.activated",
@@ -225,6 +228,14 @@ const GOVERNANCE_POLICY_GAP_AFTER_KEYS = Object.freeze([
   "triggeringVersionId",
 ]);
 const SESSION_REVOKED_BEFORE_KEYS = Object.freeze(["sessionId"]);
+const APPROVAL_RUN_STARTED_AFTER_KEYS = Object.freeze(["workflowTemplateVersionId", "status"]);
+const APPROVAL_STAGE_STARTED_AFTER_KEYS = Object.freeze(["approvalRunId", "stageOrder", "status"]);
+const APPROVAL_TASK_ASSIGNED_AFTER_KEYS = Object.freeze([
+  "approvalStageId",
+  "participantType",
+  "participantId",
+  "status",
+]);
 const VERSION_CREATED_AFTER_KEYS = Object.freeze([
   "documentVariantId",
   "versionSequence",
@@ -277,6 +288,33 @@ const CONTENT_REVISION_CREATED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeAfterKeys: CONTENT_REVISION_CREATED_AFTER_KEYS,
   requiredSafeBeforeKeys: Object.freeze([]),
   requiredSafeAfterKeys: CONTENT_REVISION_CREATED_AFTER_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
+const APPROVAL_RUN_STARTED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([]),
+  safeAfterKeys: APPROVAL_RUN_STARTED_AFTER_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: APPROVAL_RUN_STARTED_AFTER_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
+const APPROVAL_STAGE_STARTED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([]),
+  safeAfterKeys: APPROVAL_STAGE_STARTED_AFTER_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: APPROVAL_STAGE_STARTED_AFTER_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
+const APPROVAL_TASK_ASSIGNED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([]),
+  safeAfterKeys: APPROVAL_TASK_ASSIGNED_AFTER_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: APPROVAL_TASK_ASSIGNED_AFTER_KEYS,
   safeBeforeRequired: false,
   safeAfterRequired: true,
 });
@@ -435,6 +473,15 @@ const VERSION_WITHDRAWN_SCHEMA_V1: AuditEventSchema = Object.freeze({
 const auditEventSchemas = Object.fromEntries(
   AUDIT_EVENT_TYPES.map((eventType) => [eventType, Object.freeze({ 1: ENVELOPE_ONLY_SCHEMA })]),
 ) as unknown as Record<AuditEventType, Readonly<Record<number, AuditEventSchema>>>;
+auditEventSchemas["approval_run.started"] = Object.freeze({
+  1: APPROVAL_RUN_STARTED_SCHEMA_V1,
+});
+auditEventSchemas["approval_stage.started"] = Object.freeze({
+  1: APPROVAL_STAGE_STARTED_SCHEMA_V1,
+});
+auditEventSchemas["approval_task.assigned"] = Object.freeze({
+  1: APPROVAL_TASK_ASSIGNED_SCHEMA_V1,
+});
 auditEventSchemas["content_revision.created"] = Object.freeze({
   1: CONTENT_REVISION_CREATED_SCHEMA_V1,
 });

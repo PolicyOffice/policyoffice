@@ -52,7 +52,6 @@ Format, parsed strictly:
 - INV-APR-008 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-009 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-011 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APR-012 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-013 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-014 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APR-021 — MVP; no schema or domain code yet (Phase 2/3)

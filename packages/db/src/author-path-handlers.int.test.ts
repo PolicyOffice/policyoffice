@@ -351,6 +351,9 @@ describe("the author path request boundaries", () => {
       );
       expect(revisions.rows.find(({ id }) => id === SECOND_REVISION)?.submitted_at).toBeNull();
       expect(events.rows.map(({ event_type }) => event_type).sort()).toEqual([
+        "approval_run.started",
+        "approval_stage.started",
+        "approval_task.assigned",
         "content_revision.created",
         "content_revision.created",
         "document.created",
@@ -516,8 +519,28 @@ describe("the author path request boundaries", () => {
       const revision = await transaction.query<
         Record<string, unknown> & { submitted_at: Date | null }
       >(`select submitted_at from content_revision where id = $1`, [FIXTURE_REVISION_A]);
+      const approvals = await transaction.query<
+        Record<string, unknown> & { runs: number; stages: number; tasks: number }
+      >(
+        `select
+           (select count(*)::int from approval_run where content_revision_id = $1) as runs,
+           (select count(*)::int
+              from approval_stage stage
+              join approval_run run
+                on run.tenant_id = stage.tenant_id and run.id = stage.approval_run_id
+             where run.content_revision_id = $1) as stages,
+           (select count(*)::int
+              from approval_task task
+              join approval_stage stage
+                on stage.tenant_id = task.tenant_id and stage.id = task.approval_stage_id
+              join approval_run run
+                on run.tenant_id = stage.tenant_id and run.id = stage.approval_run_id
+             where run.content_revision_id = $1) as tasks`,
+        [FIXTURE_REVISION_A],
+      );
       expect(version.rows).toEqual([{ lifecycle_state: "DRAFT" }]);
       expect(revision.rows).toEqual([{ submitted_at: null }]);
+      expect(approvals.rows).toEqual([{ runs: 0, stages: 0, tasks: 0 }]);
     });
   });
 

@@ -84,6 +84,19 @@ export {
 } from "./configuration.js";
 
 export {
+  ApprovalRunActiveWorkflowVersionRequiredError,
+  ApprovalRunMaterialityRequiredError,
+  ApprovalRunWorkflowRequiredError,
+  planApprovalRun,
+  resolveApprovalRunParticipants,
+  type ApprovalRunConfigurationInput,
+  type ApprovalRunPlan,
+  type ResolvableApprovalParticipant,
+  type ResolvedApprovalParticipant,
+  type ResolvedApprovalStage,
+} from "./approval-run.js";
+
+export {
   WORKFLOW_COMPLETION_RULES,
   WORKFLOW_PARTICIPANT_TYPES,
   WORKFLOW_TEMPLATE_REQUIRED_CAPABILITIES,
