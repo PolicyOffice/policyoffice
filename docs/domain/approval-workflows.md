@@ -207,6 +207,64 @@ publication. And again at `approval_run.started`, for that version's own materia
 the type's configuration can change in between — a failure refuses the submission and names the
 requirement that is unmet.
 
+### The run, as data
+
+A run is created by submission and by nothing else. Submission writes the candidate, moves the
+version to `IN_REVIEW` and starts the run in one transaction, so *a submitted revision with no
+run* is not a state this model has.
+
+Starting a run does four things, and any of them failing refuses the submission:
+
+1. **Find the workflow.** The version's Document Type names a `default_workflow_template_id`,
+   and that template names an `active_version_id`, which is the version the run binds to. A type
+   naming no template, or a template with no active version, refuses the submission. There is no
+   default workflow and no implicit approval.
+2. **Re-check the floor** for this version's materiality class, as § *The floor under every
+   template* requires (INV-APR-020).
+3. **Resolve participants once** and freeze them on the run (INV-APR-012).
+4. **Create every stage and its tasks**, the first stage in progress and the rest pending
+   (INV-APR-008).
+
+**A version with no materiality cannot start a run.** `materiality` is nullable and a version can
+reach submission without one, so this is reachable rather than theoretical. Mandated authority is
+keyed by materiality class, so with no class there is no floor to check. Submission is refused and
+says so, rather than defaulting to a class — a default would choose the tenant's obligations on
+their behalf, and `AGENTS.md` rule 5 is to fail closed.
+
+`resolved_participants` is a JSON array in stage order, mirroring the stages of the bound
+template version:
+
+```json
+[
+  {
+    "order": 1,
+    "participants": [{ "type": "USER", "id": "…", "displayName": "Maarja Tamm" }]
+  },
+  {
+    "order": 2,
+    "participants": [{ "type": "GOVERNANCE_BODY", "id": "…", "displayName": "Management Board" }]
+  }
+]
+```
+
+| Rule | Why |
+|---|---|
+| One entry per template stage, in `order`, matching `approval_stage.stage_order` | The frozen set is read beside the stages it explains |
+| `type` and `id` repeat the template's participant in the same vocabulary § *The template, as data* uses | INV-APR-012 freezes what the template said, so the two must be comparable without translation |
+| `displayName` is captured at start and never updated afterwards | `evidence-model.md` renders `workflow.json` years later. A run naming only an id whose account was since deleted is not evidence a stranger can read |
+| In the Pilot resolution is the identity: a `USER` resolves to that user, a `GOVERNANCE_BODY` to that body | `ROLE_AT_SCOPE` and `GROUP` expand to many principals and arrive with them in V1 |
+
+The array is the resolution, never a cache of it. Nothing re-reads a group's membership or a
+role's holders to interpret a run, which is exactly what stops an administrator editing that
+group in 2028 from changing what a 2026 run meant.
+
+**Stage and task status.** A stage is `PENDING` until its predecessor is satisfied, then
+`IN_PROGRESS`, then `COMPLETED`. It is `BLOCKED` when its completion rule can no longer be
+satisfied (INV-APR-013), and `CANCELLED` with its run. A task is `PENDING`, `DECIDED`,
+`REASSIGNED`, `UNRESOLVABLE` or `CANCELLED`, as `domain-model.md` § *`ApprovalStage` and
+`ApprovalTask`* already states. Neither vocabulary had a type of its own; `data-model.md`
+§ *Enum types* now names both.
+
 ## Decisions
 
 | Decision | Meaning | Effect |
