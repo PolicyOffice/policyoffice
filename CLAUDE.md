@@ -183,9 +183,24 @@ git add docs/plans/phase-3-golden-slice.md docs/plans/open-decisions.md
 failure modes at once:
 
 ```bash
-git log --oneline origin/main..HEAD    # only your commits
-git diff origin/main HEAD --name-only  # only your files
+git log --oneline origin/main..HEAD      # only your commits
+git diff origin/main...HEAD --name-only  # only your files
 ```
+
+**Three dots on the diff, and it matters.** `git diff origin/main HEAD` compares the two commits,
+so its output also lists every file **`main` gained since you branched**. On 2026-09-17 that
+reported a third file on #152, a two-file pull request: the branch was cut at `6503163`, `main`
+had since merged #151, and the plan file that merge touched appeared as though it were yours. The
+only way to tell that false alarm from real contamination was to ask GitHub what the pull request
+actually contained.
+
+`origin/main...HEAD` diffs from the merge base instead, which is what the pull request itself
+shows. It still catches the failure this section exists for: a branch cut from Codex's moves the
+merge base back to where that branch left `main`, so its files appear. The `git log` line needs no
+such fix — commits on `HEAD` that are not on `main` is already the right question.
+
+**A check that cries wolf is worse than no check**, because it teaches you to wave through the one
+time it is right.
 
 This is not hypothetical. On 2026-09-09, PR #96 was opened as *"documentation only, Tier 0"*,
 intended to change two files in `docs/plans/`. It landed nine: a migration, a new module, its
