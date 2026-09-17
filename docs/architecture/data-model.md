@@ -159,6 +159,7 @@ Recorded here so the gaps are visible rather than assumed.
 | INV-AUTH-001 default deny | 4 | Per-principal, per-resource authorization is not a table constraint. One evaluator (`ADR-0003`) |
 | INV-AUTH-002 deny defeats allow | 4 | Same |
 | INV-AUTH-003 expiry at check time | 4 | Same. The validity range is stored; the evaluation is code |
+| INV-APR-020 mandated-authority floor | 4 | The mandate and stages are tenant configuration inside `jsonb`; domain commands compare the two on publication and assignment |
 | INV-EFF-003 atomic supersession | 4 | Transaction boundary, not a constraint |
 | INV-EVD-006 pack determinism | 4 | A property of the assembly pipeline (`ADR-0008`) |
 | INV-VER-014 materiality is human | 5 | "A human decided this" is not expressible in a schema |

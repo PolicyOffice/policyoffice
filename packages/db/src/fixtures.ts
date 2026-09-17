@@ -2,6 +2,9 @@ import type { Client } from "pg";
 import {
   buildCanonicalManifest,
   digestCanonicalManifest,
+  parseMandatedAuthority,
+  parseSeparationOfDutiesRules,
+  parseWorkflowStages,
   recordConfigurationChange,
   serializeCanonicalManifest,
   sha256Digest,
@@ -25,8 +28,10 @@ export type FixtureKind = "development" | "test";
  * a second mutable seed path.
  */
 export const REFERENCE_ENUM_VALUES = Object.freeze({
+  approval_participant_type: Object.freeze(["USER", "ROLE_AT_SCOPE", "GROUP", "GOVERNANCE_BODY"]),
   app_user_status: Object.freeze(["INVITED", "ACTIVE", "DEACTIVATED"]),
   capability: AUTHORIZATION_CAPABILITIES,
+  completion_rule: Object.freeze(["ALL", "ANY_ONE", "AT_LEAST_N", "BODY_RESOLUTION"]),
   credential_kind: Object.freeze(["PASSWORD", "OIDC", "SAML"]),
   document_lifecycle: Object.freeze(["PLANNED", "ACTIVE", "RETIRED"]),
   document_type_status: Object.freeze(["ACTIVE", "RETIRED"]),
@@ -58,6 +63,7 @@ export const REFERENCE_ENUM_VALUES = Object.freeze({
     "REJECTED",
     "CANCELLED",
   ]),
+  workflow_template_status: Object.freeze(["ACTIVE", "RETIRED"]),
 });
 
 const CREATED_AT = "2026-01-01T00:00:00.000Z";
@@ -126,6 +132,16 @@ interface DocumentTypeFixture {
   requiresAttestation: boolean;
 }
 
+interface WorkflowTemplateFixture {
+  id: string;
+  versionId: string;
+  name: string;
+  purpose: string;
+  stages: readonly Readonly<Record<string, unknown>>[];
+  separationOfDutiesRules: readonly never[];
+  publishedBy: string;
+}
+
 interface ClassificationFixture {
   id: string;
   code: string;
@@ -176,6 +192,7 @@ export interface TenantFixture {
     requestId: string;
     correlationId: string;
   }>;
+  workflowTemplate: Readonly<WorkflowTemplateFixture>;
   documentTypes: readonly DocumentTypeFixture[];
   classifications: readonly ClassificationFixture[];
   documents: readonly DocumentFixture[];
@@ -198,6 +215,44 @@ function systemRoleFixtures(prefix: "a" | "b" | "d"): readonly SecurityRoleFixtu
   }));
 }
 
+function authorityFor(participant: Readonly<{ type: "USER" | "GOVERNANCE_BODY"; id: string }>) {
+  return {
+    EDITORIAL: { requires: [participant] },
+    NON_MATERIAL: { requires: [participant] },
+    MATERIAL: { requires: [participant] },
+    EMERGENCY: { requires: [participant] },
+  } as const;
+}
+
+function workflowTemplateFixture(
+  prefix: "a" | "b" | "d",
+  userId: string,
+  bodyId: string,
+): WorkflowTemplateFixture {
+  return {
+    id: fixtureId(prefix, 27, 1),
+    versionId: fixtureId(prefix, 28, 1),
+    name: "Controlled policy approval",
+    purpose: "Bind accountable tenant authorities before a policy is released.",
+    stages: [
+      {
+        order: 1,
+        name: "Named authority review",
+        completionRule: "ALL",
+        participants: [{ type: "USER", id: userId }],
+      },
+      {
+        order: 2,
+        name: "Management Board resolution",
+        completionRule: "BODY_RESOLUTION",
+        participants: [{ type: "GOVERNANCE_BODY", id: bodyId }],
+      },
+    ],
+    separationOfDutiesRules: [],
+    publishedBy: userId,
+  };
+}
+
 const ARGON2ID_FIXTURE_PARAMETERS = Object.freeze({
   algorithm: "argon2id",
   version: 19,
@@ -214,6 +269,7 @@ const DEVELOPMENT_PASSWORD_HASH =
 function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
   const userId = fixtureId(prefix, 1, 1);
   const groupId = fixtureId(prefix, 4, 1);
+  const bodyId = fixtureId(prefix, 10, 1);
   const securityRoles = systemRoleFixtures(prefix);
   return {
     tenant: {
@@ -273,7 +329,7 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
       },
     ],
     governanceBody: {
-      id: fixtureId(prefix, 10, 1),
+      id: bodyId,
       code: "MANAGEMENT_BOARD",
       name: "Management Board",
     },
@@ -285,13 +341,14 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
       requestId: fixtureId(prefix, 16, 1),
       correlationId: fixtureId(prefix, 17, 1),
     },
+    workflowTemplate: workflowTemplateFixture(prefix, userId, bodyId),
     documentTypes: [
       {
         id: fixtureId(prefix, 14, 1),
         code: "POLICY",
         name: "Policy",
         rank: 10,
-        mandatedAuthority: { MATERIAL: { kind: "NAMED_USER" } },
+        mandatedAuthority: authorityFor({ type: "USER", id: userId }),
         defaultReviewRule: { months: 12 },
         requiresAttestation: false,
       },
@@ -349,6 +406,7 @@ function developmentTenant(): TenantFixture {
     { id: fixtureId(prefix, 4, 2), name: "Policy Owners" },
   ];
   const securityRoles = systemRoleFixtures(prefix);
+  const bodyId = fixtureId(prefix, 10, 1);
   return {
     tenant: {
       id: fixtureId(prefix, 0, 1),
@@ -414,7 +472,7 @@ function developmentTenant(): TenantFixture {
       },
     ],
     governanceBody: {
-      id: fixtureId(prefix, 10, 1),
+      id: bodyId,
       code: "MANAGEMENT_BOARD",
       name: "Management Board",
     },
@@ -426,13 +484,14 @@ function developmentTenant(): TenantFixture {
       requestId: fixtureId(prefix, 16, 1),
       correlationId: fixtureId(prefix, 17, 1),
     },
+    workflowTemplate: workflowTemplateFixture(prefix, users[0]?.id ?? "", bodyId),
     documentTypes: [
       {
         id: fixtureId(prefix, 14, 1),
         code: "POLICY",
         name: "Policy",
         rank: 10,
-        mandatedAuthority: { MATERIAL: { kind: "GOVERNANCE_BODY" } },
+        mandatedAuthority: authorityFor({ type: "GOVERNANCE_BODY", id: bodyId }),
         defaultReviewRule: { months: 12 },
         requiresAttestation: true,
       },
@@ -441,7 +500,7 @@ function developmentTenant(): TenantFixture {
         code: "PROCEDURE",
         name: "Procedure",
         rank: 20,
-        mandatedAuthority: { MATERIAL: { kind: "NAMED_USER" } },
+        mandatedAuthority: authorityFor({ type: "USER", id: users[0]?.id ?? "" }),
         defaultReviewRule: { months: 12 },
         requiresAttestation: false,
       },
@@ -450,7 +509,7 @@ function developmentTenant(): TenantFixture {
         code: "MANUAL",
         name: "Manual",
         rank: 30,
-        mandatedAuthority: { MATERIAL: { kind: "NAMED_USER" } },
+        mandatedAuthority: authorityFor({ type: "USER", id: users[0]?.id ?? "" }),
         defaultReviewRule: { months: 12 },
         requiresAttestation: false,
       },
@@ -825,12 +884,64 @@ async function insertConfiguration(sql: Client, item: TenantFixture): Promise<vo
     });
   }
 
+  const activeParticipants = {
+    userIds: new Set(item.users.map((user) => user.id)),
+    governanceBodyIds: new Set([item.governanceBody.id]),
+  };
+  const stages = parseWorkflowStages(item.workflowTemplate.stages, activeParticipants);
+  const separationRules = parseSeparationOfDutiesRules(
+    item.workflowTemplate.separationOfDutiesRules,
+  );
+  for (const documentType of item.documentTypes) {
+    parseMandatedAuthority(documentType.mandatedAuthority, activeParticipants);
+  }
+
+  await sql.query(
+    `insert into workflow_template (
+       tenant_id, id, created_at, updated_at, row_version, name, purpose,
+       active_version_id, status
+     ) values ($1, $2, $3, $3, 1, $4, $5, null, 'ACTIVE')
+     on conflict (tenant_id, id) do nothing`,
+    [
+      item.tenant.id,
+      item.workflowTemplate.id,
+      CREATED_AT,
+      item.workflowTemplate.name,
+      item.workflowTemplate.purpose,
+    ],
+  );
+  await sql.query(
+    `insert into workflow_template_version (
+       tenant_id, id, created_at, updated_at, row_version, workflow_template_id,
+       version_sequence, stages, separation_of_duties_rules, published_at, published_by
+     ) values ($1, $2, $3, $3, 1, $4, 1, $5::jsonb, $6::jsonb, $3, $7)
+     on conflict (tenant_id, id) do nothing`,
+    [
+      item.tenant.id,
+      item.workflowTemplate.versionId,
+      CREATED_AT,
+      item.workflowTemplate.id,
+      JSON.stringify(stages),
+      JSON.stringify(separationRules),
+      item.workflowTemplate.publishedBy,
+    ],
+  );
+  await sql.query(
+    `update workflow_template
+        set active_version_id = $2,
+            updated_at = $3,
+            row_version = row_version + 1
+      where id = $1 and active_version_id is distinct from $2::uuid`,
+    [item.workflowTemplate.id, item.workflowTemplate.versionId, CREATED_AT],
+  );
+
   for (const documentType of item.documentTypes) {
     await sql.query(
       `insert into document_type (
          tenant_id, id, created_at, updated_at, row_version, code, name, rank,
-         mandated_authority, default_review_rule, requires_attestation_by_default, status
-       ) values ($1, $2, $3, $3, 1, $4, $5, $6, $7::jsonb, $8::jsonb, $9, 'ACTIVE')
+         mandated_authority, default_workflow_template_id, default_review_rule,
+         requires_attestation_by_default, status
+       ) values ($1, $2, $3, $3, 1, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10, 'ACTIVE')
        on conflict (tenant_id, id) do nothing`,
       [
         item.tenant.id,
@@ -840,6 +951,7 @@ async function insertConfiguration(sql: Client, item: TenantFixture): Promise<vo
         documentType.name,
         documentType.rank,
         JSON.stringify(documentType.mandatedAuthority),
+        item.workflowTemplate.id,
         JSON.stringify(documentType.defaultReviewRule),
         documentType.requiresAttestation,
       ],
@@ -1111,6 +1223,8 @@ const DELETE_ORDER = [
   "user_credential",
   "user_group",
   "document_type",
+  "workflow_template_version",
+  "workflow_template",
   "information_classification",
   "configuration_version",
   "org_unit",
@@ -1128,6 +1242,13 @@ export async function removeFixtureSetForTests(
   await withAdministrativeClient(connectionString, async (sql) => {
     for (const item of fixture.tenants) {
       await inRoleTransaction(sql, "migration_role", item.tenant.id, async () => {
+        await sql.query(
+          `update workflow_template
+              set active_version_id = null,
+                  row_version = row_version + 1
+            where tenant_id = $1 and active_version_id is not null`,
+          [item.tenant.id],
+        );
         for (const table of DELETE_ORDER) {
           await sql.query(`delete from ${table} where tenant_id = $1`, [item.tenant.id]);
         }

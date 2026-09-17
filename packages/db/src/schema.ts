@@ -90,6 +90,19 @@ export const inheritanceMode = pgEnum("inheritance_mode", ["MANDATORY", "DEFAULT
 export const capability = pgEnum("capability", AUTHORIZATION_CAPABILITIES);
 export const scopeType = pgEnum("scope_type", AUTHORIZATION_SCOPE_TYPES);
 export const grantEffect = pgEnum("grant_effect", GRANT_EFFECTS);
+export const workflowTemplateStatus = pgEnum("workflow_template_status", ["ACTIVE", "RETIRED"]);
+export const completionRule = pgEnum("completion_rule", [
+  "ALL",
+  "ANY_ONE",
+  "AT_LEAST_N",
+  "BODY_RESOLUTION",
+]);
+export const approvalParticipantType = pgEnum("approval_participant_type", [
+  "USER",
+  "ROLE_AT_SCOPE",
+  "GROUP",
+  "GOVERNANCE_BODY",
+]);
 
 export const tenant = pgTable("tenant", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -642,6 +655,79 @@ export const space = pgTable(
   ],
 ).enableRLS();
 
+export const workflowTemplate = pgTable(
+  "workflow_template",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    name: text("name").notNull(),
+    purpose: text("purpose").notNull(),
+    activeVersionId: uuid("active_version_id"),
+    status: workflowTemplateStatus("status").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "workflow_template_pkey", columns: [t.tenantId, t.id] }),
+    unique("workflow_template_id_unique").on(t.id),
+    foreignKey({
+      name: "workflow_template_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const workflowTemplateVersion = pgTable(
+  "workflow_template_version",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    workflowTemplateId: uuid("workflow_template_id").notNull(),
+    versionSequence: integer("version_sequence").notNull(),
+    stages: jsonb("stages").notNull(),
+    separationOfDutiesRules: jsonb("separation_of_duties_rules").notNull(),
+    publishedAt: instant("published_at").notNull(),
+    publishedBy: uuid("published_by").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "workflow_template_version_pkey", columns: [t.tenantId, t.id] }),
+    unique("workflow_template_version_id_unique").on(t.id),
+    foreignKey({
+      name: "workflow_template_version_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "workflow_template_version_template_fk",
+      columns: [t.tenantId, t.workflowTemplateId],
+      foreignColumns: [workflowTemplate.tenantId, workflowTemplate.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "workflow_template_version_published_by_fk",
+      columns: [t.tenantId, t.publishedBy],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    unique("workflow_template_version_template_id_unique").on(
+      t.tenantId,
+      t.workflowTemplateId,
+      t.id,
+    ),
+    unique("workflow_template_version_sequence_unique").on(
+      t.tenantId,
+      t.workflowTemplateId,
+      t.versionSequence,
+    ),
+    check("workflow_template_version_sequence_positive", sql`${t.versionSequence} >= 1`),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
 export const configurationVersion = pgTable(
   "configuration_version",
   {
@@ -704,6 +790,11 @@ export const documentType = pgTable(
       name: "document_type_tenant_fk",
       columns: [t.tenantId],
       foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "document_type_default_workflow_template_fk",
+      columns: [t.tenantId, t.defaultWorkflowTemplateId],
+      foreignColumns: [workflowTemplate.tenantId, workflowTemplate.id],
     }).onDelete("restrict"),
     unique("document_type_tenant_code_unique").on(t.tenantId, t.code),
     unique("document_type_tenant_rank_unique").on(t.tenantId, t.rank),
