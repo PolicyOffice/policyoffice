@@ -202,7 +202,7 @@ such fix — commits on `HEAD` that are not on `main` is already the right quest
 **A check that cries wolf is worse than no check**, because it teaches you to wave through the one
 time it is right.
 
-This is not hypothetical. On 2026-09-09, PR #96 was opened as *"documentation only, Tier 0"*,
+Contamination is not hypothetical either. On 2026-09-09, PR #96 was opened as *"documentation only, Tier 0"*,
 intended to change two files in `docs/plans/`. It landed nine: a migration, a new module, its
 test, an export and two test-file edits — the whole of POL-022, swept out of Codex's working
 tree by one `git add -A`. The founder approved it on the Tier 0 description. Nothing unreviewed
