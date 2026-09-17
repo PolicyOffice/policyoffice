@@ -172,8 +172,9 @@ Two mechanical details, both learned the hard way and neither obvious:
 
   Before reaching for that, check that every **required** context is actually reporting — a
   check that never runs looks identical to one that is slow. Compare
-  `gh pr checks <n>` against the ruleset's `required_status_checks`. Seen twice in one day and
-  not since; if it becomes routine, it is worth asking GitHub about rather than absorbing.
+  `gh pr checks <n>` against the ruleset's `required_status_checks`. Seen twice in one day before
+  2026-09-10, then a third time on #107 on 2026-09-10 — three occurrences in about a week. If it
+  keeps recurring, it is worth asking GitHub about rather than absorbing.
 
 `independent review` is one of those checks, and it is set by a comment naming the exact
 head sha. For **Codex's** pull requests Claude posts it after reviewing, and the merge
@@ -231,6 +232,18 @@ aborts the remote delete too — leaving a merged branch on the origin.
 
 Note that `docker compose` derives its project name from the directory, so running it from
 the second worktree would start a *second* Postgres. Drive Docker from `PolicyManagement/`.
+
+**Start Claude sessions in `policyoffice-claude/`.** A session started in `PolicyManagement/` sits
+on Codex's feature branch; `CLAUDE.md` § *Committing* says what goes wrong.
+
+**The reviewer worktree has its own `node_modules`.** Dependencies are installed per worktree, so
+after `policyoffice-claude/` moves to a commit that changes them, run `pnpm install --frozen-lockfile`
+there before trusting a run. On 2026-09-12 `argon2id.test.ts` failed to load until it was reinstalled.
+
+**A suite full of `ECONNREFUSED ::1:5432` means the database is down, not that the code is broken.**
+Integration tests fail rather than skip by design. Start the Docker daemon, run `docker compose up -d`
+from `PolicyManagement/`, and against a fresh database apply migrations and development logins the way
+CI does: `pnpm --filter @policyoffice/db migrate`, then `pnpm --filter @policyoffice/db dev:credentials`.
 
 ## Local Codex or cloud Codex
 

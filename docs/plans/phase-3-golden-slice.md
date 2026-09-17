@@ -151,11 +151,22 @@ Written one at a time, as the authorization epic was.
 | POL-029 (#117) | Session lifecycle over the existing `0003` schema: issue, resolve, refresh idle, revoke. No routes, no UI | **merged** #122 |
 | POL-030 (#125) | `ADR-0001` § 3's one transaction helper, and the `app_role` connection the application did not have | **merged** #127 |
 | POL-031 (#130) | The request context, and the first capability ever enforced at an entry point | **merged** #133 |
-| **POL-032 (#134)** | Sign-in and sign-out, so a person rather than a test can hold a session | **ready** |
-| POL-033 | The author's minimal path — create, draft, submit | after POL-032 |
+| POL-032 (#134) | Sign-in and sign-out, so a person rather than a test can hold a session | **merged** #136 |
+| POL-033 (#137) | The author's path — create, draft, submit. Four route-level checks over three distinct capabilities, because `document.edit_draft` covers both starting a version and saving a revision (#139) | **merged** #141 |
 | POL-034 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
-| POL-035 | **The reader view**, built to `information-architecture.md` | after POL-033 |
+| POL-035 | **The reader view**, built to `information-architecture.md` | POL-033 has landed; in the reference flow it follows approval, since nothing becomes effective without it |
 | POL-036 | Playwright drives the **full** reference flow with three principals | last |
+
+### What comes next, in order
+
+1. **POL-038 (#146)** — workflow templates and the mandated authority they must satisfy. Ready: the
+   shapes it rests on were specified and merged on 2026-09-16.
+2. **The rest of the approval subsystem**, decomposed below — POL-039 runs, POL-040 approver
+   decisions, POL-041 body resolutions, POL-042 approvers who can no longer act. Each is written
+   after the one before it lands.
+3. **POL-034** the approval inbox, **POL-035** the reader view, **POL-036** the full Playwright flow.
+4. Then the unstarted groups in *The work, in dependency order* below — applicability resolution
+   and attestation, review cases, and evidence packs last.
 
 **Split again on 2026-09-12, and this is the last time it should be needed.** POL-032 was going to
 carry sign-in *and* the author's create/draft/submit path. Sign-in alone adds a third input shape to
@@ -168,11 +179,11 @@ end, and proving the harness works on a two-page flow is cheaper than discoverin
 six-page one. POL-036 keeps the full three-principal flow.
 
 **Renumbered on 2026-09-10: what was POL-030 became two tickets.** Writing it revealed that the
-request context has a prerequisite nobody had noticed — **`ADR-0001` § 3's transaction helper does
-not exist.** `withTenant` is the test harness, named as such in the architecture test; production's
-only connection constructor is *administrative*, and the application has no `app_role` connection
-at all. So every domain function taking an `AuditTransaction` is currently reachable only from
-tests.
+request context had a prerequisite nobody had noticed — **`ADR-0001` § 3's transaction helper did
+not exist.** `withTenant` was the test harness, named as such in the architecture test; production's
+only connection constructor was *administrative*, and the application had no `app_role` connection
+at all. So every domain function taking an `AuditTransaction` was reachable only from tests until
+POL-030 landed the helper (#127).
 
 It is a separate ticket rather than a bigger one because **POL-026 made client construction
 bounded**: `CONNECTION_SITES` holds two entries and its comment says *"Production has one
@@ -182,39 +193,64 @@ POL-030 also closes the first of `ADR-0001`'s two *Still to verify* items — wh
 driven entirely through a caller-supplied handle, which is what makes the one-helper rule
 enforceable at all.
 
-**POL-031 is blocked on #128, and the gap is real rather than an oversight in the ticket.**
-POL-030 landing is what exposed it. The transaction helper takes a tenant and sets it for the
-transaction — correct, and it makes the ordering problem visible: reading a session means querying
-`user_session`, which is tenant-scoped under forced row-level security, so the tenant must already
-be known. The session is what identifies the user. Nothing else in a request carries a customer.
+**POL-031 was blocked on #128, and is resolved.** Landing POL-030 exposed that nothing specified how a
+request finds its customer: reading a session needs the tenant, and the session is what identifies the
+user. The founder chose one installation per customer for the Pilot (`open-decisions.md` § 12), and
+POL-031 landed as #133. Writing it exposed a second gap — the one opener required a principal that
+session resolution produces — settled in #132 by resolving the session *inside* the opener, so no
+pre-authentication handle ever exists.
 
-It is in none of the three places it should be. `ADR-0002` says the cookie carries *"an opaque,
-high-entropy identifier and nothing else"*. `information-architecture.md` § *Addresses* gives every
-public URL and **none carries a customer segment** — while saying URLs are *"a public contract …
-decided before the first route is written rather than falling out of a router's defaults"*. And
-the `tenant` table has no host, slug or domain column.
+### The approval subsystem, decomposed
 
-There is no way to improvise it that does not either put the tenant where `ADR-0002` forbids, or
-open a query path outside row-level security — the one thing `ADR-0001` exists to prevent. #128
-puts it to the founder with a recommendation.
+**Decomposed on 2026-09-16, after POL-033 landed as #141.** Approval is the largest unbuilt
+subsystem in Phase 3: `approval_run`, `approval_stage`, `approval_task`, `approval_decision`,
+`workflow_template` and `workflow_template_version` are specified in `data-model.md` § *Approval*,
+and none of them exists. Configurability is `open-decisions.md` § 4, **option A**: one or two
+seeded template versions per governance profile, runs bind by identifier, no template editor ships.
 
-**POL-033 is unblocked.** Approval configurability was answered the same day as decision 4 —
-`open-decisions.md` § 4, **option A**: one or two seeded template versions per governance
-profile, runs bind by identifier, no template editor ships. The approval subsystem beneath the
-inbox — `approval_run`, `approval_stage`, `approval_task`, `approval_decision`,
-`workflow_template`, `workflow_template_version` — is specified in `data-model.md` § *Approval*
-and entirely unbuilt.
+The Pilot's share is `scope-and-roadmap.md` § *Controlled approval*: runs bound to a template
+version, serial stages, approve / request changes / reject, and body resolutions. Parallel tasks,
+all four completion rules, delegation, escalation, separation of duties and template editing are
+Commercial V1, under § *Configurable workflows*. Written one ticket at a time:
 
-**The one thing that would spoil A → B, recorded so the ticket carries it.** Option A is
-reversible into a full editor only if seeded templates are written as **ordinary tenant-owned
-rows** with `published_at` and `published_by` set, exactly as an editor would write them. A
-hard-coded template identifier, or a seeded row with its authoring columns left null, turns B
-into a backfill. Those columns already exist in `data-model.md`, so this costs nothing to get
-right and is an acceptance criterion in whichever ticket seeds them.
+| | What | Status |
+|---|---|---|
+| POL-037 (#142) | Applicability scope freezes at submission — Decision Request #92 | **merged** #144 |
+| **POL-038 (#146)** | Templates and mandated authority as data: `workflow_template` and `workflow_template_version`, versions immutable (INV-APR-010), the Pilot stage shape, `mandated_authority` as a structure, the INV-APR-020 floor checked when a template version is published, and seeded templates as ordinary tenant-owned rows | **ready** |
+| POL-039 | Runs start at submission: participants resolved and frozen (INV-APR-012), the mandate checked again at run start (INV-APR-020), `approval_run.started`, `approval_stage.started`, `approval_task.assigned` | after POL-038 |
+| POL-040 | Approver decisions — `APPROVE`, `REQUEST_CHANGES`, `REJECT` (INV-APR-001, INV-APR-007), serial stages (INV-APR-008), completion exactly once (INV-APR-009), changes ending the snapshot and resubmission opening a fresh run (INV-APR-003, INV-APR-004). `0010` lets `IN_REVIEW → APPROVED` happen without any run today; this closes it | after POL-039 |
+| POL-041 | Body resolutions — `BODY_RESOLUTION`, `body.act_for` (INV-APR-023), the body distinguished from its recorder (INV-APR-021), no resolution date before submission (INV-APR-022), evidence fields per configuration (INV-APR-024) | after POL-040 |
+| POL-042 | Approvers who can no longer act — unresolvable tasks and blocked runs (INV-APR-005, INV-APR-013) — and cancellation, `document-lifecycle.md` transition 7 | after POL-040 |
 
-That ticket sits between POL-032 and POL-033 and is not written yet — the approval subsystem is
-several tickets, not one, and decomposing it is the specification job that follows the request
-context, not this ticket.
+POL-034, the inbox, follows POL-040 for individual approvers and POL-041 for bodies.
+
+**The stage shape and the mandated-authority structure were specified on 2026-09-16**, in
+`approval-workflows.md` § *The template, as data* and § *The floor under every template*, and
+`document-taxonomy.md` § *Mandated authority, as data*. A stage binds a participant only when it
+cannot complete without that participant's own decision, which is what makes INV-APR-020's floor
+checkable; an omitted materiality class inherits the union of every stated class's requirements,
+which is what *"the strictest one stated"* could not mean once two classes name different
+authorities. POL-038 (#146) is written against them.
+
+**Still to specify, each before the ticket it affects:**
+
+- **Reviewer stages — before any template uses one.** The glossary's Reviewer *"may request
+  changes"* and *"cannot satisfy an approval requirement"*, and `authorization-model.md` gives the
+  Reviewer role tasks in a run — but no capability that can decide anything; `document.approve` is
+  Approver's. The Standard profile promises *"reviewers separate from approvers"*. Either a capability
+  is added, which changes `authorization-model.md` and needs a decision, or review is expressed
+  another way.
+- **Participant kinds beyond `USER` and `GOVERNANCE_BODY`.** `ROLE_AT_SCOPE` and `GROUP` resolve
+  to several principals, and *"the head of the owning department"* (`document-taxonomy.md`) is a
+  scope relative to the document, which the stage shape would have to express.
+- **Reminders and escalation (INV-APR-002)** wait on a job runner — `apps/worker/src/main.ts` is a process boundary that logs one line and runs nothing, and `ADR-0007` decides what runs there.
+
+**The one thing that would spoil A → B, recorded so POL-038 carries it.** Option A is reversible
+into a full editor only if seeded templates are written as **ordinary tenant-owned rows** with
+`published_at` and `published_by` set, exactly as an editor would write them. A hard-coded
+template identifier, or a seeded row with its authoring columns left null, turns B into a backfill.
+Those columns already exist in `data-model.md`, so this costs nothing to get right and is an
+acceptance criterion in POL-038.
 
 ## The work, in dependency order
 
@@ -223,13 +259,13 @@ Not tickets yet — tickets follow the decisions above. This is the shape.
 | Group | What it covers | Blocked by |
 |---|---|---|
 | ~~**Authorization**~~ | The evaluator, grants, the capability matrix and its CI gate | **done** — POL-023…027 |
-| **Sessions and identity** | Server-side sessions per `ADR-0002`, sign-in, principal resolution | POL-029 **merged**; sign-in is POL-032 |
-| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **unblocked** — decompose after POL-031 |
-| **Audience and attestation** | Applicability resolution, assignment, acknowledgement | Decision 1 |
-| **Read paths** | The register, a version's history, the audit trail as a person can read it | **unblocked** — POL-034 |
-| **Review cases** | Scheduled review, completion, the obligations that survive it | Decision 1 |
+| ~~**Sessions and identity**~~ | Server-side sessions per `ADR-0002`, sign-in, principal resolution | **done** — POL-029, POL-031, POL-032 |
+| **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **decomposed** 2026-09-16 — POL-037 to POL-042 above; #92 decided |
+| **Audience and attestation** | Applicability resolution, assignment, acknowledgement | unstarted. When it is decomposed, bring the founder the cost of assigning joiners automatically — `attestation-model.md` § *Audience modes*, `DYNAMIC` — which was deferred to then on 2026-09-16 |
+| **Read paths** | The register, a version's history, the audit trail as a person can read it | register **done** in POL-031; reader view is POL-035; history and audit views unwritten |
+| **Review cases** | Scheduled review, completion, the obligations that survive it | unstarted — no open decision blocks it |
 | **Evidence packs** | Assembly, the manifest, byte-exact verification outside the application | Everything above |
-| **Playwright** | The flow driven through the interface, carried from Phase 2 | **unblocked** — POL-035 |
+| **Playwright** | The flow driven through the interface, carried from Phase 2 | one spec **landed** in POL-032; the full three-principal flow is POL-036 |
 
 Two items carry forward from Phase 2 with their triggers recorded there rather than repeated
 here: **Neon restore timing**, due before any real data exists, and the **authorization
@@ -291,12 +327,11 @@ Nothing here blocks POL-026. Recorded so it is not rediscovered.
   its 135 cells only ever assert denial. The whole governance-body arm is unproven, not just
   the guard.
 
-- **Decision Request #92 is parked deliberately.** *Does submission freeze applicability, or only
-  approval?* Applicability is mutable while a version is `IN_REVIEW`, which matches
-  `versioning.md` exactly — but INV-VER-007 calls applicability a field an approver relied upon,
-  while INV-VER-002 freezes the content revision at submission because *"approvers must not
-  review a moving target."* Nothing can approve anything yet. Answer it when the approval
-  workflow is built, deliberately, rather than inheriting whatever the implementation does.
+- **Decision Request #92 — decided 2026-09-16.** The founder chose option A: applicability scope
+  freezes at submission, as the content revision does, and reopens when changes are requested.
+  POL-037 (#142) implements it and carries the invariant note. Raised alongside it and deferred:
+  whether the Pilot assigns joiners their team's policies automatically, decided when attestation
+  is decomposed.
 
 - **Neon restore timing** remains the only unaddressed ADR verification item outside
   `ADR-0003`. Its trigger is recorded in `phase-2-bootstrap.md`: before any production data
