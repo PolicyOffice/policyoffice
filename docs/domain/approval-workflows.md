@@ -222,8 +222,10 @@ Starting a run does four things, and any of them failing refuses the submission:
 2. **Re-check the floor** for this version's materiality class, as § *The floor under every
    template* requires (INV-APR-020).
 3. **Resolve participants once** and freeze them on the run (INV-APR-012).
-4. **Create every stage and its tasks**, the first stage in progress and the rest pending
-   (INV-APR-008).
+4. **Create every stage**, the first in progress and the rest pending, **and the first stage's
+   tasks only** (INV-APR-008). A later stage's tasks are created when that stage starts, not here:
+   `approval_task.assigned` says a task was created for a resolved participant, and a stage that
+   has not begun has assigned nobody.
 
 **A version with no materiality cannot start a run.** `materiality` is nullable and a version can
 reach submission without one, so this is reachable rather than theoretical. Mandated authority is
@@ -257,6 +259,13 @@ template version:
 The array is the resolution, never a cache of it. Nothing re-reads a group's membership or a
 role's holders to interpret a run, which is exactly what stops an administrator editing that
 group in 2028 from changing what a 2026 run meant.
+
+This is also what makes creating a later stage's tasks at that stage's start safe: those tasks are
+built from this array and from nothing else. Deferring **creation** is not deferring
+**resolution**, and INV-APR-012 turns on the second. Creating every task up front would instead
+require a second idea — assigned but not yet actionable — to keep a stage that has not begun out
+of its participants' inbox, and `data-model.md` § *Enum types* refuses exactly that: a derived
+condition given a stored value becomes a second source of truth that can disagree with the first.
 
 **Stage and task status.** A stage is `PENDING` until its predecessor is satisfied, then
 `IN_PROGRESS`, then `COMPLETED`. It is `BLOCKED` when its completion rule can no longer be
