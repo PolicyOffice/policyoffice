@@ -1,10 +1,13 @@
 import {
   emitAuditEvent,
+  emitAuditEvents,
   type AuditActorType,
+  type AuditEventInput,
   type AuditSourceChannel,
   type AuditTransaction,
   type EmittedAuditEvent,
 } from "./audit.js";
+import { createApprovalRunForSubmission, prepareApprovalRunForSubmission } from "./approval-run.js";
 import {
   CANONICALISATION_SCHEMA_VERSION,
   buildCanonicalManifest,
@@ -16,7 +19,7 @@ import {
   type CanonicalManifest,
   type Sha256Digest,
 } from "./content-digest.js";
-import type { VersionLifecycle } from "./version.js";
+import type { Materiality, VersionLifecycle } from "./version.js";
 
 /** Authorization contracts only; ADR-0003's evaluator has not landed. */
 export const CONTENT_REVISION_REQUIRED_CAPABILITIES = Object.freeze({
@@ -119,7 +122,9 @@ interface VersionRow extends Record<string, unknown> {
   id: string;
   document_id: string;
   document_variant_id: string;
+  document_type_id: string;
   lifecycle_state: VersionLifecycle;
+  materiality: Materiality | null;
   row_version: number;
 }
 
@@ -320,7 +325,8 @@ async function lockVersion(
 ): Promise<VersionRow> {
   const { rows } = await transaction.query<VersionRow>(
     `select version.id, variant.document_id, version.document_variant_id,
-            version.lifecycle_state, version.row_version
+            version.document_type_id, version.lifecycle_state, version.materiality,
+            version.row_version
        from document_version version
        join document_variant variant
          on variant.tenant_id = version.tenant_id
@@ -750,6 +756,11 @@ export async function submitContentRevision(
     throw new ContentRevisionConcurrencyError();
   }
   if (version.lifecycle_state !== "DRAFT") throw new ContentRevisionLifecycleError();
+  const preparedApprovalRun = await prepareApprovalRunForSubmission(transaction, {
+    tenantId: input.tenantId,
+    documentTypeId: version.document_type_id,
+    materiality: version.materiality,
+  });
 
   const manifest = manifestWithAttachments(
     revision,
@@ -791,7 +802,7 @@ export async function submitContentRevision(
   );
   const changedVersion = versionResult.rows[0];
   if (!changedVersion) throw new ContentRevisionConcurrencyError();
-  const emittedEvent = await emitAuditEvent(transaction, {
+  const versionSubmittedEvent = {
     tenantId: input.tenantId,
     eventType: "version.submitted",
     eventSchemaVersion: 1,
@@ -815,7 +826,26 @@ export async function submitContentRevision(
     },
     configurationVersionId: input.configurationVersionId,
     dedupeKey: `version.submitted:${input.documentVersionId}:${input.revisionId}`,
+  } satisfies AuditEventInput;
+  const approvalEvents = await createApprovalRunForSubmission(transaction, {
+    tenantId: input.tenantId,
+    documentId: revision.document_id,
+    documentVariantId: revision.document_variant_id,
+    documentVersionId: input.documentVersionId,
+    contentRevisionId: input.revisionId,
+    prepared: preparedApprovalRun,
+    actor: input.actor,
+    configurationVersionId: input.configurationVersionId,
+    occurredAt: input.occurredAt,
+    requestId: input.requestId,
+    correlationId: input.correlationId,
+    sourceChannel: input.sourceChannel,
   });
+  const [emittedEvent] = await emitAuditEvents(transaction, [
+    versionSubmittedEvent,
+    ...approvalEvents,
+  ]);
+  if (!emittedEvent) throw new Error("version submission emitted no audit event");
   return {
     id: submitted.id,
     documentVersionId: input.documentVersionId,

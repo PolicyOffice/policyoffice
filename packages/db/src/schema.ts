@@ -103,6 +103,28 @@ export const approvalParticipantType = pgEnum("approval_participant_type", [
   "GROUP",
   "GOVERNANCE_BODY",
 ]);
+export const runStatus = pgEnum("run_status", [
+  "RUNNING",
+  "BLOCKED",
+  "COMPLETED",
+  "CHANGES_REQUESTED",
+  "REJECTED",
+  "CANCELLED",
+]);
+export const approvalStageStatus = pgEnum("approval_stage_status", [
+  "PENDING",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "BLOCKED",
+  "CANCELLED",
+]);
+export const approvalTaskStatus = pgEnum("approval_task_status", [
+  "PENDING",
+  "DECIDED",
+  "REASSIGNED",
+  "UNRESOLVABLE",
+  "CANCELLED",
+]);
 
 export const tenant = pgTable("tenant", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -1229,6 +1251,134 @@ export const contentRevision = pgTable(
     ),
     index("content_revision_version_idx").on(t.tenantId, t.documentVersionId),
     index("content_revision_created_by_idx").on(t.tenantId, t.createdBy),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const approvalRun = pgTable(
+  "approval_run",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    contentRevisionId: uuid("content_revision_id").notNull(),
+    workflowTemplateVersionId: uuid("workflow_template_version_id").notNull(),
+    resolvedParticipants: jsonb("resolved_participants").notNull(),
+    status: runStatus("status").notNull(),
+    startedAt: instant("started_at").notNull(),
+    completedAt: instant("completed_at"),
+    cancelledReason: text("cancelled_reason"),
+    configurationVersionId: uuid("configuration_version_id").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "approval_run_pkey", columns: [t.tenantId, t.id] }),
+    unique("approval_run_id_unique").on(t.id),
+    foreignKey({
+      name: "approval_run_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_run_content_revision_fk",
+      columns: [t.tenantId, t.contentRevisionId],
+      foreignColumns: [contentRevision.tenantId, contentRevision.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_run_workflow_version_fk",
+      columns: [t.tenantId, t.workflowTemplateVersionId],
+      foreignColumns: [workflowTemplateVersion.tenantId, workflowTemplateVersion.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_run_configuration_version_fk",
+      columns: [t.tenantId, t.configurationVersionId],
+      foreignColumns: [configurationVersion.tenantId, configurationVersion.id],
+    }).onDelete("restrict"),
+    unique("approval_run_content_revision_unique").on(t.tenantId, t.contentRevisionId),
+    check(
+      "approval_run_resolved_participants_array",
+      sql`jsonb_typeof(${t.resolvedParticipants}) = 'array'`,
+    ),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const approvalStage = pgTable(
+  "approval_stage",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    approvalRunId: uuid("approval_run_id").notNull(),
+    stageOrder: integer("stage_order").notNull(),
+    completionRule: completionRule("completion_rule").notNull(),
+    threshold: integer("threshold"),
+    status: approvalStageStatus("status").notNull(),
+    dueAt: instant("due_at"),
+    completedAt: instant("completed_at"),
+  },
+  (t) => [
+    primaryKey({ name: "approval_stage_pkey", columns: [t.tenantId, t.id] }),
+    unique("approval_stage_id_unique").on(t.id),
+    foreignKey({
+      name: "approval_stage_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_stage_run_fk",
+      columns: [t.tenantId, t.approvalRunId],
+      foreignColumns: [approvalRun.tenantId, approvalRun.id],
+    }).onDelete("restrict"),
+    unique("approval_stage_run_order_unique").on(t.tenantId, t.approvalRunId, t.stageOrder),
+    check("approval_stage_order_positive", sql`${t.stageOrder} >= 1`),
+    check(
+      "approval_stage_threshold_consistent",
+      sql`(${t.completionRule} = 'AT_LEAST_N' and ${t.threshold} is not null and ${t.threshold} > 1)
+          or (${t.completionRule} <> 'AT_LEAST_N' and ${t.threshold} is null)`,
+    ),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const approvalTask = pgTable(
+  "approval_task",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    approvalStageId: uuid("approval_stage_id").notNull(),
+    participantType: approvalParticipantType("participant_type").notNull(),
+    participantId: uuid("participant_id").notNull(),
+    status: approvalTaskStatus("status").notNull(),
+    assignedAt: instant("assigned_at").notNull(),
+    dueAt: instant("due_at"),
+    delegatedFromUserId: uuid("delegated_from_user_id"),
+  },
+  (t) => [
+    primaryKey({ name: "approval_task_pkey", columns: [t.tenantId, t.id] }),
+    unique("approval_task_id_unique").on(t.id),
+    foreignKey({
+      name: "approval_task_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_task_stage_fk",
+      columns: [t.tenantId, t.approvalStageId],
+      foreignColumns: [approvalStage.tenantId, approvalStage.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_task_delegated_from_user_fk",
+      columns: [t.tenantId, t.delegatedFromUserId],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    index("approval_task_participant_status_idx").on(t.tenantId, t.participantId, t.status),
     tenantPolicy(),
   ],
 ).enableRLS();

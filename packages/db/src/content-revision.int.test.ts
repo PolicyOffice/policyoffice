@@ -3,6 +3,8 @@ import {
   CANONICALISATION_SCHEMA_VERSION,
   ContentRevisionLifecycleError,
   ContentRevisionNotFoundError,
+  WorkflowMandateUnsatisfiedError,
+  WorkflowTemplateValidationError,
   addContentAttachment,
   buildCanonicalManifest,
   createContentRevision,
@@ -33,6 +35,10 @@ const ORG_UNIT = "96000000-0000-0000-0003-000000000001";
 const OTHER_ORG_UNIT = "97000000-0000-0000-0003-000000000001";
 const CONFIGURATION = "96000000-0000-0000-0004-000000000001";
 const OTHER_CONFIGURATION = "97000000-0000-0000-0004-000000000001";
+const WORKFLOW_TEMPLATE = "96000000-0000-0000-0004-000000000002";
+const OTHER_WORKFLOW_TEMPLATE = "97000000-0000-0000-0004-000000000002";
+const WORKFLOW_VERSION = "96000000-0000-0000-0004-000000000003";
+const OTHER_WORKFLOW_VERSION = "97000000-0000-0000-0004-000000000003";
 const DOCUMENT_TYPE = "96000000-0000-0000-0005-000000000001";
 const OTHER_DOCUMENT_TYPE = "97000000-0000-0000-0005-000000000001";
 const CLASSIFICATION = "96000000-0000-0000-0006-000000000001";
@@ -60,6 +66,8 @@ interface Seed {
   legalEntityId: string;
   orgUnitId: string;
   configurationId: string;
+  workflowTemplateId: string;
+  workflowVersionId: string;
   documentTypeId: string;
   classificationId: string;
   documentId: string;
@@ -95,9 +103,18 @@ async function clearTenant(sql: Sql, tenantId: string): Promise<void> {
   await sql.query("begin");
   try {
     await sql.query("select set_config('app.tenant_id', $1, true)", [tenantId]);
+    await sql.query(
+      `update workflow_template
+          set active_version_id = null, row_version = row_version + 1
+        where tenant_id = $1 and active_version_id is not null`,
+      [tenantId],
+    );
     for (const table of [
       "audit_event",
       "tenant_event_sequence",
+      "approval_task",
+      "approval_stage",
+      "approval_run",
       "content_attachment",
       "content_revision",
       "document_version",
@@ -108,6 +125,8 @@ async function clearTenant(sql: Sql, tenantId: string): Promise<void> {
       "document_type",
       "information_classification",
       "configuration_version",
+      "workflow_template_version",
+      "workflow_template",
       "app_user",
     ]) {
       await sql.query(`delete from ${table} where tenant_id = $1`, [tenantId]);
@@ -151,11 +170,60 @@ async function seedTenant(seed: Seed): Promise<void> {
       ],
     );
     await sql.query(
+      `insert into workflow_template (
+         tenant_id, id, name, purpose, active_version_id, status
+       ) values ($1, $2, 'Revision approval', 'Approve revision test candidates', null, 'ACTIVE')`,
+      [seed.tenantId, seed.workflowTemplateId],
+    );
+    const stages = [
+      {
+        order: 1,
+        name: "Named authority",
+        completionRule: "ALL",
+        participants: [{ type: "USER", id: seed.userId }],
+      },
+      {
+        order: 2,
+        name: "Final authority",
+        completionRule: "ALL",
+        participants: [{ type: "USER", id: seed.userId }],
+      },
+    ];
+    await sql.query(
+      `insert into workflow_template_version (
+         tenant_id, id, workflow_template_id, version_sequence, stages,
+         separation_of_duties_rules, published_at, published_by
+       ) values ($1, $2, $3, 1, $4::jsonb, '[]'::jsonb, $5, $6)`,
+      [
+        seed.tenantId,
+        seed.workflowVersionId,
+        seed.workflowTemplateId,
+        JSON.stringify(stages),
+        FIXED_INSTANT.toISOString(),
+        seed.userId,
+      ],
+    );
+    await sql.query(
+      `update workflow_template
+          set active_version_id = $2, row_version = row_version + 1
+        where id = $1`,
+      [seed.workflowTemplateId, seed.workflowVersionId],
+    );
+    await sql.query(
       `insert into document_type (
          tenant_id, id, code, name, rank, mandated_authority,
-         default_review_rule, requires_attestation_by_default, status
-       ) values ($1, $2, $3, 'Policy', 10, '{}'::jsonb, '{}'::jsonb, false, 'ACTIVE')`,
-      [seed.tenantId, seed.documentTypeId, `POLICY_${seed.label}`],
+         default_workflow_template_id, default_review_rule,
+         requires_attestation_by_default, status
+       ) values ($1, $2, $3, 'Policy', 10, $4::jsonb, $5, '{}'::jsonb, false, 'ACTIVE')`,
+      [
+        seed.tenantId,
+        seed.documentTypeId,
+        `POLICY_${seed.label}`,
+        JSON.stringify({
+          MATERIAL: { requires: [{ type: "USER", id: seed.userId }] },
+        }),
+        seed.workflowTemplateId,
+      ],
     );
     await sql.query(
       `insert into information_classification (
@@ -282,6 +350,8 @@ async function installFixtures(): Promise<void> {
     legalEntityId: LEGAL_ENTITY,
     orgUnitId: ORG_UNIT,
     configurationId: CONFIGURATION,
+    workflowTemplateId: WORKFLOW_TEMPLATE,
+    workflowVersionId: WORKFLOW_VERSION,
     documentTypeId: DOCUMENT_TYPE,
     classificationId: CLASSIFICATION,
     documentId: DOCUMENT,
@@ -294,6 +364,8 @@ async function installFixtures(): Promise<void> {
     legalEntityId: OTHER_LEGAL_ENTITY,
     orgUnitId: OTHER_ORG_UNIT,
     configurationId: OTHER_CONFIGURATION,
+    workflowTemplateId: OTHER_WORKFLOW_TEMPLATE,
+    workflowVersionId: OTHER_WORKFLOW_VERSION,
     documentTypeId: OTHER_DOCUMENT_TYPE,
     classificationId: OTHER_CLASSIFICATION,
     documentId: OTHER_DOCUMENT,
@@ -331,6 +403,19 @@ async function installFixtures(): Promise<void> {
         OTHER_USER,
       ],
     );
+    await submitContentRevision(transaction(sql), {
+      tenantId: OTHER_TENANT,
+      documentVersionId: OTHER_VERSION,
+      revisionId: OTHER_REVISION,
+      expectedVersionRowVersion: 1,
+      expectedRevisionRowVersion: 1,
+      actor: { type: "USER", id: OTHER_USER },
+      configurationVersionId: OTHER_CONFIGURATION,
+      occurredAt: FIXED_INSTANT,
+      requestId: REQUEST,
+      correlationId: CORRELATION,
+      sourceChannel: "API",
+    });
   });
 }
 
@@ -555,7 +640,7 @@ describe("content revisions and governed attachments", () => {
     });
   });
 
-  it("INV-VER-002 / INV-VER-009: atomically finalizes the manifest and records version.submitted", async () => {
+  it("INV-VER-002 / INV-APR-012 / INV-AUD-001: atomically submits and starts the frozen approval run", async () => {
     await withTenant(TENANT, async (sql) => {
       await insertVersion(sql);
       const created = await createRevision(sql);
@@ -605,8 +690,255 @@ describe("content revisions and governed attachments", () => {
       expect(events.rows).toEqual([
         { event_type: "content_revision.created" },
         { event_type: "version.submitted" },
+        { event_type: "approval_run.started" },
+        { event_type: "approval_stage.started" },
+        { event_type: "approval_task.assigned" },
       ]);
-      expect(events.rows).not.toContainEqual({ event_type: "approval_run.started" });
+      const runs = await sql.query<{
+        id: string;
+        workflow_template_version_id: string;
+        resolved_participants: unknown;
+        status: string;
+        started_at: Date;
+        configuration_version_id: string;
+      }>(
+        `select id, workflow_template_version_id, resolved_participants, status,
+                started_at, configuration_version_id
+           from approval_run where content_revision_id = $1`,
+        [REVISION],
+      );
+      expect(runs.rows).toHaveLength(1);
+      expect(runs.rows[0]).toMatchObject({
+        workflow_template_version_id: WORKFLOW_VERSION,
+        resolved_participants: [
+          {
+            order: 1,
+            participants: [{ type: "USER", id: USER, displayName: "A author" }],
+          },
+          {
+            order: 2,
+            participants: [{ type: "USER", id: USER, displayName: "A author" }],
+          },
+        ],
+        status: "RUNNING",
+        started_at: FIXED_INSTANT,
+        configuration_version_id: CONFIGURATION,
+      });
+      const runId = runs.rows[0]?.id;
+      const stages = await sql.query<{
+        id: string;
+        stage_order: number;
+        completion_rule: string;
+        threshold: number | null;
+        status: string;
+        due_at: Date | null;
+      }>(
+        `select id, stage_order, completion_rule, threshold, status, due_at
+           from approval_stage where approval_run_id = $1 order by stage_order`,
+        [runId],
+      );
+      expect(
+        stages.rows.map(({ stage_order, completion_rule, threshold, status, due_at }) => ({
+          stage_order,
+          completion_rule,
+          threshold,
+          status,
+          due_at,
+        })),
+      ).toEqual([
+        {
+          stage_order: 1,
+          completion_rule: "ALL",
+          threshold: null,
+          status: "IN_PROGRESS",
+          due_at: null,
+        },
+        {
+          stage_order: 2,
+          completion_rule: "ALL",
+          threshold: null,
+          status: "PENDING",
+          due_at: null,
+        },
+      ]);
+      const tasks = await sql.query<{
+        approval_stage_id: string;
+        participant_type: string;
+        participant_id: string;
+        status: string;
+        due_at: Date | null;
+      }>(
+        `select approval_stage_id, participant_type, participant_id, status, due_at
+           from approval_task order by assigned_at`,
+      );
+      expect(tasks.rows).toEqual([
+        {
+          approval_stage_id: stages.rows[0]?.id,
+          participant_type: "USER",
+          participant_id: USER,
+          status: "PENDING",
+          due_at: null,
+        },
+      ]);
+
+      const approvalEvents = await sql.query<{
+        event_type: string;
+        subject_type: string;
+        document_id: string;
+        document_variant_id: string;
+        document_version_id: string;
+        actor_type: string;
+        actor_id: string;
+        occurred_at: Date;
+        correlation_id: string;
+        configuration_version_id: string;
+        safe_after: Record<string, unknown>;
+      }>(
+        `select event_type, subject_type, document_id, document_variant_id,
+                document_version_id, actor_type, actor_id, occurred_at,
+                correlation_id, configuration_version_id, safe_after
+           from audit_event
+          where event_type in (
+            'approval_run.started', 'approval_stage.started', 'approval_task.assigned'
+          )
+          order by sequence`,
+      );
+      expect(approvalEvents.rows).toHaveLength(3);
+      expect(
+        approvalEvents.rows.map(({ event_type, subject_type }) => ({ event_type, subject_type })),
+      ).toEqual([
+        { event_type: "approval_run.started", subject_type: "APPROVAL_RUN" },
+        { event_type: "approval_stage.started", subject_type: "APPROVAL_STAGE" },
+        { event_type: "approval_task.assigned", subject_type: "APPROVAL_TASK" },
+      ]);
+      for (const event of approvalEvents.rows) {
+        expect(event).toMatchObject({
+          document_id: DOCUMENT,
+          document_variant_id: VARIANT,
+          document_version_id: VERSION,
+          actor_type: "USER",
+          actor_id: USER,
+          occurred_at: FIXED_INSTANT,
+          correlation_id: CORRELATION,
+          configuration_version_id: CONFIGURATION,
+        });
+      }
+
+      await sql.query(
+        `update app_user
+            set display_name = 'Renamed after run start', status = 'DEACTIVATED',
+                deactivated_at = $2, row_version = row_version + 1
+          where id = $1`,
+        [USER, FIXED_INSTANT.toISOString()],
+      );
+      const frozen = await sql.query<{ resolved_participants: unknown }>(
+        "select resolved_participants from approval_run where id = $1",
+        [runId],
+      );
+      expect(frozen.rows[0]?.resolved_participants).toEqual(runs.rows[0]?.resolved_participants);
+    });
+  });
+
+  it("INV-APR-020: an unmet run-start floor rolls back the submission and creates nothing", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const secondAuthority = "96000000-0000-0000-0001-000000000002";
+      await sql.query(
+        `insert into app_user (tenant_id, id, display_name, contact_email, status)
+         values ($1, $2, 'Second authority', 'second@authority.example.test', 'ACTIVE')`,
+        [TENANT, secondAuthority],
+      );
+      await sql.query(
+        `update document_type
+            set mandated_authority = $2::jsonb, row_version = row_version + 1
+          where id = $1`,
+        [
+          DOCUMENT_TYPE,
+          JSON.stringify({ MATERIAL: { requires: [{ type: "USER", id: secondAuthority }] } }),
+        ],
+      );
+      await insertVersion(sql);
+      const created = await createRevision(sql);
+
+      await expect(submitRevision(sql, REVISION, created.rowVersion, 1)).rejects.toBeInstanceOf(
+        WorkflowMandateUnsatisfiedError,
+      );
+      const state = await sql.query<{
+        submitted_at: Date | null;
+        lifecycle_state: string;
+      }>(
+        `select revision.submitted_at, version.lifecycle_state
+           from content_revision revision
+           join document_version version
+             on version.tenant_id = revision.tenant_id
+            and version.id = revision.document_version_id
+          where revision.id = $1`,
+        [REVISION],
+      );
+      expect(state.rows).toEqual([{ submitted_at: null, lifecycle_state: "DRAFT" }]);
+      for (const table of ["approval_run", "approval_stage", "approval_task"]) {
+        const rows = await sql.query<{ count: number }>(
+          `select count(*)::int as count from ${table}`,
+        );
+        expect(rows.rows).toEqual([{ count: 0 }]);
+      }
+      const events = await sql.query<{ event_type: string }>(
+        "select event_type from audit_event order by sequence",
+      );
+      expect(events.rows).toEqual([{ event_type: "content_revision.created" }]);
+    });
+  });
+
+  it("INV-APR-012: the database permits only one approval run per submitted revision", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertVersion(sql);
+      const created = await createRevision(sql);
+      await submitRevision(sql, REVISION, created.rowVersion, 1);
+      await expect(
+        sql.query(
+          `insert into approval_run (
+             tenant_id, content_revision_id, workflow_template_version_id,
+             resolved_participants, status, started_at, configuration_version_id
+           ) values ($1, $2, $3, '[]'::jsonb, 'RUNNING', $4, $5)`,
+          [TENANT, REVISION, WORKFLOW_VERSION, FIXED_INSTANT.toISOString(), CONFIGURATION],
+        ),
+      ).rejects.toMatchObject({
+        code: "23505",
+        constraint: "approval_run_content_revision_unique",
+      });
+    });
+  });
+
+  it("INV-APR-012: refuses submission when a named participant is no longer active", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertVersion(sql);
+      const created = await createRevision(sql);
+      await sql.query(
+        `update app_user
+            set status = 'DEACTIVATED', deactivated_at = $2,
+                row_version = row_version + 1
+          where id = $1`,
+        [USER, FIXED_INSTANT.toISOString()],
+      );
+
+      await expect(submitRevision(sql, REVISION, created.rowVersion, 1)).rejects.toMatchObject({
+        name: WorkflowTemplateValidationError.name,
+        code: "PARTICIPANT_NOT_ACTIVE",
+      });
+      const run = await sql.query<{ count: number }>(
+        "select count(*)::int as count from approval_run",
+      );
+      expect(run.rows).toEqual([{ count: 0 }]);
+    });
+  });
+
+  it("INV-TEN-001: another tenant's run, stages and tasks are invisible", async () => {
+    await withTenant(TENANT, async (sql) => {
+      for (const table of ["approval_run", "approval_stage", "approval_task"]) {
+        const rows = await sql.query<{ count: number }>(
+          `select count(*)::int as count from ${table}`,
+        );
+        expect(rows.rows).toEqual([{ count: 0 }]);
+      }
     });
   });
 
