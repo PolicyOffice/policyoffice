@@ -110,6 +110,20 @@ Claim it before starting, and release it if you stop:
 gh issue edit <n> --add-label in-progress
 ```
 
+**Before starting anything new, clear your own pull requests.** A requested change on a pull
+request whose commits you wrote is work, and it outranks picking up a fresh issue:
+
+```bash
+gh pr list --state open        # then: whose commits did I write, and what is unanswered on it?
+```
+
+A pull request carrying a review finding and no `Reviewed-commit` is waiting on nobody but you.
+Push the fix and reply on the thread. **Finding no `ready` issue and reporting nothing to do,
+while your own pull request sits on a requested change, is the failure this paragraph exists to
+prevent.** It happened on 2026-09-19: #161 had a blocking finding, the only open issue was
+already `in-progress`, the only open pull request was its own — so selection found nothing and
+the finding sat unread until the operator asked.
+
 For review work, `gh pr list --state open` — review every PR with no review from you since
 its most recent commit. **That includes pull requests the other agent authored.** A pull
 request whose commits you did not write is yours to review, whatever the account on it says
