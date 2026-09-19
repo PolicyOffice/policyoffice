@@ -12,6 +12,7 @@ import {
   boolean,
   check,
   customType,
+  date,
   foreignKey,
   index,
   integer,
@@ -124,6 +125,11 @@ export const approvalTaskStatus = pgEnum("approval_task_status", [
   "REASSIGNED",
   "UNRESOLVABLE",
   "CANCELLED",
+]);
+export const approvalDecisionKind = pgEnum("approval_decision_kind", [
+  "APPROVE",
+  "REQUEST_CHANGES",
+  "REJECT",
 ]);
 
 export const tenant = pgTable("tenant", {
@@ -1426,6 +1432,77 @@ export const contentAttachment = pgTable(
       sql`${t.storageRef} ~ ('^t/' || ${t.tenantId}::text || '/blob/[0-9a-f]{64}$')`,
     ),
     index("content_attachment_revision_idx").on(t.tenantId, t.contentRevisionId),
+    tenantPolicy(),
+  ],
+).enableRLS();
+
+export const approvalDecision = pgTable(
+  "approval_decision",
+  {
+    tenantId: uuid("tenant_id").notNull(),
+    id: uuid("id").defaultRandom().notNull(),
+    createdAt: instant("created_at").defaultNow().notNull(),
+    updatedAt: instant("updated_at").defaultNow().notNull(),
+    rowVersion: integer("row_version").default(1).notNull(),
+    approvalTaskId: uuid("approval_task_id").notNull(),
+    decision: approvalDecisionKind("decision").notNull(),
+    decidedByType: text("decided_by_type").notNull(),
+    decidedById: uuid("decided_by_id").notNull(),
+    recordedByUserId: uuid("recorded_by_user_id").notNull(),
+    recordedAt: instant("recorded_at").defaultNow().notNull(),
+    contentRevisionId: uuid("content_revision_id").notNull(),
+    contentDigest: text("content_digest").notNull(),
+    reasonCode: text("reason_code"),
+    commentRef: uuid("comment_ref"),
+    resolutionReference: text("resolution_reference"),
+    resolutionDate: date("resolution_date"),
+    minutesAttachmentId: uuid("minutes_attachment_id"),
+    attendingMembers: uuid("attending_members").array(),
+    configurationVersionId: uuid("configuration_version_id").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "approval_decision_pkey", columns: [t.tenantId, t.id] }),
+    unique("approval_decision_id_unique").on(t.id),
+    foreignKey({
+      name: "approval_decision_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_decision_task_fk",
+      columns: [t.tenantId, t.approvalTaskId],
+      foreignColumns: [approvalTask.tenantId, approvalTask.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_decision_recorded_by_user_fk",
+      columns: [t.tenantId, t.recordedByUserId],
+      foreignColumns: [appUser.tenantId, appUser.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_decision_content_revision_fk",
+      columns: [t.tenantId, t.contentRevisionId],
+      foreignColumns: [contentRevision.tenantId, contentRevision.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_decision_minutes_attachment_fk",
+      columns: [t.tenantId, t.minutesAttachmentId],
+      foreignColumns: [contentAttachment.tenantId, contentAttachment.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "approval_decision_configuration_version_fk",
+      columns: [t.tenantId, t.configurationVersionId],
+      foreignColumns: [configurationVersion.tenantId, configurationVersion.id],
+    }).onDelete("restrict"),
+    unique("approval_decision_task_unique").on(t.tenantId, t.approvalTaskId),
+    check("approval_decision_actor_type_valid", sql`${t.decidedByType} in ('USER', 'BODY')`),
+    check(
+      "approval_decision_body_recorder_required",
+      sql`${t.decidedByType} <> 'BODY' or ${t.recordedByUserId} is not null`,
+    ),
+    check(
+      "approval_decision_content_digest_format",
+      sql`${t.contentDigest} ~ '^sha-256:[0-9a-f]{64}$'`,
+    ),
     tenantPolicy(),
   ],
 ).enableRLS();

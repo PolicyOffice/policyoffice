@@ -97,6 +97,25 @@ export {
 } from "./approval-run.js";
 
 export {
+  APPROVAL_DECISION_REQUIRED_CAPABILITIES,
+  ApprovalBodyResolutionRequiredError,
+  ApprovalRunNotRunningError,
+  ApprovalStageNotInProgressError,
+  ApprovalTaskNotFoundError,
+  ApprovalTaskNotHeldError,
+  ApprovalTaskNotPendingError,
+  ApprovalVersionNotInReviewError,
+  InvalidApprovalRunSnapshotError,
+  UnsupportedApprovalCompletionRuleError,
+  isApprovalStageSatisfied,
+  recordApprovalDecision,
+  type ApprovalCompletionRule,
+  type ApprovalDecisionKind,
+  type RecordApprovalDecisionInput,
+  type RecordedApprovalDecision,
+} from "./approval-decision.js";
+
+export {
   WORKFLOW_COMPLETION_RULES,
   WORKFLOW_PARTICIPANT_TYPES,
   WORKFLOW_TEMPLATE_REQUIRED_CAPABILITIES,
