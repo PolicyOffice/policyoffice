@@ -50,6 +50,36 @@ A ticket is Codex-ready only when it is a complete contract. Use the
 invariants or acceptance-criteria sections, the specification is not ready and the
 ticket should not exist yet.
 
+**A complete contract is not yet a claimable one.** The template applies `implementation` and
+nothing else, while Codex takes work with `gh issue list --label ready` (`AGENTS.md` § *Picking up
+work*). A ticket filed without `ready` is invisible to it, and the failure is silent — nothing
+errors, Codex simply reports there is nothing to do. POL-039 sat untouched that way on 2026-09-17
+until the founder relayed the refusal by hand, which is exactly the courier role
+*Never brief Codex through the operator* exists to remove.
+
+**Which label it carries depends on whether anything blocks it, and the two sets are mutually
+exclusive.** With no open dependency:
+
+```bash
+gh issue create --label implementation --label ready --label tier-2 --label phase-3 …
+```
+
+With a dependency still open, `blocked` takes the place of `ready`, and they swap when the
+dependency merges:
+
+```bash
+gh issue create --label implementation --label blocked --label tier-2 --label phase-3 …
+gh issue edit <n> --remove-label blocked --add-label ready   # once the dependency lands
+```
+
+**Never both.** `ready` is what Codex selects on, so a ticket carrying both is picked up with its
+dependency still open — the opposite failure, and a worse one than being ignored. POL-039 should
+have been filed `blocked` while its specification was unmerged and flipped when that landed;
+instead it carried neither, and sat.
+
+Two labels are never yours: `in-progress` is Codex's when it claims the work, and
+`decision-required` belongs to whoever raises one.
+
 ### Never assert from memory what a file already states
 
 Before writing or amending any ticket, **open the authority and read the specific lines
