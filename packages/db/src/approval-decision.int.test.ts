@@ -1,17 +1,23 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
+  ApprovalBodyResolutionEvidenceError,
   ApprovalBodyResolutionRequiredError,
+  ApprovalBodyResolutionUnauthorizedError,
   ApprovalRunNotRunningError,
   ApprovalStageNotInProgressError,
   ApprovalTaskNotHeldError,
   ApprovalTaskNotPendingError,
+  AuthzContext,
   createContentRevision,
   recordApprovalDecision,
+  recordBodyResolution,
   submitContentRevision,
   type ApprovalDecisionKind,
   type AuditTransaction,
+  type RecordBodyResolutionInput,
 } from "../../domain/src/index.js";
 import { withAppRole, withTenant, type Sql } from "@policyoffice/testing";
+import { authorizationDataLoader } from "./authorization.js";
 import { buildFixtureSet, loadFixtureSet, removeFixtureSetForTests } from "./fixtures.js";
 
 const fixture = buildFixtureSet("test");
@@ -44,9 +50,14 @@ const COMMITTED_VARIANT = "a1000000-0000-0000-0000-000000000007";
 const COMMITTED_VERSION = "a1000000-0000-0000-0000-000000000008";
 const COMMITTED_REVISION = "a1000000-0000-0000-0000-000000000009";
 const TWO_STAGE_SECOND_STAGE = "a1000000-0000-0000-0000-00000000000a";
+const BODY_GRANT = "a1000000-0000-0000-0000-00000000000b";
+const OTHER_BODY = "a1000000-0000-0000-0000-00000000000c";
+const OTHER_BODY_GRANT = "a1000000-0000-0000-0000-00000000000d";
+const DOCUMENT_APPROVE_GRANT = "a1000000-0000-0000-0000-00000000000e";
 const REQUEST = "a2000000-0000-0000-0000-000000000001";
 const CORRELATION = "a2000000-0000-0000-0000-000000000002";
 const DECIDED_AT = new Date("2026-09-19T10:00:00.000Z");
+const SUBMITTED_AT = new Date("2026-09-17T10:00:00.000Z");
 
 function transaction(sql: Sql): AuditTransaction {
   return {
@@ -83,12 +94,16 @@ async function atSavepoint(
   }
 }
 
-async function setupOneStageRun(sql: Sql, includeBodyStage = false): Promise<void> {
+async function setupOneStageRun(
+  sql: Sql,
+  includeBodyStage = false,
+  submittedAt = DECIDED_AT,
+): Promise<void> {
   await sql.query(
     `update content_revision
         set submitted_at = $2::timestamptz, row_version = row_version + 1
       where id = $1 and submitted_at is null`,
-    [document.contentRevisionId, DECIDED_AT.toISOString()],
+    [document.contentRevisionId, submittedAt.toISOString()],
   );
   await sql.query(
     `update document_version
@@ -257,6 +272,61 @@ function decide(
   });
 }
 
+function authorizationContext(sql: Sql, principalId = USER): AuthzContext {
+  return new AuthzContext({
+    tenantId: TENANT,
+    principal: { type: "USER", id: principalId },
+    instant: DECIDED_AT,
+    load: authorizationDataLoader(transaction(sql)),
+  });
+}
+
+async function insertDirectGrant(
+  sql: Sql,
+  input: Readonly<{
+    id: string;
+    capability: "body.act_for" | "document.approve";
+    scopeType: "GOVERNANCE_BODY" | "DOCUMENT_VERSION";
+    scopeId: string;
+  }>,
+): Promise<void> {
+  await sql.query(
+    `insert into access_grant (
+       tenant_id, id, effect, principal_type, principal_id,
+       security_role_id, capability, scope_type, scope_id,
+       validity, granted_by, reason
+     ) values (
+       $1, $2, 'ALLOW', 'USER', $3,
+       null, $4::capability, $5::scope_type, $6,
+       tstzrange('2026-01-01T00:00:00Z', null, '[)'), $3, null
+     )`,
+    [TENANT, input.id, USER, input.capability, input.scopeType, input.scopeId],
+  );
+}
+
+function resolveBody(
+  sql: Sql,
+  approvalTaskId: string,
+  overrides: Partial<RecordBodyResolutionInput> = {},
+) {
+  return recordBodyResolution(transaction(sql), authorizationContext(sql), {
+    tenantId: TENANT,
+    approvalTaskId,
+    recordedByUserId: USER,
+    decision: "APPROVE",
+    resolutionReference: "MB-2026-09-18-01",
+    resolutionDate: "2026-09-18",
+    minutesAttachmentId: document.contentAttachmentId,
+    attendingMembers: [USER],
+    configurationVersionId: CONFIGURATION,
+    occurredAt: DECIDED_AT,
+    requestId: REQUEST,
+    correlationId: CORRELATION,
+    sourceChannel: "API",
+    ...overrides,
+  });
+}
+
 async function committedTenant(operation: (sql: Sql) => Promise<void>): Promise<void> {
   await withAppRole(async (sql) => {
     await sql.query("begin");
@@ -400,6 +470,312 @@ describe("approval decisions", () => {
         "approval_stage.started",
         "approval_task.assigned",
       ]);
+    });
+  });
+
+  it("INV-APR-021 / INV-APR-022 / INV-APR-023: ALL then BODY_RESOLUTION approves as the institution", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await setupOneStageRun(sql, true, SUBMITTED_AT);
+      await insertDirectGrant(sql, {
+        id: BODY_GRANT,
+        capability: "body.act_for",
+        scopeType: "GOVERNANCE_BODY",
+        scopeId: tenant.governanceBody.id,
+      });
+      await decide(sql, ONE_STAGE_TASK, "APPROVE");
+      const bodyTask = await sql.query<{ id: string }>(
+        "select id from approval_task where approval_stage_id = $1",
+        [TWO_STAGE_SECOND_STAGE],
+      );
+      const result = await resolveBody(sql, required(bodyTask.rows[0]?.id, "body task missing"));
+      expect(result).toMatchObject({
+        runStatus: "COMPLETED",
+        versionLifecycleState: "APPROVED",
+      });
+
+      const stored = await sql.query<{
+        decided_by_type: string;
+        decided_by_id: string;
+        recorded_by_user_id: string;
+        resolution_reference: string;
+        resolution_date: string;
+        minutes_attachment_id: string;
+        attending_members: string[];
+        configuration_version_id: string;
+      }>(
+        `select decided_by_type, decided_by_id, recorded_by_user_id,
+                resolution_reference, resolution_date::text as resolution_date,
+                minutes_attachment_id, attending_members, configuration_version_id
+           from approval_decision where id = $1`,
+        [result.id],
+      );
+      expect(stored.rows[0]).toMatchObject({
+        decided_by_type: "BODY",
+        decided_by_id: tenant.governanceBody.id,
+        recorded_by_user_id: USER,
+        resolution_reference: "MB-2026-09-18-01",
+        resolution_date: "2026-09-18",
+        minutes_attachment_id: document.contentAttachmentId,
+        attending_members: [USER],
+        configuration_version_id: CONFIGURATION,
+      });
+
+      const states = await sql.query<{
+        run_status: string;
+        stage_statuses: string[];
+        lifecycle_state: string;
+      }>(
+        `select run.status as run_status,
+                array_agg(stage.status::text order by stage.stage_order) as stage_statuses,
+                version.lifecycle_state
+           from approval_run run
+           join approval_stage stage on stage.approval_run_id = run.id
+           join content_revision revision on revision.id = run.content_revision_id
+           join document_version version on version.id = revision.document_version_id
+          where run.id = $1
+          group by run.status, version.lifecycle_state`,
+        [ONE_STAGE_RUN],
+      );
+      expect(states.rows).toEqual([
+        {
+          run_status: "COMPLETED",
+          stage_statuses: ["COMPLETED", "COMPLETED"],
+          lifecycle_state: "APPROVED",
+        },
+      ]);
+
+      const events = await sql.query<{
+        event_type: string;
+        actor_type: string;
+        actor_id: string;
+        safe_after: Record<string, unknown>;
+      }>(
+        `select event_type, actor_type, actor_id, safe_after
+           from audit_event where correlation_id = $1 order by sequence`,
+        [CORRELATION],
+      );
+      expect(events.rows.map(({ event_type }) => event_type)).toEqual([
+        "approval.approved",
+        "approval_stage.completed",
+        "approval_stage.started",
+        "approval_task.assigned",
+        "approval.approved",
+        "approval_stage.completed",
+        "approval_run.completed",
+        "version.approved",
+      ]);
+      const bodyEvents = events.rows.slice(4);
+      expect(bodyEvents.every(({ actor_type }) => actor_type === "BODY")).toBe(true);
+      expect(bodyEvents.every(({ actor_id }) => actor_id === tenant.governanceBody.id)).toBe(true);
+      expect(bodyEvents[0]?.safe_after).toMatchObject({
+        decidedByType: "BODY",
+        decidedById: tenant.governanceBody.id,
+      });
+      expect(bodyEvents[0]?.safe_after).not.toHaveProperty("recordedByUserId");
+
+      await atSavepoint(sql, "duplicate_body_decision", async () => {
+        try {
+          await sql.query(
+            `insert into approval_decision (
+               tenant_id, approval_task_id, decision, decided_by_type, decided_by_id,
+               recorded_by_user_id, content_revision_id, content_digest,
+               configuration_version_id
+             )
+             select tenant_id, approval_task_id, decision, decided_by_type, decided_by_id,
+                    recorded_by_user_id, content_revision_id, content_digest,
+                    configuration_version_id
+               from approval_decision where id = $1`,
+            [result.id],
+          );
+          expect.unreachable("the database accepted a second body decision for one task");
+        } catch (error) {
+          expect(databaseCode(error)).toBe("23505");
+          expect(databaseConstraint(error)).toBe("approval_decision_task_unique");
+        }
+      });
+
+      const beforeDissolution = await sql.query<{ bytes: string }>(
+        "select encode(convert_to(to_jsonb(approval_decision)::text, 'UTF8'), 'hex') as bytes from approval_decision where id = $1",
+        [result.id],
+      );
+      await sql.query(
+        `update governance_body
+            set status = 'DISSOLVED', closed_at = $2, row_version = row_version + 1
+          where id = $1`,
+        [tenant.governanceBody.id, DECIDED_AT.toISOString()],
+      );
+      expect(
+        await sql.query<{ bytes: string }>(
+          "select encode(convert_to(to_jsonb(approval_decision)::text, 'UTF8'), 'hex') as bytes from approval_decision where id = $1",
+          [result.id],
+        ),
+      ).toEqual(beforeDissolution);
+    });
+  });
+
+  it.each([
+    ["REQUEST_CHANGES", "CHANGES_REQUESTED", ["approval.changes_requested"]],
+    ["REJECT", "REJECTED", ["approval.rejected", "version.rejected"]],
+  ] as const)(
+    "body %s has the same terminal run and version outcome as a user decision",
+    async (decision, expectedStatus, expectedEvents) => {
+      await withTenant(TENANT, async (sql) => {
+        await insertDirectGrant(sql, {
+          id: BODY_GRANT,
+          capability: "body.act_for",
+          scopeType: "GOVERNANCE_BODY",
+          scopeId: tenant.governanceBody.id,
+        });
+        const result = await resolveBody(sql, document.approvalBodyTaskId, { decision });
+        expect(result.runStatus).toBe(expectedStatus);
+        expect(result.versionLifecycleState).toBe(expectedStatus);
+        const events = await sql.query<{ event_type: string }>(
+          "select event_type from audit_event where correlation_id = $1 order by sequence",
+          [CORRELATION],
+        );
+        expect(events.rows.map(({ event_type }) => event_type)).toEqual(expectedEvents);
+      });
+    },
+  );
+
+  it("INV-APR-023: a grant for another body is refused without a decision", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await sql.query(
+        `insert into governance_body (
+           tenant_id, id, code, name, legal_entity_id, quorum_rule, status
+         ) values ($1, $2, 'OTHER_BOARD', 'Other Board', $3, '{}'::jsonb, 'ACTIVE')`,
+        [TENANT, OTHER_BODY, tenant.legalEntity.id],
+      );
+      await insertDirectGrant(sql, {
+        id: OTHER_BODY_GRANT,
+        capability: "body.act_for",
+        scopeType: "GOVERNANCE_BODY",
+        scopeId: OTHER_BODY,
+      });
+      await expect(resolveBody(sql, document.approvalBodyTaskId)).rejects.toBeInstanceOf(
+        ApprovalBodyResolutionUnauthorizedError,
+      );
+      expect(
+        (
+          await sql.query("select id from approval_decision where approval_task_id = $1", [
+            document.approvalBodyTaskId,
+          ])
+        ).rows,
+      ).toHaveLength(0);
+    });
+  });
+
+  it("INV-APR-023: document.approve never substitutes for body.act_for", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertDirectGrant(sql, {
+        id: DOCUMENT_APPROVE_GRANT,
+        capability: "document.approve",
+        scopeType: "DOCUMENT_VERSION",
+        scopeId: document.approvalVersionId,
+      });
+      await expect(resolveBody(sql, document.approvalBodyTaskId)).rejects.toBeInstanceOf(
+        ApprovalBodyResolutionUnauthorizedError,
+      );
+      expect(
+        (
+          await sql.query("select id from approval_decision where approval_task_id = $1", [
+            document.approvalBodyTaskId,
+          ])
+        ).rows,
+      ).toHaveLength(0);
+    });
+  });
+
+  it("INV-APR-022: the date boundary is stable across session timezones", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertDirectGrant(sql, {
+        id: BODY_GRANT,
+        capability: "body.act_for",
+        scopeType: "GOVERNANCE_BODY",
+        scopeId: tenant.governanceBody.id,
+      });
+      for (const [savepoint, timeZone] of [
+        ["resolution_before_submission_utc", "UTC"],
+        ["resolution_before_submission_los_angeles", "America/Los_Angeles"],
+      ] as const) {
+        await atSavepoint(sql, savepoint, async () => {
+          await sql.query("select set_config('TimeZone', $1, true)", [timeZone]);
+          try {
+            await resolveBody(sql, document.approvalBodyTaskId, {
+              resolutionDate: "2025-12-31",
+              attendingMembers: null,
+            });
+            expect.unreachable("the database accepted a pre-submission resolution date");
+          } catch (error) {
+            expect(databaseCode(error)).toBe("23514");
+            expect(databaseConstraint(error)).toBe(
+              "approval_decision_resolution_date_not_before_submission",
+            );
+          }
+        });
+      }
+      await expect(
+        resolveBody(sql, document.approvalBodyTaskId, {
+          resolutionDate: "2026-01-02",
+          attendingMembers: [USER],
+        }),
+      ).resolves.toMatchObject({ runStatus: "COMPLETED" });
+    });
+  });
+
+  it("INV-APR-021 / INV-TEN-003: the database rejects an absent or cross-tenant deciding body", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await atSavepoint(sql, "foreign_deciding_body", async () => {
+        try {
+          await sql.query(
+            `insert into approval_decision (
+               tenant_id, approval_task_id, decision, decided_by_type, decided_by_id,
+               recorded_by_user_id, content_revision_id, content_digest,
+               configuration_version_id
+             )
+             select tenant_id, $2, 'APPROVE', 'BODY', $3, $4,
+                    content_revision_id, content_digest, configuration_version_id
+               from approval_decision where id = $5 and tenant_id = $1`,
+            [
+              TENANT,
+              document.approvalBodyTaskId,
+              otherTenant.governanceBody.id,
+              USER,
+              document.approvalDecisionId,
+            ],
+          );
+          expect.unreachable("the database accepted a cross-tenant deciding body");
+        } catch (error) {
+          expect(databaseCode(error)).toBe("23503");
+          expect(databaseConstraint(error)).toBe("approval_decision_deciding_body_fk");
+        }
+      });
+    });
+  });
+
+  it("INV-ORG-002: an attendee without a dated seat is refused without a decision", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await sql.query(
+        `insert into app_user (tenant_id, id, display_name, contact_email, status)
+         values ($1, $2, 'Non-member attendee', 'non-member@example.test', 'ACTIVE')`,
+        [TENANT, SECOND_USER],
+      );
+      await insertDirectGrant(sql, {
+        id: BODY_GRANT,
+        capability: "body.act_for",
+        scopeType: "GOVERNANCE_BODY",
+        scopeId: tenant.governanceBody.id,
+      });
+      await expect(
+        resolveBody(sql, document.approvalBodyTaskId, { attendingMembers: [SECOND_USER] }),
+      ).rejects.toBeInstanceOf(ApprovalBodyResolutionEvidenceError);
+      expect(
+        (
+          await sql.query("select id from approval_decision where approval_task_id = $1", [
+            document.approvalBodyTaskId,
+          ])
+        ).rows,
+      ).toHaveLength(0);
     });
   });
 
@@ -691,6 +1067,24 @@ describe("approval decisions", () => {
     await committedTenant(async (sql) => {
       await setupCommittedOneStageRun(sql);
       decisionId = (await decide(sql, ONE_STAGE_TASK, "APPROVE")).id;
+    });
+    await withTenant(OTHER_TENANT, async (sql) => {
+      expect(
+        (await sql.query("select id from approval_decision where id = $1", [decisionId])).rows,
+      ).toEqual([]);
+    });
+  });
+
+  it("INV-TEN-001 / INV-TEN-003: another tenant cannot observe a body resolution", async () => {
+    let decisionId = "";
+    await committedTenant(async (sql) => {
+      await insertDirectGrant(sql, {
+        id: BODY_GRANT,
+        capability: "body.act_for",
+        scopeType: "GOVERNANCE_BODY",
+        scopeId: tenant.governanceBody.id,
+      });
+      decisionId = (await resolveBody(sql, document.approvalBodyTaskId)).id;
     });
     await withTenant(OTHER_TENANT, async (sql) => {
       expect(

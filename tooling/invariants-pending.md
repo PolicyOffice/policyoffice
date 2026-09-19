@@ -49,10 +49,7 @@ Format, parsed strictly:
 - INV-APR-011 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APR-013 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-014 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APR-021 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-APR-022 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-APR-023 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-APR-024 — MVP; no schema or domain code yet (Phase 2/3)
+- INV-APR-024 — MVP; every approval decision records the configuration version in force. Which body-resolution evidence fields that version requires remains unenforced because tenant configuration has no required-field structure to read
 
 ## INV-CFG — Configuration
 
