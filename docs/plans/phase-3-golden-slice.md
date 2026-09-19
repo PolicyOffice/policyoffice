@@ -243,14 +243,14 @@ authorities. POL-038 (#146) is written against them.
 - **Participant kinds beyond `USER` and `GOVERNANCE_BODY`.** `ROLE_AT_SCOPE` and `GROUP` resolve
   to several principals, and *"the head of the owning department"* (`document-taxonomy.md`) is a
   scope relative to the document, which the stage shape would have to express.
-- **Reminders and escalation (INV-APR-002)** wait on a job runner — `apps/worker/src/main.ts` is a process boundary that logs one line
+- **Reminders and escalation (INV-APR-002)** wait on a job runner — `apps/worker/src/main.ts` is a process boundary that logs one line and runs nothing, and `ADR-0007` decides what runs there.
 - **Which evidence fields a body resolution requires (INV-APR-024) — before it can be enforced.**
   `document-taxonomy.md` marks `resolution_reference`, `resolution_date`, `minutes_attachment`
   and `attending_members` *configurable*, and there is nowhere to configure them.
   `configuration_version` holds a sequence, an actor, a reason and a digest — no payload — and
   no configuration table expresses required evidence fields. POL-041 records the fields and
   leaves the requirement unenforced, which is why INV-APR-024 keeps a pending entry rather
-  than being claimed
+  than being claimed.
 
 **The one thing that would spoil A → B, recorded so POL-038 carries it.** Option A is reversible
 into a full editor only if seeded templates are written as **ordinary tenant-owned rows** with
