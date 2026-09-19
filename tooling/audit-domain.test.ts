@@ -234,23 +234,17 @@ describe("the audit event envelope", () => {
     for (const eventType of [
       "version.created",
       "version.effective",
+      "version.approved",
       "version.materiality_changed",
       "version.metadata_changed",
       "version.published",
+      "version.rejected",
       "version.superseded",
       "version.withdrawn",
     ] as const) {
       expect(IMPLEMENTED_AUDIT_EVENT_TYPES).toContain(eventType);
       expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterRequired).toBe(true);
       expect(AUDIT_EVENT_SCHEMAS[eventType][1]?.safeAfterKeys.length).toBeGreaterThan(0);
-    }
-    for (const eventType of ["version.approved", "version.rejected"] as const) {
-      expect(IMPLEMENTED_AUDIT_EVENT_TYPES).not.toContain(eventType);
-      expect(AUDIT_EVENT_SCHEMAS[eventType][1]).toMatchObject({
-        safeBeforeKeys: [],
-        safeAfterKeys: [],
-        safeAfterRequired: false,
-      });
     }
   });
 

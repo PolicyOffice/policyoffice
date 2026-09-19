@@ -125,7 +125,12 @@ export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
 /** Production transitions that currently emit through the sole write path. */
 export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
+  "approval.approved",
+  "approval.changes_requested",
+  "approval.rejected",
+  "approval_run.completed",
   "approval_run.started",
+  "approval_stage.completed",
   "approval_stage.started",
   "approval_task.assigned",
   "content_revision.created",
@@ -142,7 +147,9 @@ export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "version.effective",
   "version.materiality_changed",
   "version.metadata_changed",
+  "version.approved",
   "version.published",
+  "version.rejected",
   "version.submitted",
   "version.superseded",
   "version.withdrawn",
@@ -236,6 +243,16 @@ const APPROVAL_TASK_ASSIGNED_AFTER_KEYS = Object.freeze([
   "participantId",
   "status",
 ]);
+const APPROVAL_DECISION_AFTER_KEYS = Object.freeze([
+  "approvalTaskId",
+  "decidedByType",
+  "decidedById",
+  "contentRevisionId",
+  "contentDigest",
+  "decision",
+]);
+const APPROVAL_STATUS_KEYS = Object.freeze(["status"]);
+const VERSION_APPROVAL_KEYS = Object.freeze(["lifecycleState"]);
 const VERSION_CREATED_AFTER_KEYS = Object.freeze([
   "documentVariantId",
   "versionSequence",
@@ -316,6 +333,33 @@ const APPROVAL_TASK_ASSIGNED_SCHEMA_V1: AuditEventSchema = Object.freeze({
   requiredSafeBeforeKeys: Object.freeze([]),
   requiredSafeAfterKeys: APPROVAL_TASK_ASSIGNED_AFTER_KEYS,
   safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
+const APPROVAL_DECISION_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([]),
+  safeAfterKeys: APPROVAL_DECISION_AFTER_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: APPROVAL_DECISION_AFTER_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
+const APPROVAL_STATUS_TRANSITION_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: APPROVAL_STATUS_KEYS,
+  safeAfterKeys: APPROVAL_STATUS_KEYS,
+  requiredSafeBeforeKeys: APPROVAL_STATUS_KEYS,
+  requiredSafeAfterKeys: APPROVAL_STATUS_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const VERSION_APPROVAL_TRANSITION_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: VERSION_APPROVAL_KEYS,
+  safeAfterKeys: VERSION_APPROVAL_KEYS,
+  requiredSafeBeforeKeys: VERSION_APPROVAL_KEYS,
+  requiredSafeAfterKeys: VERSION_APPROVAL_KEYS,
+  safeBeforeRequired: true,
   safeAfterRequired: true,
 });
 
@@ -473,8 +517,19 @@ const VERSION_WITHDRAWN_SCHEMA_V1: AuditEventSchema = Object.freeze({
 const auditEventSchemas = Object.fromEntries(
   AUDIT_EVENT_TYPES.map((eventType) => [eventType, Object.freeze({ 1: ENVELOPE_ONLY_SCHEMA })]),
 ) as unknown as Record<AuditEventType, Readonly<Record<number, AuditEventSchema>>>;
+auditEventSchemas["approval.approved"] = Object.freeze({ 1: APPROVAL_DECISION_SCHEMA_V1 });
+auditEventSchemas["approval.changes_requested"] = Object.freeze({
+  1: APPROVAL_DECISION_SCHEMA_V1,
+});
+auditEventSchemas["approval.rejected"] = Object.freeze({ 1: APPROVAL_DECISION_SCHEMA_V1 });
+auditEventSchemas["approval_run.completed"] = Object.freeze({
+  1: APPROVAL_STATUS_TRANSITION_SCHEMA_V1,
+});
 auditEventSchemas["approval_run.started"] = Object.freeze({
   1: APPROVAL_RUN_STARTED_SCHEMA_V1,
+});
+auditEventSchemas["approval_stage.completed"] = Object.freeze({
+  1: APPROVAL_STATUS_TRANSITION_SCHEMA_V1,
 });
 auditEventSchemas["approval_stage.started"] = Object.freeze({
   1: APPROVAL_STAGE_STARTED_SCHEMA_V1,
@@ -512,7 +567,13 @@ auditEventSchemas["version.materiality_changed"] = Object.freeze({
 auditEventSchemas["version.metadata_changed"] = Object.freeze({
   1: VERSION_METADATA_CHANGED_SCHEMA_V1,
 });
+auditEventSchemas["version.approved"] = Object.freeze({
+  1: VERSION_APPROVAL_TRANSITION_SCHEMA_V1,
+});
 auditEventSchemas["version.published"] = Object.freeze({ 1: VERSION_PUBLISHED_SCHEMA_V1 });
+auditEventSchemas["version.rejected"] = Object.freeze({
+  1: VERSION_APPROVAL_TRANSITION_SCHEMA_V1,
+});
 auditEventSchemas["version.submitted"] = Object.freeze({ 1: VERSION_SUBMITTED_SCHEMA_V1 });
 auditEventSchemas["version.superseded"] = Object.freeze({ 1: VERSION_SUPERSEDED_SCHEMA_V1 });
 auditEventSchemas["version.withdrawn"] = Object.freeze({ 1: VERSION_WITHDRAWN_SCHEMA_V1 });
@@ -959,6 +1020,85 @@ function validateContentRevisionAuditSnapshots(input: Record<string, unknown>): 
   }
 }
 
+function validateApprovalAuditSnapshots(input: Record<string, unknown>): void {
+  const decisionByEvent = {
+    "approval.approved": "APPROVE",
+    "approval.changes_requested": "REQUEST_CHANGES",
+    "approval.rejected": "REJECT",
+  } as const;
+  if (Object.hasOwn(decisionByEvent, String(input.eventType))) {
+    if (input.safeBefore !== undefined && input.safeBefore !== null) {
+      throw new InvalidAuditEventError("approval decision safeBefore must be null");
+    }
+    if (!record(input.safeAfter)) return;
+    requiredUuid(input.safeAfter.approvalTaskId, "safeAfter.approvalTaskId");
+    requiredUuid(input.safeAfter.decidedById, "safeAfter.decidedById");
+    requiredUuid(input.safeAfter.contentRevisionId, "safeAfter.contentRevisionId");
+    if (!new Set(["USER", "BODY"]).has(String(input.safeAfter.decidedByType))) {
+      throw new InvalidAuditEventError("safeAfter.decidedByType must be USER or BODY");
+    }
+    if (
+      typeof input.safeAfter.contentDigest !== "string" ||
+      !sha256Digest.test(input.safeAfter.contentDigest)
+    ) {
+      throw new InvalidAuditEventError("safeAfter.contentDigest must be a sha-256 digest");
+    }
+    const expected = decisionByEvent[input.eventType as keyof typeof decisionByEvent];
+    if (input.safeAfter.decision !== expected) {
+      throw new InvalidAuditEventError(`${String(input.eventType)} must record ${expected}`);
+    }
+    if (!record(input.subject) || input.subject.type !== "APPROVAL_DECISION") {
+      throw new InvalidAuditEventError(
+        "approval decision events require APPROVAL_DECISION subject",
+      );
+    }
+    return;
+  }
+
+  if (!record(input.safeBefore) || !record(input.safeAfter)) return;
+  const expectedTransitions: Readonly<Record<string, readonly [string, string, string]>> = {
+    "approval_stage.completed": ["IN_PROGRESS", "COMPLETED", "APPROVAL_STAGE"],
+    "approval_run.completed": ["RUNNING", "COMPLETED", "APPROVAL_RUN"],
+  };
+  const approvalTransition = expectedTransitions[String(input.eventType)];
+  if (approvalTransition) {
+    if (
+      input.safeBefore.status !== approvalTransition[0] ||
+      input.safeAfter.status !== approvalTransition[1]
+    ) {
+      throw new InvalidAuditEventError(
+        `${String(input.eventType)} must record ${approvalTransition[0]} to ${approvalTransition[1]}`,
+      );
+    }
+    if (!record(input.subject) || input.subject.type !== approvalTransition[2]) {
+      throw new InvalidAuditEventError(
+        `${String(input.eventType)} requires ${approvalTransition[2]} subject`,
+      );
+    }
+    return;
+  }
+
+  const versionTransition =
+    input.eventType === "version.approved"
+      ? ("APPROVED" as const)
+      : input.eventType === "version.rejected"
+        ? ("REJECTED" as const)
+        : null;
+  if (versionTransition !== null) {
+    if (
+      input.safeBefore.lifecycleState !== "IN_REVIEW" ||
+      input.safeAfter.lifecycleState !== versionTransition
+    ) {
+      throw new InvalidAuditEventError(
+        `${String(input.eventType)} must record IN_REVIEW to ${versionTransition}`,
+      );
+    }
+    if (!record(input.subject) || input.subject.type !== "DOCUMENT_VERSION") {
+      throw new InvalidAuditEventError("version approval events require DOCUMENT_VERSION subject");
+    }
+  }
+}
+
 function validateGovernanceAuditSnapshots(input: Record<string, unknown>): void {
   if (input.eventType !== "governance.policy_gap" || !record(input.safeAfter)) return;
   if (input.safeAfter.severity !== "HIGH") {
@@ -1039,6 +1179,7 @@ export function validateAuditEvent(input: unknown): asserts input is AuditEventI
     schema.safeAfterRequired,
   );
   validateConfigurationChangedSnapshots(input);
+  validateApprovalAuditSnapshots(input);
   validateContentRevisionAuditSnapshots(input);
   validateDocumentAuditSnapshots(input);
   validateGovernanceAuditSnapshots(input);

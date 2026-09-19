@@ -42,15 +42,10 @@ Format, parsed strictly:
 
 ## INV-APR — Approval
 
-- INV-APR-001 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-APR-003 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-APR-004 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-005 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-006 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APR-007 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-APR-008 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-APR-009 — MVP; no schema or domain code yet (Phase 2/3)
+- INV-APR-007 — MVP; recorded decisions are immutable to `app_role` and duplicate task decisions are structurally refused. Compensating corrections and `approval.corrected` remain unimplemented
 - INV-APR-011 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APR-013 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-014 — V1; no schema or domain code yet (Phase 2/3)

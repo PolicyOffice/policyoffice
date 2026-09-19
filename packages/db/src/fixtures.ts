@@ -31,6 +31,7 @@ export type FixtureKind = "development" | "test";
  * a second mutable seed path.
  */
 export const REFERENCE_ENUM_VALUES = Object.freeze({
+  approval_decision_kind: Object.freeze(["APPROVE", "REQUEST_CHANGES", "REJECT"]),
   approval_participant_type: Object.freeze(["USER", "ROLE_AT_SCOPE", "GROUP", "GOVERNANCE_BODY"]),
   approval_stage_status: Object.freeze([
     "PENDING",
@@ -190,6 +191,8 @@ interface DocumentFixture {
   approvalRunId: string;
   approvalStageIds: readonly [string, string];
   approvalTaskId: string;
+  approvalBodyTaskId: string;
+  approvalDecisionId: string;
   documentCode: string;
   canonicalTitle: string;
   documentTypeId: string;
@@ -409,6 +412,8 @@ function essentialTenant(prefix: "a" | "b", name: string): TenantFixture {
         approvalRunId: fixtureId(prefix, 32, 1),
         approvalStageIds: [fixtureId(prefix, 33, 1), fixtureId(prefix, 33, 2)],
         approvalTaskId: fixtureId(prefix, 34, 1),
+        approvalBodyTaskId: fixtureId(prefix, 34, 2),
+        approvalDecisionId: fixtureId(prefix, 35, 1),
         documentCode: "POL-001",
         canonicalTitle: `${name} Policy Framework`,
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -592,6 +597,8 @@ function developmentTenant(): TenantFixture {
         approvalRunId: fixtureId(prefix, 32, 1),
         approvalStageIds: [fixtureId(prefix, 33, 1), fixtureId(prefix, 33, 2)],
         approvalTaskId: fixtureId(prefix, 34, 1),
+        approvalBodyTaskId: fixtureId(prefix, 34, 2),
+        approvalDecisionId: fixtureId(prefix, 35, 1),
         documentCode: "POL-001",
         canonicalTitle: "Policy Management Policy",
         documentTypeId: fixtureId(prefix, 14, 1),
@@ -1200,6 +1207,7 @@ async function insertDocuments(
         attachments: [],
       });
       const canonicalApprovalManifest = serializeCanonicalManifest(approvalManifest);
+      const approvalRevisionDigest = digestCanonicalManifest(approvalManifest);
       await sql.query(
         `insert into document_variant (
          tenant_id, id, created_at, updated_at, row_version, document_id,
@@ -1247,7 +1255,7 @@ async function insertDocuments(
           document.approvalVersionId,
           objectReference(approvalBodyDigest),
           JSON.stringify(canonicalApprovalManifest),
-          digestCanonicalManifest(approvalManifest),
+          approvalRevisionDigest,
           approvalUser.id,
         ],
       );
@@ -1297,8 +1305,8 @@ async function insertDocuments(
          tenant_id, id, created_at, updated_at, row_version, approval_run_id,
          stage_order, completion_rule, threshold, status, due_at, completed_at
        ) values
-         ($1, $2, $4, $4, 1, $5, 1, 'ALL', null, 'IN_PROGRESS', null, null),
-         ($1, $3, $4, $4, 1, $5, 2, 'BODY_RESOLUTION', null, 'PENDING', null, null)
+         ($1, $2, $4, $4, 1, $5, 1, 'ALL', null, 'COMPLETED', null, $4),
+         ($1, $3, $4, $4, 1, $5, 2, 'BODY_RESOLUTION', null, 'IN_PROGRESS', null, null)
        on conflict (tenant_id, id) do nothing`,
         [
           item.tenant.id,
@@ -1313,14 +1321,41 @@ async function insertDocuments(
          tenant_id, id, created_at, updated_at, row_version, approval_stage_id,
          participant_type, participant_id, status, assigned_at, due_at,
          delegated_from_user_id
-       ) values ($1, $2, $3, $3, 1, $4, 'USER', $5, 'PENDING', $3, null, null)
+       ) values
+         ($1, $2, $4, $4, 1, $5, 'USER', $6, 'DECIDED', $4, null, null),
+         ($1, $3, $4, $4, 1, $7, 'GOVERNANCE_BODY', $8, 'PENDING', $4, null, null)
        on conflict (tenant_id, id) do nothing`,
         [
           item.tenant.id,
           document.approvalTaskId,
+          document.approvalBodyTaskId,
           fixture.createdAt,
           document.approvalStageIds[0],
           approvalUser.id,
+          document.approvalStageIds[1],
+          item.governanceBody.id,
+        ],
+      );
+      await sql.query(
+        `insert into approval_decision (
+         tenant_id, id, created_at, updated_at, row_version, approval_task_id,
+         decision, decided_by_type, decided_by_id, recorded_by_user_id, recorded_at,
+         content_revision_id, content_digest, reason_code, comment_ref,
+         resolution_reference, resolution_date, minutes_attachment_id,
+         attending_members, configuration_version_id
+       ) values (
+         $1, $2, $3, $3, 1, $4, 'APPROVE', 'USER', $5, $5, $3,
+         $6, $7, null, null, null, null, null, null, $8
+       ) on conflict (tenant_id, id) do nothing`,
+        [
+          item.tenant.id,
+          document.approvalDecisionId,
+          fixture.createdAt,
+          document.approvalTaskId,
+          approvalUser.id,
+          document.approvalRevisionId,
+          approvalRevisionDigest,
+          item.configuration.id,
         ],
       );
     }
@@ -1398,6 +1433,7 @@ export async function loadFixtureSet(
 const DELETE_ORDER = [
   "audit_event",
   "tenant_event_sequence",
+  "approval_decision",
   "approval_task",
   "approval_stage",
   "approval_run",
