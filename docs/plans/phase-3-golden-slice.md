@@ -159,12 +159,11 @@ Written one at a time, as the authorization epic was.
 
 ### What comes next, in order
 
-1. **POL-040 (#157)** — approver decisions, where stages actually advance. Written on 2026-09-18
-   and **ready**, now that POL-039 merged as #156: runs, stages and first-stage tasks exist and
-   nothing yet moves them. It also carries the test the approval-run snapshot trigger still
-   lacks — see #156.
-2. **The rest of the approval subsystem**, decomposed below — POL-041 body resolutions, POL-042
-   approvers who can no longer act. Each is written after the one before it lands.
+1. **POL-041 (#159)** — body resolutions, where the institution decides rather than a person.
+   Written on 2026-09-19 and **ready**, now that POL-040 merged as #158: decisions advance an
+   `ALL` stage, and a `BODY_RESOLUTION` stage is deliberately refused until this lands.
+2. **POL-042** — approvers who can no longer act, and cancellation. Written after POL-041 lands,
+   and the last piece of the approval subsystem.
 3. **POL-034** the approval inbox, **POL-035** the reader view, **POL-036** the full Playwright flow.
 4. Then the unstarted groups in *The work, in dependency order* below — applicability resolution
    and attestation, review cases, and evidence packs last.
@@ -219,8 +218,8 @@ Commercial V1, under § *Configurable workflows*. Written one ticket at a time:
 | POL-037 (#142) | Applicability scope freezes at submission — Decision Request #92 | **merged** #144 |
 | POL-038 (#146) | Templates and mandated authority as data: `workflow_template` and `workflow_template_version`, versions immutable (INV-APR-010), the Pilot stage shape, `mandated_authority` as a structure, the INV-APR-020 floor checked when a template version is published, and seeded templates as ordinary tenant-owned rows | **merged** #149 |
 | POL-039 (#153) | Runs start at submission: participants resolved and frozen (INV-APR-012), the mandate checked again at run start (INV-APR-020), `approval_run.started`, `approval_stage.started`, `approval_task.assigned` | **merged** #156 |
-| **POL-040 (#157)** | Approver decisions — `APPROVE`, `REQUEST_CHANGES`, `REJECT` (INV-APR-001, INV-APR-007), serial stages (INV-APR-008), completion exactly once (INV-APR-009), changes ending the snapshot and resubmission opening a fresh run (INV-APR-003, INV-APR-004). `0010` lets `IN_REVIEW → APPROVED` happen without any run today; this closes it | **ready** |
-| POL-041 | Body resolutions — `BODY_RESOLUTION`, `body.act_for` (INV-APR-023), the body distinguished from its recorder (INV-APR-021), no resolution date before submission (INV-APR-022), evidence fields per configuration (INV-APR-024) | after POL-040 |
+| POL-040 (#157) | Approver decisions — `APPROVE`, `REQUEST_CHANGES`, `REJECT` (INV-APR-001, INV-APR-007), serial stages (INV-APR-008), completion exactly once (INV-APR-009), changes ending the snapshot and resubmission opening a fresh run (INV-APR-003, INV-APR-004). `0010` lets `IN_REVIEW → APPROVED` happen without any run today; this closes it | **merged** #158 |
+| **POL-041 (#159)** | Body resolutions — `BODY_RESOLUTION`, `body.act_for` (INV-APR-023), the body distinguished from its recorder (INV-APR-021), no resolution date before submission (INV-APR-022), evidence fields per configuration (INV-APR-024) | **ready** |
 | POL-042 | Approvers who can no longer act — unresolvable tasks and blocked runs (INV-APR-005, INV-APR-013) — and cancellation, `document-lifecycle.md` transition 7 | after POL-040 |
 
 POL-034, the inbox, follows POL-040 for individual approvers and POL-041 for bodies.
@@ -244,7 +243,14 @@ authorities. POL-038 (#146) is written against them.
 - **Participant kinds beyond `USER` and `GOVERNANCE_BODY`.** `ROLE_AT_SCOPE` and `GROUP` resolve
   to several principals, and *"the head of the owning department"* (`document-taxonomy.md`) is a
   scope relative to the document, which the stage shape would have to express.
-- **Reminders and escalation (INV-APR-002)** wait on a job runner — `apps/worker/src/main.ts` is a process boundary that logs one line and runs nothing, and `ADR-0007` decides what runs there.
+- **Reminders and escalation (INV-APR-002)** wait on a job runner — `apps/worker/src/main.ts` is a process boundary that logs one line
+- **Which evidence fields a body resolution requires (INV-APR-024) — before it can be enforced.**
+  `document-taxonomy.md` marks `resolution_reference`, `resolution_date`, `minutes_attachment`
+  and `attending_members` *configurable*, and there is nowhere to configure them.
+  `configuration_version` holds a sequence, an actor, a reason and a digest — no payload — and
+  no configuration table expresses required evidence fields. POL-041 records the fields and
+  leaves the requirement unenforced, which is why INV-APR-024 keeps a pending entry rather
+  than being claimed
 
 **The one thing that would spoil A → B, recorded so POL-038 carries it.** Option A is reversible
 into a full editor only if seeded templates are written as **ordinary tenant-owned rows** with
