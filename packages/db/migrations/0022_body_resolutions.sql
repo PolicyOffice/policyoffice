@@ -48,7 +48,8 @@ begin
    where revision.tenant_id = new.tenant_id
      and revision.id = new.content_revision_id;
 
-  if submitted_at is null or new.resolution_date < submitted_at::date then
+  if submitted_at is null
+     or new.resolution_date < (submitted_at at time zone 'UTC')::date then
     raise exception 'a body resolution cannot predate submission of the revision it approves'
       using errcode = '23514',
             constraint = 'approval_decision_resolution_date_not_before_submission';

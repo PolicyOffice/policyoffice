@@ -686,7 +686,7 @@ describe("approval decisions", () => {
     });
   });
 
-  it("INV-APR-022: the database rejects pre-submission dates and accepts a later resolution date", async () => {
+  it("INV-APR-022: the date boundary is stable across session timezones", async () => {
     await withTenant(TENANT, async (sql) => {
       await insertDirectGrant(sql, {
         id: BODY_GRANT,
@@ -694,20 +694,26 @@ describe("approval decisions", () => {
         scopeType: "GOVERNANCE_BODY",
         scopeId: tenant.governanceBody.id,
       });
-      await atSavepoint(sql, "resolution_before_submission", async () => {
-        try {
-          await resolveBody(sql, document.approvalBodyTaskId, {
-            resolutionDate: "2025-12-31",
-            attendingMembers: null,
-          });
-          expect.unreachable("the database accepted a pre-submission resolution date");
-        } catch (error) {
-          expect(databaseCode(error)).toBe("23514");
-          expect(databaseConstraint(error)).toBe(
-            "approval_decision_resolution_date_not_before_submission",
-          );
-        }
-      });
+      for (const [savepoint, timeZone] of [
+        ["resolution_before_submission_utc", "UTC"],
+        ["resolution_before_submission_los_angeles", "America/Los_Angeles"],
+      ] as const) {
+        await atSavepoint(sql, savepoint, async () => {
+          await sql.query("select set_config('TimeZone', $1, true)", [timeZone]);
+          try {
+            await resolveBody(sql, document.approvalBodyTaskId, {
+              resolutionDate: "2025-12-31",
+              attendingMembers: null,
+            });
+            expect.unreachable("the database accepted a pre-submission resolution date");
+          } catch (error) {
+            expect(databaseCode(error)).toBe("23514");
+            expect(databaseConstraint(error)).toBe(
+              "approval_decision_resolution_date_not_before_submission",
+            );
+          }
+        });
+      }
       await expect(
         resolveBody(sql, document.approvalBodyTaskId, {
           resolutionDate: "2026-01-02",
