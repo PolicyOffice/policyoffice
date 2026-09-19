@@ -98,7 +98,10 @@ export {
 
 export {
   APPROVAL_DECISION_REQUIRED_CAPABILITIES,
+  BODY_RESOLUTION_REQUIRED_CAPABILITIES,
+  ApprovalBodyResolutionEvidenceError,
   ApprovalBodyResolutionRequiredError,
+  ApprovalBodyResolutionUnauthorizedError,
   ApprovalRunNotRunningError,
   ApprovalStageNotInProgressError,
   ApprovalTaskNotFoundError,
@@ -107,11 +110,15 @@ export {
   ApprovalVersionNotInReviewError,
   InvalidApprovalRunSnapshotError,
   UnsupportedApprovalCompletionRuleError,
+  assertAttendingMembersHeldSeats,
   isApprovalStageSatisfied,
   recordApprovalDecision,
+  recordBodyResolution,
   type ApprovalCompletionRule,
   type ApprovalDecisionKind,
+  type DatedBodyMembership,
   type RecordApprovalDecisionInput,
+  type RecordBodyResolutionInput,
   type RecordedApprovalDecision,
 } from "./approval-decision.js";
 

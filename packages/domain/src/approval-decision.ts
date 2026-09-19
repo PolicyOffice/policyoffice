@@ -6,21 +6,33 @@ import {
   type AuditTransaction,
   type EmittedAuditEvent,
 } from "./audit.js";
+import {
+  AuthzContext,
+  decide as decideAuthorization,
+  type DecisionReason,
+} from "./authorization.js";
 
 export const APPROVAL_DECISION_REQUIRED_CAPABILITIES = Object.freeze({
   record: "document.approve",
 } as const);
 
+export const BODY_RESOLUTION_REQUIRED_CAPABILITIES = Object.freeze({
+  record: "body.act_for",
+} as const);
+
 export type ApprovalDecisionKind = "APPROVE" | "REQUEST_CHANGES" | "REJECT";
 export type ApprovalCompletionRule = "ALL" | "ANY_ONE" | "AT_LEAST_N" | "BODY_RESOLUTION";
 
-interface ApprovalDecisionAuditContext {
-  readonly actor: Readonly<{ type: AuditActorType; id: string | null }>;
+interface ApprovalDecisionRequestContext {
   readonly configurationVersionId: string;
   readonly occurredAt: Date;
   readonly requestId: string;
   readonly correlationId: string;
   readonly sourceChannel: AuditSourceChannel;
+}
+
+interface ApprovalDecisionAuditContext extends ApprovalDecisionRequestContext {
+  readonly actor: Readonly<{ type: AuditActorType; id: string | null }>;
 }
 
 export interface RecordApprovalDecisionInput extends ApprovalDecisionAuditContext {
@@ -30,6 +42,19 @@ export interface RecordApprovalDecisionInput extends ApprovalDecisionAuditContex
   readonly decision: ApprovalDecisionKind;
   readonly reasonCode?: string | null;
   readonly commentRef?: string | null;
+}
+
+export interface RecordBodyResolutionInput extends ApprovalDecisionRequestContext {
+  readonly tenantId: string;
+  readonly approvalTaskId: string;
+  readonly recordedByUserId: string;
+  readonly decision: ApprovalDecisionKind;
+  readonly reasonCode?: string | null;
+  readonly commentRef?: string | null;
+  readonly resolutionReference?: string | null;
+  readonly resolutionDate?: string | null;
+  readonly minutesAttachmentId?: string | null;
+  readonly attendingMembers?: readonly string[] | null;
 }
 
 export interface RecordedApprovalDecision {
@@ -91,8 +116,22 @@ export class ApprovalVersionNotInReviewError extends Error {
 
 export class ApprovalBodyResolutionRequiredError extends Error {
   constructor() {
-    super("BODY_RESOLUTION decisions must be recorded through POL-041's body-resolution command");
+    super("BODY_RESOLUTION decisions must be recorded through recordBodyResolution");
     this.name = "ApprovalBodyResolutionRequiredError";
+  }
+}
+
+export class ApprovalBodyResolutionUnauthorizedError extends Error {
+  constructor(readonly because: DecisionReason) {
+    super("the recording principal cannot act for this governance body");
+    this.name = "ApprovalBodyResolutionUnauthorizedError";
+  }
+}
+
+export class ApprovalBodyResolutionEvidenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApprovalBodyResolutionEvidenceError";
   }
 }
 
@@ -136,6 +175,12 @@ interface CreatedDecisionRow extends Record<string, unknown> {
   recorded_at: Date;
 }
 
+interface BodyMembershipRow extends Record<string, unknown> {
+  user_id: string;
+  valid_from: Date;
+  valid_until: Date | null;
+}
+
 interface NextStageRow extends Record<string, unknown> {
   id: string;
   stage_order: number;
@@ -148,7 +193,23 @@ interface FrozenParticipant {
   readonly displayName: string;
 }
 
+interface DecisionExecutionInput extends ApprovalDecisionAuditContext {
+  readonly tenantId: string;
+  readonly approvalTaskId: string;
+  readonly decision: ApprovalDecisionKind;
+  readonly decidedByType: "USER" | "BODY";
+  readonly decidedById: string;
+  readonly recordedByUserId: string;
+  readonly reasonCode: string | null;
+  readonly commentRef: string | null;
+  readonly resolutionReference: string | null;
+  readonly resolutionDate: string | null;
+  readonly minutesAttachmentId: string | null;
+  readonly attendingMembers: readonly string[] | null;
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DECISIONS = new Set<ApprovalDecisionKind>(["APPROVE", "REQUEST_CHANGES", "REJECT"]);
 const ACTOR_TYPES = new Set<AuditActorType>(["USER", "BODY", "API_CLIENT", "SYSTEM"]);
 const SOURCE_CHANNELS = new Set<AuditSourceChannel>(["WEB", "API", "JOB", "IMPORT"]);
@@ -157,27 +218,112 @@ function requireUuid(value: string, field: string): void {
   if (!UUID.test(value)) throw new TypeError(`${field} must be a UUID`);
 }
 
-function validateInput(input: RecordApprovalDecisionInput): void {
+function requireIsoDate(value: string, field: string): void {
+  if (!ISO_DATE.test(value)) throw new TypeError(`${field} must be an ISO calendar date`);
+  const instant = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(instant.valueOf()) || instant.toISOString().slice(0, 10) !== value) {
+    throw new TypeError(`${field} must be an ISO calendar date`);
+  }
+}
+
+function validateRequestContext(
+  input: ApprovalDecisionRequestContext & { tenantId: string },
+): void {
   requireUuid(input.tenantId, "tenantId");
-  requireUuid(input.approvalTaskId, "approvalTaskId");
-  requireUuid(input.decidingUserId, "decidingUserId");
   requireUuid(input.configurationVersionId, "configurationVersionId");
   requireUuid(input.requestId, "requestId");
   requireUuid(input.correlationId, "correlationId");
-  if (!DECISIONS.has(input.decision)) throw new TypeError("decision is not supported");
-  if (!ACTOR_TYPES.has(input.actor.type)) throw new TypeError("actor.type is not supported");
-  if (input.actor.id !== null) requireUuid(input.actor.id, "actor.id");
-  if (input.actor.type !== "USER" || input.actor.id !== input.decidingUserId) {
-    throw new ApprovalTaskNotHeldError();
-  }
   if (!SOURCE_CHANNELS.has(input.sourceChannel)) {
     throw new TypeError("sourceChannel is not supported");
   }
   if (!(input.occurredAt instanceof Date) || Number.isNaN(input.occurredAt.valueOf())) {
     throw new TypeError("occurredAt must be a valid Date");
   }
+}
+
+function validateInput(input: RecordApprovalDecisionInput): void {
+  validateRequestContext(input);
+  requireUuid(input.approvalTaskId, "approvalTaskId");
+  requireUuid(input.decidingUserId, "decidingUserId");
+  if (!DECISIONS.has(input.decision)) throw new TypeError("decision is not supported");
+  if (!ACTOR_TYPES.has(input.actor.type)) throw new TypeError("actor.type is not supported");
+  if (input.actor.id !== null) requireUuid(input.actor.id, "actor.id");
+  if (input.actor.type !== "USER" || input.actor.id !== input.decidingUserId) {
+    throw new ApprovalTaskNotHeldError();
+  }
   if (input.commentRef !== undefined && input.commentRef !== null) {
     requireUuid(input.commentRef, "commentRef");
+  }
+}
+
+function validateBodyResolutionInput(
+  authorizationContext: AuthzContext,
+  input: RecordBodyResolutionInput,
+): void {
+  validateRequestContext(input);
+  requireUuid(input.approvalTaskId, "approvalTaskId");
+  requireUuid(input.recordedByUserId, "recordedByUserId");
+  if (!DECISIONS.has(input.decision)) throw new TypeError("decision is not supported");
+  if (input.commentRef !== undefined && input.commentRef !== null) {
+    requireUuid(input.commentRef, "commentRef");
+  }
+  if (input.minutesAttachmentId !== undefined && input.minutesAttachmentId !== null) {
+    requireUuid(input.minutesAttachmentId, "minutesAttachmentId");
+  }
+  if (input.resolutionDate !== undefined && input.resolutionDate !== null) {
+    requireIsoDate(input.resolutionDate, "resolutionDate");
+  }
+  if (input.attendingMembers !== undefined && input.attendingMembers !== null) {
+    input.attendingMembers.forEach((member, index) =>
+      requireUuid(member, `attendingMembers[${index}]`),
+    );
+    if (input.attendingMembers.length > 0 && !input.resolutionDate) {
+      throw new ApprovalBodyResolutionEvidenceError(
+        "resolutionDate is required when attendingMembers are recorded",
+      );
+    }
+  }
+  if (!(authorizationContext instanceof AuthzContext)) {
+    throw new TypeError("authorizationContext must be an AuthzContext");
+  }
+  if (authorizationContext.tenantId !== input.tenantId) {
+    throw new ApprovalBodyResolutionUnauthorizedError("WRONG_TENANT");
+  }
+  if (
+    authorizationContext.principal.type !== "USER" ||
+    authorizationContext.principal.id !== input.recordedByUserId
+  ) {
+    throw new ApprovalBodyResolutionUnauthorizedError("NO_GRANT");
+  }
+}
+
+export interface DatedBodyMembership {
+  readonly userId: string;
+  readonly validFrom: Date;
+  readonly validUntil: Date | null;
+}
+
+/** Ensure every recorded attendee held a seat at some instant on the resolution date. */
+export function assertAttendingMembersHeldSeats(
+  attendingMembers: readonly string[],
+  memberships: readonly DatedBodyMembership[],
+  resolutionDate: string,
+): void {
+  requireIsoDate(resolutionDate, "resolutionDate");
+  const dayStart = new Date(`${resolutionDate}T00:00:00.000Z`).valueOf();
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+  const seated = new Set(
+    memberships
+      .filter(
+        ({ validFrom, validUntil }) =>
+          validFrom.valueOf() < dayEnd && (validUntil === null || validUntil.valueOf() > dayStart),
+      )
+      .map(({ userId }) => userId),
+  );
+  if (attendingMembers.some((member) => !seated.has(member))) {
+    throw new ApprovalBodyResolutionEvidenceError(
+      "every attending member must hold a seat on the deciding body at the resolution date",
+    );
   }
 }
 
@@ -294,7 +440,7 @@ async function lockApprovalTask(
   return row;
 }
 
-function assertActionable(row: LockedApprovalTaskRow, decidingUserId: string): void {
+function assertActionable(row: LockedApprovalTaskRow): void {
   if (row.task_status !== "PENDING") throw new ApprovalTaskNotPendingError(row.task_status);
   if (row.stage_status !== "IN_PROGRESS") {
     throw new ApprovalStageNotInProgressError(row.stage_status);
@@ -303,14 +449,33 @@ function assertActionable(row: LockedApprovalTaskRow, decidingUserId: string): v
   if (row.lifecycle_state !== "IN_REVIEW") {
     throw new ApprovalVersionNotInReviewError(row.lifecycle_state);
   }
+}
+
+function assertUserActionable(row: LockedApprovalTaskRow, decidingUserId: string): void {
+  assertActionable(row);
   if (row.completion_rule === "BODY_RESOLUTION") throw new ApprovalBodyResolutionRequiredError();
   if (row.participant_type !== "USER" || row.participant_id !== decidingUserId) {
     throw new ApprovalTaskNotHeldError();
   }
 }
 
+function assertBodyResolutionActionable(row: LockedApprovalTaskRow): void {
+  assertActionable(row);
+  if (row.completion_rule !== "BODY_RESOLUTION" || row.participant_type !== "GOVERNANCE_BODY") {
+    throw new ApprovalBodyResolutionRequiredError();
+  }
+  const participants = frozenParticipantsForStage(row.resolved_participants, row.stage_order);
+  if (
+    participants.length !== 1 ||
+    participants[0]?.type !== "GOVERNANCE_BODY" ||
+    participants[0].id !== row.participant_id
+  ) {
+    throw new InvalidApprovalRunSnapshotError();
+  }
+}
+
 function decisionEvent(
-  input: RecordApprovalDecisionInput,
+  input: DecisionExecutionInput,
   row: LockedApprovalTaskRow,
   decisionId: string,
 ): AuditEventInput {
@@ -338,8 +503,8 @@ function decisionEvent(
     safeBefore: null,
     safeAfter: {
       approvalTaskId: row.task_id,
-      decidedByType: "USER",
-      decidedById: input.decidingUserId,
+      decidedByType: input.decidedByType,
+      decidedById: input.decidedById,
       contentRevisionId: row.content_revision_id,
       contentDigest: row.content_digest,
       decision: input.decision,
@@ -350,7 +515,7 @@ function decisionEvent(
 }
 
 function transitionEvent(
-  input: RecordApprovalDecisionInput,
+  input: DecisionExecutionInput,
   row: LockedApprovalTaskRow,
   event: Readonly<{
     type:
@@ -395,7 +560,7 @@ function transitionEvent(
 
 async function startNextStage(
   transaction: AuditTransaction,
-  input: RecordApprovalDecisionInput,
+  input: DecisionExecutionInput,
   row: LockedApprovalTaskRow,
   events: AuditEventInput[],
 ): Promise<boolean> {
@@ -481,15 +646,11 @@ async function startNextStage(
   return true;
 }
 
-/** Record one immutable user decision and advance or terminate its frozen run atomically. */
-export async function recordApprovalDecision(
+async function executeApprovalDecision(
   transaction: AuditTransaction,
-  input: RecordApprovalDecisionInput,
+  input: DecisionExecutionInput,
+  row: LockedApprovalTaskRow,
 ): Promise<RecordedApprovalDecision> {
-  validateInput(input);
-  const row = await lockApprovalTask(transaction, input.tenantId, input.approvalTaskId);
-  assertActionable(row, input.decidingUserId);
-
   const decisionResult = await transaction.query<CreatedDecisionRow>(
     `insert into approval_decision (
        tenant_id, approval_task_id, decision, decided_by_type, decided_by_id,
@@ -497,21 +658,27 @@ export async function recordApprovalDecision(
        reason_code, comment_ref, resolution_reference, resolution_date,
        minutes_attachment_id, attending_members, configuration_version_id
      ) values (
-       $1::uuid, $2::uuid, $3::approval_decision_kind, 'USER', $4::uuid,
-       $4::uuid, $5::timestamptz, $6::uuid, $7::text,
-       $8::text, $9::uuid, null, null, null, null, $10::uuid
+       $1::uuid, $2::uuid, $3::approval_decision_kind, $4::text, $5::uuid,
+       $6::uuid, $7::timestamptz, $8::uuid, $9::text,
+       $10::text, $11::uuid, $12::text, $13::date, $14::uuid, $15::uuid[], $16::uuid
      )
      returning id, recorded_at`,
     [
       input.tenantId,
       input.approvalTaskId,
       input.decision,
-      input.decidingUserId,
+      input.decidedByType,
+      input.decidedById,
+      input.recordedByUserId,
       input.occurredAt.toISOString(),
       row.content_revision_id,
       row.content_digest,
-      input.reasonCode ?? null,
-      input.commentRef ?? null,
+      input.reasonCode,
+      input.commentRef,
+      input.resolutionReference,
+      input.resolutionDate,
+      input.minutesAttachmentId,
+      input.attendingMembers,
       input.configurationVersionId,
     ],
   );
@@ -546,11 +713,17 @@ export async function recordApprovalDecision(
     );
     const count = counts.rows[0];
     if (!count) throw new Error("approval stage count returned no row");
-    const satisfied = isApprovalStageSatisfied({
-      completionRule: row.completion_rule,
-      taskCount: count.task_count,
-      approvalCount: count.approval_count,
-    });
+    const satisfied =
+      input.decidedByType === "BODY"
+        ? count.task_count === 1 && count.approval_count === 1
+        : isApprovalStageSatisfied({
+            completionRule: row.completion_rule,
+            taskCount: count.task_count,
+            approvalCount: count.approval_count,
+          });
+    if (input.decidedByType === "BODY" && !satisfied) {
+      throw new InvalidApprovalRunSnapshotError();
+    }
     if (satisfied) {
       const stageResult = await transaction.query<Record<string, unknown> & { id: string }>(
         `update approval_stage
@@ -665,4 +838,129 @@ export async function recordApprovalDecision(
     versionLifecycleState,
     emittedEvents: Object.freeze(emittedEvents),
   });
+}
+
+/** Record one immutable user decision and advance or terminate its frozen run atomically. */
+export async function recordApprovalDecision(
+  transaction: AuditTransaction,
+  input: RecordApprovalDecisionInput,
+): Promise<RecordedApprovalDecision> {
+  validateInput(input);
+  const row = await lockApprovalTask(transaction, input.tenantId, input.approvalTaskId);
+  assertUserActionable(row, input.decidingUserId);
+  return executeApprovalDecision(
+    transaction,
+    {
+      tenantId: input.tenantId,
+      approvalTaskId: input.approvalTaskId,
+      decision: input.decision,
+      decidedByType: "USER",
+      decidedById: input.decidingUserId,
+      recordedByUserId: input.decidingUserId,
+      actor: input.actor,
+      reasonCode: input.reasonCode ?? null,
+      commentRef: input.commentRef ?? null,
+      resolutionReference: null,
+      resolutionDate: null,
+      minutesAttachmentId: null,
+      attendingMembers: null,
+      configurationVersionId: input.configurationVersionId,
+      occurredAt: input.occurredAt,
+      requestId: input.requestId,
+      correlationId: input.correlationId,
+      sourceChannel: input.sourceChannel,
+    },
+    row,
+  );
+}
+
+async function assertAttendingMembersForBody(
+  transaction: AuditTransaction,
+  tenantId: string,
+  bodyId: string,
+  attendingMembers: readonly string[] | null,
+  resolutionDate: string | null,
+): Promise<void> {
+  if (!attendingMembers || attendingMembers.length === 0) return;
+  if (!resolutionDate) {
+    throw new ApprovalBodyResolutionEvidenceError(
+      "resolutionDate is required when attendingMembers are recorded",
+    );
+  }
+  const result = await transaction.query<BodyMembershipRow>(
+    `select user_id, lower(validity) as valid_from, upper(validity) as valid_until
+       from body_membership
+      where tenant_id = $1::uuid
+        and body_id = $2::uuid
+        and user_id = any($3::uuid[])
+      for share`,
+    [tenantId, bodyId, attendingMembers],
+  );
+  assertAttendingMembersHeldSeats(
+    attendingMembers,
+    result.rows.map((membership) => ({
+      userId: membership.user_id,
+      validFrom: membership.valid_from,
+      validUntil: membership.valid_until,
+    })),
+    resolutionDate,
+  );
+}
+
+/** Record one institutional decision after authorizing its human recorder for that exact body. */
+export async function recordBodyResolution(
+  transaction: AuditTransaction,
+  authorizationContext: AuthzContext,
+  input: RecordBodyResolutionInput,
+): Promise<RecordedApprovalDecision> {
+  validateBodyResolutionInput(authorizationContext, input);
+  const row = await lockApprovalTask(transaction, input.tenantId, input.approvalTaskId);
+  assertBodyResolutionActionable(row);
+
+  const authorization = await decideAuthorization(
+    authorizationContext,
+    BODY_RESOLUTION_REQUIRED_CAPABILITIES.record,
+    { tenantId: input.tenantId, type: "GOVERNANCE_BODY", id: row.participant_id },
+  );
+  if (!authorization.allowed) {
+    throw new ApprovalBodyResolutionUnauthorizedError(authorization.because);
+  }
+
+  const attendingMembers =
+    input.attendingMembers === undefined || input.attendingMembers === null
+      ? null
+      : Object.freeze([...input.attendingMembers]);
+  const resolutionDate = input.resolutionDate ?? null;
+  await assertAttendingMembersForBody(
+    transaction,
+    input.tenantId,
+    row.participant_id,
+    attendingMembers,
+    resolutionDate,
+  );
+
+  return executeApprovalDecision(
+    transaction,
+    {
+      tenantId: input.tenantId,
+      approvalTaskId: input.approvalTaskId,
+      decision: input.decision,
+      decidedByType: "BODY",
+      decidedById: row.participant_id,
+      recordedByUserId: input.recordedByUserId,
+      actor: Object.freeze({ type: "BODY", id: row.participant_id }),
+      reasonCode: input.reasonCode ?? null,
+      commentRef: input.commentRef ?? null,
+      resolutionReference: input.resolutionReference ?? null,
+      resolutionDate,
+      minutesAttachmentId: input.minutesAttachmentId ?? null,
+      attendingMembers,
+      configurationVersionId: input.configurationVersionId,
+      occurredAt: input.occurredAt,
+      requestId: input.requestId,
+      correlationId: input.correlationId,
+      sourceChannel: input.sourceChannel,
+    },
+    row,
+  );
 }
