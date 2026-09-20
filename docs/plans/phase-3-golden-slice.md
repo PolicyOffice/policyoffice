@@ -220,7 +220,9 @@ Commercial V1, under § *Configurable workflows*. Written one ticket at a time:
 | POL-041 (#159) | Body resolutions — `BODY_RESOLUTION`, `body.act_for` (INV-APR-023), the body distinguished from its recorder (INV-APR-021), no resolution date before submission (INV-APR-022), evidence fields per configuration (INV-APR-024) | **merged** #161 |
 | **POL-042 (#163)** | Approvers who can no longer act — unresolvable tasks and blocked runs (INV-APR-005, INV-APR-013) — and cancellation, `document-lifecycle.md` transition 7 | **ready** |
 
-POL-034, the inbox, follows POL-040 for individual approvers and POL-041 for bodies.
+POL-034, the inbox, follows POL-042, the last of them: it surfaces individual approvers'
+tasks, body resolutions awaiting a recorder, and the blocked runs POL-042 introduces —
+which #163 calls exactly what the inbox must show.
 
 **The stage shape and the mandated-authority structure were specified on 2026-09-16**, in
 `approval-workflows.md` § *The template, as data* and § *The floor under every template*, and
