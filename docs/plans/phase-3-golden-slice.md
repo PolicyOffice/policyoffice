@@ -159,12 +159,17 @@ Written one at a time, as the authorization epic was.
 
 ### What comes next, in order
 
-1. **POL-042 (#163)** — approvers who can no longer act, and cancellation. Written on 2026-09-19
-   and **ready**, now that POL-041 merged as #161. It is the **last** ticket of the approval
-   subsystem: when it lands, submission through approval runs end to end.
-2. **POL-034** the approval inbox, **POL-035** the reader view, **POL-036** the full Playwright flow.
-3. Then the unstarted groups in *The work, in dependency order* below — applicability resolution
+1. **POL-034** the approval inbox, then **POL-035** the reader view and **POL-036** the full
+   three-principal Playwright flow, which is this phase's exit criterion. **The approval subsystem
+   is complete**: POL-042 merged as #165, so submission through approval runs end to end.
+2. Then the unstarted groups in *The work, in dependency order* below — applicability resolution
    and attestation, review cases, and evidence packs last.
+
+**This list records sequence; the tables record what merged.** Neither carries *ready* or *in
+progress* for an unmerged ticket. Those live on the issue as labels, they change while a pull
+request to this file waits to be reviewed, and a row asserting them lands false current state —
+which is what happened on #160 and twice on #164. A row gains **merged** and its number when the
+work lands, and that is a fact which never goes stale; until then it names the ticket and stops.
 
 **Split again on 2026-09-12, and this is the last time it should be needed.** POL-032 was going to
 carry sign-in *and* the author's create/draft/submit path. Sign-in alone adds a third input shape to
@@ -218,7 +223,7 @@ Commercial V1, under § *Configurable workflows*. Written one ticket at a time:
 | POL-039 (#153) | Runs start at submission: participants resolved and frozen (INV-APR-012), the mandate checked again at run start (INV-APR-020), `approval_run.started`, `approval_stage.started`, `approval_task.assigned` | **merged** #156 |
 | POL-040 (#157) | Approver decisions — `APPROVE`, `REQUEST_CHANGES`, `REJECT` (INV-APR-001, INV-APR-007), serial stages (INV-APR-008), completion exactly once (INV-APR-009), changes ending the snapshot and resubmission opening a fresh run (INV-APR-003, INV-APR-004). `0010` lets `IN_REVIEW → APPROVED` happen without any run today; this closes it | **merged** #158 |
 | POL-041 (#159) | Body resolutions — `BODY_RESOLUTION`, `body.act_for` (INV-APR-023), the body distinguished from its recorder (INV-APR-021), no resolution date before submission (INV-APR-022), evidence fields per configuration (INV-APR-024) | **merged** #161 |
-| **POL-042 (#163)** | Approvers who can no longer act — unresolvable tasks and blocked runs (INV-APR-005, INV-APR-013) — and cancellation, `document-lifecycle.md` transition 7 | **ready** |
+| **POL-042 (#163)** | Approvers who can no longer act — unresolvable tasks and blocked runs (INV-APR-005, INV-APR-013) — and cancellation, `document-lifecycle.md` transition 7 | **merged** #165 |
 
 POL-034, the inbox, follows POL-042, the last of them: it surfaces individual approvers'
 tasks, body resolutions awaiting a recorder, and the blocked runs POL-042 introduces —
