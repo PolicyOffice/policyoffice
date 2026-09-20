@@ -43,11 +43,10 @@ Format, parsed strictly:
 ## INV-APR — Approval
 
 - INV-APR-002 — MVP; no schema or domain code yet (Phase 2/3)
-- INV-APR-005 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-APR-006 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APR-007 — MVP; recorded decisions are immutable to `app_role` and duplicate task decisions are structurally refused. Compensating corrections and `approval.corrected` remain unimplemented
 - INV-APR-011 — V1; no schema or domain code yet (Phase 2/3)
-- INV-APR-013 — MVP; no schema or domain code yet (Phase 2/3)
+- INV-APR-013 — MVP; stage activation now marks inactive frozen participants UNRESOLVABLE and blocks the run without substitution. A participant becoming ineligible after its stage is already running is not detected until the job-runner path lands
 - INV-APR-014 — V1; no schema or domain code yet (Phase 2/3)
 - INV-APR-024 — MVP; every approval decision records the configuration version in force. Which body-resolution evidence fields that version requires remains unenforced because tenant configuration has no required-field structure to read
 

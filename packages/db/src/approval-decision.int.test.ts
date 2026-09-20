@@ -1,19 +1,22 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   ApprovalBodyResolutionEvidenceError,
-  ApprovalBodyResolutionRequiredError,
   ApprovalBodyResolutionUnauthorizedError,
   ApprovalRunNotRunningError,
   ApprovalStageNotInProgressError,
   ApprovalTaskNotHeldError,
   ApprovalTaskNotPendingError,
   AuthzContext,
+  DocumentVersionCancellationUnauthorizedError,
+  DocumentVersionNotFoundError,
+  cancelDocumentVersion,
   createContentRevision,
   recordApprovalDecision,
   recordBodyResolution,
   submitContentRevision,
   type ApprovalDecisionKind,
   type AuditTransaction,
+  type CancelDocumentVersionInput,
   type RecordBodyResolutionInput,
 } from "../../domain/src/index.js";
 import { withAppRole, withTenant, type Sql } from "@policyoffice/testing";
@@ -54,8 +57,11 @@ const BODY_GRANT = "a1000000-0000-0000-0000-00000000000b";
 const OTHER_BODY = "a1000000-0000-0000-0000-00000000000c";
 const OTHER_BODY_GRANT = "a1000000-0000-0000-0000-00000000000d";
 const DOCUMENT_APPROVE_GRANT = "a1000000-0000-0000-0000-00000000000e";
+const VERSION_CANCEL_GRANT = "a1000000-0000-0000-0000-00000000000f";
 const REQUEST = "a2000000-0000-0000-0000-000000000001";
 const CORRELATION = "a2000000-0000-0000-0000-000000000002";
+const CANCEL_REQUEST = "a2000000-0000-0000-0000-000000000003";
+const CANCEL_CORRELATION = "a2000000-0000-0000-0000-000000000004";
 const DECIDED_AT = new Date("2026-09-19T10:00:00.000Z");
 const SUBMITTED_AT = new Date("2026-09-17T10:00:00.000Z");
 
@@ -96,7 +102,7 @@ async function atSavepoint(
 
 async function setupOneStageRun(
   sql: Sql,
-  includeBodyStage = false,
+  secondStage: boolean | "USER" = false,
   submittedAt = DECIDED_AT,
 ): Promise<void> {
   await sql.query(
@@ -116,16 +122,18 @@ async function setupOneStageRun(
       order: 1,
       participants: [{ type: "USER", id: USER, displayName: decidingUser.displayName }],
     },
-    ...(includeBodyStage
+    ...(secondStage
       ? [
           {
             order: 2,
             participants: [
-              {
-                type: "GOVERNANCE_BODY",
-                id: tenant.governanceBody.id,
-                displayName: tenant.governanceBody.name,
-              },
+              secondStage === "USER"
+                ? { type: "USER", id: SECOND_USER, displayName: "Second approver" }
+                : {
+                    type: "GOVERNANCE_BODY",
+                    id: tenant.governanceBody.id,
+                    displayName: tenant.governanceBody.name,
+                  },
             ],
           },
         ]
@@ -152,12 +160,17 @@ async function setupOneStageRun(
      ) values ($1, $2, $3, 1, 'ALL', null, 'IN_PROGRESS')`,
     [TENANT, ONE_STAGE_STAGE, ONE_STAGE_RUN],
   );
-  if (includeBodyStage) {
+  if (secondStage) {
     await sql.query(
       `insert into approval_stage (
          tenant_id, id, approval_run_id, stage_order, completion_rule, threshold, status
-       ) values ($1, $2, $3, 2, 'BODY_RESOLUTION', null, 'PENDING')`,
-      [TENANT, TWO_STAGE_SECOND_STAGE, ONE_STAGE_RUN],
+       ) values ($1, $2, $3, 2, $4::completion_rule, null, 'PENDING')`,
+      [
+        TENANT,
+        TWO_STAGE_SECOND_STAGE,
+        ONE_STAGE_RUN,
+        secondStage === "USER" ? "ALL" : "BODY_RESOLUTION",
+      ],
     );
   }
   await sql.query(
@@ -285,7 +298,7 @@ async function insertDirectGrant(
   sql: Sql,
   input: Readonly<{
     id: string;
-    capability: "body.act_for" | "document.approve";
+    capability: "body.act_for" | "document.approve" | "document.cancel_version";
     scopeType: "GOVERNANCE_BODY" | "DOCUMENT_VERSION";
     scopeId: string;
   }>,
@@ -322,6 +335,30 @@ function resolveBody(
     occurredAt: DECIDED_AT,
     requestId: REQUEST,
     correlationId: CORRELATION,
+    sourceChannel: "API",
+    ...overrides,
+  });
+}
+
+async function cancelVersion(
+  sql: Sql,
+  versionId: string,
+  overrides: Partial<CancelDocumentVersionInput> = {},
+) {
+  const current = await sql.query<{ row_version: number }>(
+    "select row_version from document_version where id = $1",
+    [versionId],
+  );
+  return cancelDocumentVersion(transaction(sql), authorizationContext(sql), {
+    tenantId: TENANT,
+    versionId,
+    expectedRowVersion: required(current.rows[0]?.row_version, "version row is missing"),
+    cancellationReason: "Policy initiative stopped",
+    actor: { type: "USER", id: USER },
+    configurationVersionId: CONFIGURATION,
+    occurredAt: DECIDED_AT,
+    requestId: CANCEL_REQUEST,
+    correlationId: CANCEL_CORRELATION,
     sourceChannel: "API",
     ...overrides,
   });
@@ -419,7 +456,7 @@ describe("approval decisions", () => {
     });
   });
 
-  it("INV-APR-008 / INV-APR-012: stage two starts from the frozen resolution", async () => {
+  it("INV-APR-005 / POL-042: a dissolved frozen body blocks stage two without substitution", async () => {
     await withTenant(TENANT, async (sql) => {
       await setupOneStageRun(sql, true);
       await sql.query(
@@ -430,7 +467,7 @@ describe("approval decisions", () => {
         [tenant.governanceBody.id, DECIDED_AT.toISOString()],
       );
       const result = await decide(sql, ONE_STAGE_TASK, "APPROVE");
-      expect(result.runStatus).toBe("RUNNING");
+      expect(result.runStatus).toBe("BLOCKED");
       expect(result.versionLifecycleState).toBe("IN_REVIEW");
 
       const stages = await sql.query<{ stage_order: number; status: string }>(
@@ -440,7 +477,7 @@ describe("approval decisions", () => {
       );
       expect(stages.rows).toEqual([
         { stage_order: 1, status: "COMPLETED" },
-        { stage_order: 2, status: "IN_PROGRESS" },
+        { stage_order: 2, status: "BLOCKED" },
       ]);
       const bodyTask = await sql.query<{
         id: string;
@@ -455,10 +492,10 @@ describe("approval decisions", () => {
       expect(bodyTask.rows[0]).toMatchObject({
         participant_type: "GOVERNANCE_BODY",
         participant_id: tenant.governanceBody.id,
-        status: "PENDING",
+        status: "UNRESOLVABLE",
       });
       await expect(decide(sql, bodyTask.rows[0]?.id ?? "", "APPROVE")).rejects.toBeInstanceOf(
-        ApprovalBodyResolutionRequiredError,
+        ApprovalTaskNotPendingError,
       );
       const events = await sql.query<{ event_type: string }>(
         "select event_type from audit_event where correlation_id = $1 order by sequence",
@@ -469,7 +506,67 @@ describe("approval decisions", () => {
         "approval_stage.completed",
         "approval_stage.started",
         "approval_task.assigned",
+        "approval_task.unresolvable",
+        "approval_run.blocked",
       ]);
+    });
+  });
+
+  it("INV-APR-005 / POL-042: a deactivated frozen user blocks stage two and preserves the snapshot", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await sql.query(
+        `insert into app_user (
+         tenant_id, id, display_name, contact_email, status, deactivated_at
+         ) values ($1, $2, 'Second approver', 'second-approver@example.test',
+                   'ACTIVE', null)`,
+        [TENANT, SECOND_USER],
+      );
+      await setupOneStageRun(sql, "USER");
+      const before = await sql.query<{ resolved_participants: unknown }>(
+        "select resolved_participants from approval_run where id = $1",
+        [ONE_STAGE_RUN],
+      );
+      await sql.query(
+        `update app_user
+            set status = 'DEACTIVATED', deactivated_at = $2,
+                row_version = row_version + 1
+          where id = $1`,
+        [SECOND_USER, DECIDED_AT.toISOString()],
+      );
+
+      const result = await decide(sql, ONE_STAGE_TASK, "APPROVE");
+      expect(result).toMatchObject({ runStatus: "BLOCKED", versionLifecycleState: "IN_REVIEW" });
+      const state = await sql.query<{
+        run_status: string;
+        stage_status: string;
+        task_status: string;
+        participant_id: string;
+        resolved_participants: unknown;
+      }>(
+        `select run.status as run_status, stage.status as stage_status,
+                task.status as task_status, task.participant_id,
+                run.resolved_participants
+           from approval_run run
+           join approval_stage stage
+             on stage.approval_run_id = run.id and stage.stage_order = 2
+           join approval_task task on task.approval_stage_id = stage.id
+          where run.id = $1`,
+        [ONE_STAGE_RUN],
+      );
+      expect(state.rows).toEqual([
+        {
+          run_status: "BLOCKED",
+          stage_status: "BLOCKED",
+          task_status: "UNRESOLVABLE",
+          participant_id: SECOND_USER,
+          resolved_participants: before.rows[0]?.resolved_participants,
+        },
+      ]);
+      const approved = await sql.query<{ count: number }>(
+        "select count(*)::int as count from audit_event where document_version_id = $1 and event_type = 'version.approved'",
+        [document.draftVersionId],
+      );
+      expect(approved.rows).toEqual([{ count: 0 }]);
     });
   });
 
@@ -1090,6 +1187,237 @@ describe("approval decisions", () => {
       expect(
         (await sql.query("select id from approval_decision where id = $1", [decisionId])).rows,
       ).toEqual([]);
+    });
+  });
+});
+
+describe("document version cancellation", () => {
+  it("INV-VER-003: cancels a DRAFT with one reasoned event and no approval-run event", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertDirectGrant(sql, {
+        id: VERSION_CANCEL_GRANT,
+        capability: "document.cancel_version",
+        scopeType: "DOCUMENT_VERSION",
+        scopeId: document.draftVersionId,
+      });
+      const result = await cancelVersion(sql, document.draftVersionId);
+      expect(result).toMatchObject({
+        lifecycleState: "CANCELLED",
+        previousLifecycleState: "DRAFT",
+        cancellationReason: "Policy initiative stopped",
+        cancelledApprovalRunId: null,
+      });
+      const events = await sql.query<{
+        event_type: string;
+        safe_before: Record<string, unknown>;
+        safe_after: Record<string, unknown>;
+      }>(
+        `select event_type, safe_before, safe_after
+           from audit_event where correlation_id = $1 order by sequence`,
+        [CANCEL_CORRELATION],
+      );
+      expect(events.rows).toEqual([
+        {
+          event_type: "version.cancelled",
+          safe_before: { lifecycleState: "DRAFT" },
+          safe_after: {
+            lifecycleState: "CANCELLED",
+            cancelledAt: DECIDED_AT.toISOString(),
+            cancellationReason: "Policy initiative stopped",
+          },
+        },
+      ]);
+    });
+  });
+
+  it.each(["CHANGES_REQUESTED", "APPROVED"] as const)(
+    "INV-VER-003: cancels a %s version before publication",
+    async (lifecycleState) => {
+      await withTenant(TENANT, async (sql) => {
+        await sql.query(
+          `update document_version
+              set lifecycle_state = 'IN_REVIEW', row_version = row_version + 1
+            where id = $1`,
+          [document.draftVersionId],
+        );
+        await sql.query(
+          `update document_version
+              set lifecycle_state = $2::version_lifecycle, row_version = row_version + 1
+            where id = $1`,
+          [document.draftVersionId, lifecycleState],
+        );
+        await insertDirectGrant(sql, {
+          id: VERSION_CANCEL_GRANT,
+          capability: "document.cancel_version",
+          scopeType: "DOCUMENT_VERSION",
+          scopeId: document.draftVersionId,
+        });
+
+        await expect(cancelVersion(sql, document.draftVersionId)).resolves.toMatchObject({
+          previousLifecycleState: lifecycleState,
+          lifecycleState: "CANCELLED",
+        });
+      });
+    },
+  );
+
+  it("INV-APR-012 / INV-VER-003: cancelling IN_REVIEW closes only open run artifacts and preserves prior decisions", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertDirectGrant(sql, {
+        id: VERSION_CANCEL_GRANT,
+        capability: "document.cancel_version",
+        scopeType: "DOCUMENT_VERSION",
+        scopeId: document.approvalVersionId,
+      });
+      const beforeDecision = await sql.query<{ bytes: string }>(
+        "select encode(convert_to(to_jsonb(approval_decision)::text, 'UTF8'), 'hex') as bytes from approval_decision where id = $1",
+        [document.approvalDecisionId],
+      );
+
+      const result = await cancelVersion(sql, document.approvalVersionId);
+      expect(result).toMatchObject({
+        lifecycleState: "CANCELLED",
+        previousLifecycleState: "IN_REVIEW",
+        cancelledApprovalRunId: document.approvalRunId,
+      });
+      const state = await sql.query<{
+        run_status: string;
+        cancelled_reason: string;
+        stage_statuses: string[];
+        task_statuses: string[];
+        lifecycle_state: string;
+      }>(
+        `select run.status as run_status, run.cancelled_reason,
+                array_agg(distinct stage.status::text order by stage.status::text) as stage_statuses,
+                array_agg(distinct task.status::text order by task.status::text) as task_statuses,
+                version.lifecycle_state
+           from approval_run run
+           join approval_stage stage on stage.approval_run_id = run.id
+           join approval_task task on task.approval_stage_id = stage.id
+           join content_revision revision on revision.id = run.content_revision_id
+           join document_version version on version.id = revision.document_version_id
+          where run.id = $1
+          group by run.status, run.cancelled_reason, version.lifecycle_state`,
+        [document.approvalRunId],
+      );
+      expect(state.rows).toEqual([
+        {
+          run_status: "CANCELLED",
+          cancelled_reason: "Policy initiative stopped",
+          stage_statuses: ["CANCELLED", "COMPLETED"],
+          task_statuses: ["CANCELLED", "DECIDED"],
+          lifecycle_state: "CANCELLED",
+        },
+      ]);
+      expect(
+        await sql.query<{ bytes: string }>(
+          "select encode(convert_to(to_jsonb(approval_decision)::text, 'UTF8'), 'hex') as bytes from approval_decision where id = $1",
+          [document.approvalDecisionId],
+        ),
+      ).toEqual(beforeDecision);
+      const events = await sql.query<{ event_type: string }>(
+        "select event_type from audit_event where correlation_id = $1 order by sequence",
+        [CANCEL_CORRELATION],
+      );
+      expect(events.rows.map(({ event_type }) => event_type)).toEqual([
+        "version.cancelled",
+        "approval_run.cancelled",
+      ]);
+    });
+  });
+
+  it("INV-APR-005 / POL-042: cancelling a blocked run closes its unresolvable task", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await setupOneStageRun(sql, true);
+      await sql.query(
+        `update governance_body
+            set status = 'DISSOLVED', closed_at = $2, row_version = row_version + 1
+          where id = $1`,
+        [tenant.governanceBody.id, DECIDED_AT.toISOString()],
+      );
+      await decide(sql, ONE_STAGE_TASK, "APPROVE");
+      await insertDirectGrant(sql, {
+        id: VERSION_CANCEL_GRANT,
+        capability: "document.cancel_version",
+        scopeType: "DOCUMENT_VERSION",
+        scopeId: document.draftVersionId,
+      });
+
+      await cancelVersion(sql, document.draftVersionId);
+      const state = await sql.query<{
+        run_status: string;
+        stage_statuses: string[];
+        task_statuses: string[];
+        lifecycle_state: string;
+      }>(
+        `select run.status as run_status,
+                array_agg(stage.status::text order by stage.stage_order) as stage_statuses,
+                array_agg(task.status::text order by stage.stage_order) as task_statuses,
+                version.lifecycle_state
+           from approval_run run
+           join approval_stage stage on stage.approval_run_id = run.id
+           join approval_task task on task.approval_stage_id = stage.id
+           join content_revision revision on revision.id = run.content_revision_id
+           join document_version version on version.id = revision.document_version_id
+          where run.id = $1
+          group by run.status, version.lifecycle_state`,
+        [ONE_STAGE_RUN],
+      );
+      expect(state.rows).toEqual([
+        {
+          run_status: "CANCELLED",
+          stage_statuses: ["COMPLETED", "CANCELLED"],
+          task_statuses: ["DECIDED", "CANCELLED"],
+          lifecycle_state: "CANCELLED",
+        },
+      ]);
+    });
+  });
+
+  it("INV-AUTH-001: an unauthorized cancellation makes no writes", async () => {
+    await withTenant(TENANT, async (sql) => {
+      const before = await sql.query<{ lifecycle_state: string; row_version: number }>(
+        "select lifecycle_state, row_version from document_version where id = $1",
+        [document.draftVersionId],
+      );
+      await expect(cancelVersion(sql, document.draftVersionId)).rejects.toBeInstanceOf(
+        DocumentVersionCancellationUnauthorizedError,
+      );
+      expect(
+        await sql.query<{ lifecycle_state: string; row_version: number }>(
+          "select lifecycle_state, row_version from document_version where id = $1",
+          [document.draftVersionId],
+        ),
+      ).toEqual(before);
+      expect(
+        (
+          await sql.query("select event_id from audit_event where correlation_id = $1", [
+            CANCEL_CORRELATION,
+          ])
+        ).rows,
+      ).toEqual([]);
+    });
+  });
+
+  it("INV-TEN-001: a cross-tenant version identifier is indistinguishable from not found", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await expect(
+        cancelDocumentVersion(transaction(sql), authorizationContext(sql), {
+          tenantId: TENANT,
+          versionId: required(
+            otherTenant.documents[0]?.draftVersionId,
+            "other tenant draft version missing",
+          ),
+          expectedRowVersion: 1,
+          cancellationReason: "Must remain invisible",
+          actor: { type: "USER", id: USER },
+          configurationVersionId: CONFIGURATION,
+          occurredAt: DECIDED_AT,
+          requestId: CANCEL_REQUEST,
+          correlationId: CANCEL_CORRELATION,
+          sourceChannel: "API",
+        }),
+      ).rejects.toBeInstanceOf(DocumentVersionNotFoundError);
     });
   });
 });

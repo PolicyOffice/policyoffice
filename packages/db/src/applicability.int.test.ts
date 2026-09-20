@@ -609,7 +609,9 @@ describe("applicability provenance and history", () => {
       );
       await sql.query(
         `update document_version
-            set lifecycle_state = 'CANCELLED', row_version = row_version + 1
+            set lifecycle_state = 'CANCELLED', cancelled_at = statement_timestamp(),
+                cancellation_reason = 'Replaced by applicability correction',
+                row_version = row_version + 1
           where id = $1`,
         [documentA.draftVersionId],
       );

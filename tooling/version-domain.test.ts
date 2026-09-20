@@ -12,6 +12,8 @@ import {
   PUBLICATION_LIFECYCLE_TRANSITIONS,
   PUBLICATION_REQUIRED_CAPABILITIES,
 } from "../packages/domain/src/publication.js";
+import { AuthzContext } from "../packages/domain/src/authorization.js";
+import { cancelDocumentVersion } from "../packages/domain/src/version-cancellation.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -81,6 +83,8 @@ describe("document version contracts", () => {
         "superseded_by_version_id",
         "withdrawn_at",
         "withdrawal_reason",
+        "cancelled_at",
+        "cancellation_reason",
         "updated_at",
         "row_version",
       ],
@@ -93,6 +97,8 @@ describe("document version contracts", () => {
       [
         "approved_at",
         "approved_revision_id",
+        "cancellation_reason",
+        "cancelled_at",
         "change_summary",
         "classification_id",
         "configuration_version_id",
@@ -134,13 +140,39 @@ describe("document version contracts", () => {
     }
   });
 
-  it("records version entry-point capabilities without inventing an evaluator", () => {
+  it("records version entry-point capabilities", () => {
     expect(VERSION_REQUIRED_CAPABILITIES).toEqual({
       create: "document.edit_draft",
       changeMateriality: "document.edit_draft",
       changeMetadata: "document.manage",
       cancel: "document.cancel_version",
     });
+  });
+
+  it("INV-VER-003: cancellation rejects a blank reason before loading or writing", async () => {
+    const tenantId = "10000000-0000-0000-0000-000000000001";
+    const userId = "10000000-0000-0000-0001-000000000001";
+    const context = new AuthzContext({
+      tenantId,
+      principal: { type: "USER", id: userId },
+      instant: new Date("2027-01-15T09:42:17.231Z"),
+      load: async () => Promise.reject(new Error("authorization must not load")),
+    });
+    const transaction = { query: async () => Promise.reject(new Error("must not query")) };
+    await expect(
+      cancelDocumentVersion(transaction, context, {
+        tenantId,
+        versionId: "10000000-0000-0000-0002-000000000001",
+        expectedRowVersion: 1,
+        cancellationReason: "   ",
+        actor: { type: "USER", id: userId },
+        configurationVersionId: "10000000-0000-0000-0003-000000000001",
+        occurredAt: new Date("2027-01-15T09:42:17.231Z"),
+        requestId: "10000000-0000-0000-0004-000000000001",
+        correlationId: "10000000-0000-0000-0005-000000000001",
+        sourceChannel: "API",
+      }),
+    ).rejects.toThrow(/cancellationReason is required/i);
   });
 
   it("INV-EFF-001 / INV-EFF-004: exposes only transitions 8, 9, 10 and 12 through publication operations", () => {

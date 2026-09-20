@@ -781,7 +781,9 @@ describe("publication, supersession, withdrawal and resolution", () => {
 
       await sql.query(
         `update document_version
-            set lifecycle_state = 'CANCELLED', row_version = row_version + 1
+            set lifecycle_state = 'CANCELLED', cancelled_at = statement_timestamp(),
+                cancellation_reason = 'Publication lifecycle test',
+                row_version = row_version + 1
           where id = $1`,
         [versionId],
       );
@@ -1181,7 +1183,9 @@ describe("effective-instant lifecycle narration", () => {
       await addApprovedVersion(sql, cancelledId, variantId, 2);
       await sql.query(
         `update document_version
-            set lifecycle_state = 'CANCELLED', row_version = row_version + 1
+            set lifecycle_state = 'CANCELLED', cancelled_at = statement_timestamp(),
+                cancellation_reason = 'Effective transition no-op fixture',
+                row_version = row_version + 1
           where tenant_id = $1 and id = $2`,
         [TENANT, cancelledId],
       );

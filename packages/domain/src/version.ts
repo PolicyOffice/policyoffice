@@ -69,6 +69,8 @@ export const DOCUMENT_VERSION_COLUMN_CLASSIFICATION = Object.freeze({
     "superseded_by_version_id",
     "withdrawn_at",
     "withdrawal_reason",
+    "cancelled_at",
+    "cancellation_reason",
     "updated_at",
     "row_version",
   ]),

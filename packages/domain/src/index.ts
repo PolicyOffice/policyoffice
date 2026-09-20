@@ -111,11 +111,13 @@ export {
   InvalidApprovalRunSnapshotError,
   UnsupportedApprovalCompletionRuleError,
   assertAttendingMembersHeldSeats,
+  isApprovalParticipantEligible,
   isApprovalStageSatisfied,
   recordApprovalDecision,
   recordBodyResolution,
   type ApprovalCompletionRule,
   type ApprovalDecisionKind,
+  type ApprovalParticipantEligibility,
   type DatedBodyMembership,
   type RecordApprovalDecisionInput,
   type RecordBodyResolutionInput,
@@ -315,3 +317,10 @@ export {
   type Materiality,
   type VersionLifecycle,
 } from "./version.js";
+
+export {
+  DocumentVersionCancellationUnauthorizedError,
+  cancelDocumentVersion,
+  type CancelDocumentVersionInput,
+  type CancelledDocumentVersion,
+} from "./version-cancellation.js";
