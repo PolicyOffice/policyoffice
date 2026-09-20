@@ -255,6 +255,16 @@ export {
 } from "./publication.js";
 
 export {
+  READER_VIEW_REQUIRED_CAPABILITIES,
+  getReaderDocumentVersion,
+  resolveReaderDocument,
+  type ReaderAttachment,
+  type ReaderDocumentView,
+  type ReaderReleasedLifecycle,
+  type ReaderVersion,
+} from "./reader-view.js";
+
+export {
   SESSION_ABSOLUTE_LIFETIME_MS,
   SESSION_IDLE_TIMEOUT_MS,
   SESSION_TOKEN_BYTES,
