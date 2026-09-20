@@ -1001,6 +1001,8 @@ export const documentVersion = pgTable(
     supersededByVersionId: uuid("superseded_by_version_id"),
     withdrawnAt: instant("withdrawn_at"),
     withdrawalReason: text("withdrawal_reason"),
+    cancelledAt: instant("cancelled_at"),
+    cancellationReason: text("cancellation_reason"),
     configurationVersionId: uuid("configuration_version_id"),
     effectiveRange: tstzrange("effective_range").generatedAlwaysAs(
       sql`case
@@ -1051,6 +1053,11 @@ export const documentVersion = pgTable(
       "document_version_withdrawal_reason_required",
       sql`${t.lifecycleState} <> 'WITHDRAWN'
           or nullif(btrim(${t.withdrawalReason}), '') is not null`,
+    ),
+    check(
+      "document_version_cancellation_reason_required",
+      sql`${t.lifecycleState} <> 'CANCELLED'
+          or nullif(btrim(${t.cancellationReason}), '') is not null`,
     ),
     check(
       "document_version_effective_interval_start_required",

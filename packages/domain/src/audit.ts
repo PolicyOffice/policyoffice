@@ -128,11 +128,14 @@ export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "approval.approved",
   "approval.changes_requested",
   "approval.rejected",
+  "approval_run.blocked",
+  "approval_run.cancelled",
   "approval_run.completed",
   "approval_run.started",
   "approval_stage.completed",
   "approval_stage.started",
   "approval_task.assigned",
+  "approval_task.unresolvable",
   "content_revision.created",
   "configuration.changed",
   "document.activated",
@@ -143,6 +146,7 @@ export const IMPLEMENTED_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "document.type_changed",
   "governance.policy_gap",
   "session.revoked",
+  "version.cancelled",
   "version.created",
   "version.effective",
   "version.materiality_changed",
@@ -243,6 +247,10 @@ const APPROVAL_TASK_ASSIGNED_AFTER_KEYS = Object.freeze([
   "participantId",
   "status",
 ]);
+const APPROVAL_TASK_UNRESOLVABLE_AFTER_KEYS = Object.freeze([
+  ...APPROVAL_TASK_ASSIGNED_AFTER_KEYS,
+  "participantStatus",
+]);
 const APPROVAL_DECISION_AFTER_KEYS = Object.freeze([
   "approvalTaskId",
   "decidedByType",
@@ -252,7 +260,14 @@ const APPROVAL_DECISION_AFTER_KEYS = Object.freeze([
   "decision",
 ]);
 const APPROVAL_STATUS_KEYS = Object.freeze(["status"]);
+const APPROVAL_RUN_CANCELLED_AFTER_KEYS = Object.freeze(["status", "cancellationReason"]);
 const VERSION_APPROVAL_KEYS = Object.freeze(["lifecycleState"]);
+const VERSION_CANCELLED_BEFORE_KEYS = Object.freeze(["lifecycleState"]);
+const VERSION_CANCELLED_AFTER_KEYS = Object.freeze([
+  "lifecycleState",
+  "cancelledAt",
+  "cancellationReason",
+]);
 const VERSION_CREATED_AFTER_KEYS = Object.freeze([
   "documentVariantId",
   "versionSequence",
@@ -354,11 +369,38 @@ const APPROVAL_STATUS_TRANSITION_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeAfterRequired: true,
 });
 
+const APPROVAL_RUN_CANCELLED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: APPROVAL_STATUS_KEYS,
+  safeAfterKeys: APPROVAL_RUN_CANCELLED_AFTER_KEYS,
+  requiredSafeBeforeKeys: APPROVAL_STATUS_KEYS,
+  requiredSafeAfterKeys: APPROVAL_RUN_CANCELLED_AFTER_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const APPROVAL_TASK_UNRESOLVABLE_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: Object.freeze([]),
+  safeAfterKeys: APPROVAL_TASK_UNRESOLVABLE_AFTER_KEYS,
+  requiredSafeBeforeKeys: Object.freeze([]),
+  requiredSafeAfterKeys: APPROVAL_TASK_UNRESOLVABLE_AFTER_KEYS,
+  safeBeforeRequired: false,
+  safeAfterRequired: true,
+});
+
 const VERSION_APPROVAL_TRANSITION_SCHEMA_V1: AuditEventSchema = Object.freeze({
   safeBeforeKeys: VERSION_APPROVAL_KEYS,
   safeAfterKeys: VERSION_APPROVAL_KEYS,
   requiredSafeBeforeKeys: VERSION_APPROVAL_KEYS,
   requiredSafeAfterKeys: VERSION_APPROVAL_KEYS,
+  safeBeforeRequired: true,
+  safeAfterRequired: true,
+});
+
+const VERSION_CANCELLED_SCHEMA_V1: AuditEventSchema = Object.freeze({
+  safeBeforeKeys: VERSION_CANCELLED_BEFORE_KEYS,
+  safeAfterKeys: VERSION_CANCELLED_AFTER_KEYS,
+  requiredSafeBeforeKeys: VERSION_CANCELLED_BEFORE_KEYS,
+  requiredSafeAfterKeys: VERSION_CANCELLED_AFTER_KEYS,
   safeBeforeRequired: true,
   safeAfterRequired: true,
 });
@@ -522,6 +564,12 @@ auditEventSchemas["approval.changes_requested"] = Object.freeze({
   1: APPROVAL_DECISION_SCHEMA_V1,
 });
 auditEventSchemas["approval.rejected"] = Object.freeze({ 1: APPROVAL_DECISION_SCHEMA_V1 });
+auditEventSchemas["approval_run.blocked"] = Object.freeze({
+  1: APPROVAL_STATUS_TRANSITION_SCHEMA_V1,
+});
+auditEventSchemas["approval_run.cancelled"] = Object.freeze({
+  1: APPROVAL_RUN_CANCELLED_SCHEMA_V1,
+});
 auditEventSchemas["approval_run.completed"] = Object.freeze({
   1: APPROVAL_STATUS_TRANSITION_SCHEMA_V1,
 });
@@ -536,6 +584,9 @@ auditEventSchemas["approval_stage.started"] = Object.freeze({
 });
 auditEventSchemas["approval_task.assigned"] = Object.freeze({
   1: APPROVAL_TASK_ASSIGNED_SCHEMA_V1,
+});
+auditEventSchemas["approval_task.unresolvable"] = Object.freeze({
+  1: APPROVAL_TASK_UNRESOLVABLE_SCHEMA_V1,
 });
 auditEventSchemas["content_revision.created"] = Object.freeze({
   1: CONTENT_REVISION_CREATED_SCHEMA_V1,
@@ -559,6 +610,7 @@ auditEventSchemas["governance.policy_gap"] = Object.freeze({
   1: GOVERNANCE_POLICY_GAP_SCHEMA_V1,
 });
 auditEventSchemas["session.revoked"] = Object.freeze({ 1: SESSION_REVOKED_SCHEMA_V1 });
+auditEventSchemas["version.cancelled"] = Object.freeze({ 1: VERSION_CANCELLED_SCHEMA_V1 });
 auditEventSchemas["version.created"] = Object.freeze({ 1: VERSION_CREATED_SCHEMA_V1 });
 auditEventSchemas["version.effective"] = Object.freeze({ 1: VERSION_EFFECTIVE_SCHEMA_V1 });
 auditEventSchemas["version.materiality_changed"] = Object.freeze({
@@ -886,6 +938,21 @@ function validateVersionAuditSnapshots(input: Record<string, unknown>): void {
       validateMateriality(after.materiality, "safeAfter.materiality");
       requiredUuid(after.configurationVersionId, "safeAfter.configurationVersionId");
       return;
+    case "version.cancelled":
+      if (!before || !after) return;
+      if (
+        !["DRAFT", "IN_REVIEW", "CHANGES_REQUESTED", "APPROVED"].includes(
+          String(before.lifecycleState),
+        ) ||
+        after.lifecycleState !== "CANCELLED"
+      ) {
+        throw new InvalidAuditEventError(
+          "version.cancelled must record a pre-release state to CANCELLED transition",
+        );
+      }
+      requireInstant(after.cancelledAt, "safeAfter.cancelledAt");
+      requiredString(after.cancellationReason, "safeAfter.cancellationReason");
+      return;
     case "version.materiality_changed":
       if (!before || !after) return;
       validateMateriality(before.materiality, "safeBefore.materiality");
@@ -1055,9 +1122,30 @@ function validateApprovalAuditSnapshots(input: Record<string, unknown>): void {
     return;
   }
 
+  if (input.eventType === "approval_task.unresolvable") {
+    if (input.safeBefore !== undefined && input.safeBefore !== null) {
+      throw new InvalidAuditEventError("approval_task.unresolvable safeBefore must be null");
+    }
+    if (!record(input.safeAfter)) return;
+    requiredUuid(input.safeAfter.approvalStageId, "safeAfter.approvalStageId");
+    requiredUuid(input.safeAfter.participantId, "safeAfter.participantId");
+    if (!new Set(["USER", "GOVERNANCE_BODY"]).has(String(input.safeAfter.participantType))) {
+      throw new InvalidAuditEventError("safeAfter.participantType must be USER or GOVERNANCE_BODY");
+    }
+    if (input.safeAfter.status !== "UNRESOLVABLE") {
+      throw new InvalidAuditEventError("safeAfter.status must be UNRESOLVABLE");
+    }
+    requiredString(input.safeAfter.participantStatus, "safeAfter.participantStatus");
+    if (!record(input.subject) || input.subject.type !== "APPROVAL_TASK") {
+      throw new InvalidAuditEventError("approval_task.unresolvable requires APPROVAL_TASK subject");
+    }
+    return;
+  }
+
   if (!record(input.safeBefore) || !record(input.safeAfter)) return;
   const expectedTransitions: Readonly<Record<string, readonly [string, string, string]>> = {
     "approval_stage.completed": ["IN_PROGRESS", "COMPLETED", "APPROVAL_STAGE"],
+    "approval_run.blocked": ["RUNNING", "BLOCKED", "APPROVAL_RUN"],
     "approval_run.completed": ["RUNNING", "COMPLETED", "APPROVAL_RUN"],
   };
   const approvalTransition = expectedTransitions[String(input.eventType)];
@@ -1074,6 +1162,22 @@ function validateApprovalAuditSnapshots(input: Record<string, unknown>): void {
       throw new InvalidAuditEventError(
         `${String(input.eventType)} requires ${approvalTransition[2]} subject`,
       );
+    }
+    return;
+  }
+
+  if (input.eventType === "approval_run.cancelled") {
+    if (
+      !["RUNNING", "BLOCKED"].includes(String(input.safeBefore.status)) ||
+      input.safeAfter.status !== "CANCELLED"
+    ) {
+      throw new InvalidAuditEventError(
+        "approval_run.cancelled must record an active state to CANCELLED transition",
+      );
+    }
+    requiredString(input.safeAfter.cancellationReason, "safeAfter.cancellationReason");
+    if (!record(input.subject) || input.subject.type !== "APPROVAL_RUN") {
+      throw new InvalidAuditEventError("approval_run.cancelled requires APPROVAL_RUN subject");
     }
     return;
   }

@@ -265,6 +265,8 @@ async function transitionVersion(
   options: {
     withdrawnAt?: string | null | undefined;
     withdrawalReason?: string | null | undefined;
+    cancelledAt?: string | null | undefined;
+    cancellationReason?: string | null | undefined;
   } = {},
 ): Promise<number> {
   const { rows } = await sql.query<{ row_version: number }>(
@@ -281,10 +283,28 @@ async function transitionVersion(
                               'Withdrawn in lifecycle test')
               else withdrawal_reason
             end,
+            cancelled_at = case
+              when $2::version_lifecycle = 'CANCELLED'
+                then coalesce($5::timestamptz, cancelled_at, statement_timestamp())
+              else cancelled_at
+            end,
+            cancellation_reason = case
+              when $2::version_lifecycle = 'CANCELLED'
+                then coalesce(nullif(btrim($6::text), ''), cancellation_reason,
+                              'Cancelled in lifecycle test')
+              else cancellation_reason
+            end,
             row_version = row_version + 1
       where id = $1
       returning row_version`,
-    [id, to, options.withdrawnAt ?? null, options.withdrawalReason ?? null],
+    [
+      id,
+      to,
+      options.withdrawnAt ?? null,
+      options.withdrawalReason ?? null,
+      options.cancelledAt ?? null,
+      options.cancellationReason ?? null,
+    ],
   );
   const row = rows[0];
   if (!row) throw new Error(`test fixture version ${id} was not found`);
@@ -299,6 +319,8 @@ async function walkVersionLifecycle(
   options: {
     withdrawnAt?: string | null | undefined;
     withdrawalReason?: string | null | undefined;
+    cancelledAt?: string | null | undefined;
+    cancellationReason?: string | null | undefined;
   } = {},
 ): Promise<number> {
   let rowVersion = 1;
@@ -538,6 +560,24 @@ describe("document version effectivity and immutability", () => {
       });
     },
   );
+
+  it("INV-VER-003: the database refuses cancellation without a non-empty reason", async () => {
+    await withTenant(TENANT, async (sql) => {
+      await insertVersion(sql, { id: VERSION, lifecycle: "DRAFT" });
+      await expect(
+        sql.query(
+          `update document_version
+              set lifecycle_state = 'CANCELLED', cancelled_at = $2,
+                  cancellation_reason = '   ', row_version = row_version + 1
+            where id = $1`,
+          [VERSION, FIXED_INSTANT.toISOString()],
+        ),
+      ).rejects.toMatchObject({
+        code: "23514",
+        constraint: "document_version_cancellation_reason_required",
+      });
+    });
+  });
 
   it.each(FORBIDDEN_VERSION_LIFECYCLE_PAIRS)(
     "refuses unspecified document version transition %s → %s",

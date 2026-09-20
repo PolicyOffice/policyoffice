@@ -6,6 +6,7 @@ import {
   ApprovalBodyResolutionUnauthorizedError,
   UnsupportedApprovalCompletionRuleError,
   assertAttendingMembersHeldSeats,
+  isApprovalParticipantEligible,
   isApprovalStageSatisfied,
   recordBodyResolution,
 } from "../packages/domain/src/approval-decision.js";
@@ -42,6 +43,22 @@ function bodyResolutionInput() {
 }
 
 describe("approval stage completion", () => {
+  it("INV-APR-005 / POL-042: only active frozen participants remain eligible", () => {
+    expect(isApprovalParticipantEligible({ participantType: "USER", status: "ACTIVE" })).toBe(true);
+    expect(isApprovalParticipantEligible({ participantType: "USER", status: "DEACTIVATED" })).toBe(
+      false,
+    );
+    expect(
+      isApprovalParticipantEligible({ participantType: "GOVERNANCE_BODY", status: "ACTIVE" }),
+    ).toBe(true);
+    expect(
+      isApprovalParticipantEligible({
+        participantType: "GOVERNANCE_BODY",
+        status: "DISSOLVED",
+      }),
+    ).toBe(false);
+  });
+
   it("INV-APR-008: ALL completes only after every task has approved", () => {
     expect(
       isApprovalStageSatisfied({ completionRule: "ALL", taskCount: 2, approvalCount: 1 }),

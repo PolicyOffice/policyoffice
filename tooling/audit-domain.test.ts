@@ -217,6 +217,50 @@ describe("the audit event envelope", () => {
     );
   });
 
+  it("INV-AUD-008: cancellation and blocking events publish their fixed v1 evidence", () => {
+    const cancelledVersion = event({
+      eventType: "version.cancelled",
+      subject: { type: "DOCUMENT_VERSION", id: "10000000-0000-0000-0015-000000000001" },
+      safeBefore: { lifecycleState: "IN_REVIEW" },
+      safeAfter: {
+        lifecycleState: "CANCELLED",
+        cancelledAt: "2027-01-15T09:42:17.231Z",
+        cancellationReason: "Superseded before release",
+      },
+    });
+    expect(() => validateAuditEvent(cancelledVersion)).not.toThrow();
+
+    const blockedRun = event({
+      eventType: "approval_run.blocked",
+      subject: { type: "APPROVAL_RUN", id: "10000000-0000-0000-0016-000000000001" },
+      safeBefore: { status: "RUNNING" },
+      safeAfter: { status: "BLOCKED" },
+    });
+    expect(() => validateAuditEvent(blockedRun)).not.toThrow();
+
+    const unresolvableTask = event({
+      eventType: "approval_task.unresolvable",
+      subject: { type: "APPROVAL_TASK", id: "10000000-0000-0000-0017-000000000001" },
+      safeBefore: null,
+      safeAfter: {
+        approvalStageId: "10000000-0000-0000-0018-000000000001",
+        participantType: "USER",
+        participantId: "10000000-0000-0000-0019-000000000001",
+        status: "UNRESOLVABLE",
+        participantStatus: "DEACTIVATED",
+      },
+    });
+    expect(() => validateAuditEvent(unresolvableTask)).not.toThrow();
+
+    const cancelledRun = event({
+      eventType: "approval_run.cancelled",
+      subject: { type: "APPROVAL_RUN", id: "10000000-0000-0000-0016-000000000001" },
+      safeBefore: { status: "BLOCKED" },
+      safeAfter: { status: "CANCELLED", cancellationReason: "Policy initiative stopped" },
+    });
+    expect(() => validateAuditEvent(cancelledRun)).not.toThrow();
+  });
+
   it("INV-AUD-008 / INV-VER-008: version.metadata_changed requires identical changed keys", () => {
     const changed = event({
       eventType: "version.metadata_changed",
@@ -235,6 +279,7 @@ describe("the audit event envelope", () => {
       "version.created",
       "version.effective",
       "version.approved",
+      "version.cancelled",
       "version.materiality_changed",
       "version.metadata_changed",
       "version.published",

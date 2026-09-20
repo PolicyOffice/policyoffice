@@ -67,7 +67,7 @@ export interface RecordedApprovalDecision {
   readonly contentDigest: string;
   readonly decision: ApprovalDecisionKind;
   readonly recordedAt: Date;
-  readonly runStatus: "RUNNING" | "COMPLETED" | "CHANGES_REQUESTED" | "REJECTED";
+  readonly runStatus: "RUNNING" | "BLOCKED" | "COMPLETED" | "CHANGES_REQUESTED" | "REJECTED";
   readonly versionLifecycleState: "IN_REVIEW" | "APPROVED" | "CHANGES_REQUESTED" | "REJECTED";
   readonly emittedEvents: readonly EmittedAuditEvent[];
 }
@@ -187,10 +187,19 @@ interface NextStageRow extends Record<string, unknown> {
   status: string;
 }
 
+interface ParticipantStatusRow extends Record<string, unknown> {
+  status: string;
+}
+
 interface FrozenParticipant {
   readonly type: "USER" | "GOVERNANCE_BODY";
   readonly id: string;
   readonly displayName: string;
+}
+
+export interface ApprovalParticipantEligibility {
+  readonly participantType: "USER" | "GOVERNANCE_BODY";
+  readonly status: string;
 }
 
 interface DecisionExecutionInput extends ApprovalDecisionAuditContext {
@@ -213,6 +222,11 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DECISIONS = new Set<ApprovalDecisionKind>(["APPROVE", "REQUEST_CHANGES", "REJECT"]);
 const ACTOR_TYPES = new Set<AuditActorType>(["USER", "BODY", "API_CLIENT", "SYSTEM"]);
 const SOURCE_CHANNELS = new Set<AuditSourceChannel>(["WEB", "API", "JOB", "IMPORT"]);
+
+/** Pilot eligibility is deliberately narrow and never substitutes another participant. */
+export function isApprovalParticipantEligible(input: ApprovalParticipantEligibility): boolean {
+  return input.status === "ACTIVE";
+}
 
 function requireUuid(value: string, field: string): void {
   if (!UUID.test(value)) throw new TypeError(`${field} must be a UUID`);
@@ -399,6 +413,32 @@ async function lockApprovalTask(
   tenantId: string,
   approvalTaskId: string,
 ): Promise<LockedApprovalTaskRow> {
+  // Cancellation locks the governed version first. Use the same order here so a
+  // simultaneous decision and cancellation serialize instead of forming a lock cycle.
+  const versionResult = await transaction.query<Record<string, unknown> & { id: string }>(
+    `select version.id
+       from approval_task task
+       join approval_stage stage
+         on stage.tenant_id = task.tenant_id and stage.id = task.approval_stage_id
+       join approval_run run
+         on run.tenant_id = stage.tenant_id and run.id = stage.approval_run_id
+       join content_revision revision
+         on revision.tenant_id = run.tenant_id and revision.id = run.content_revision_id
+       join document_version version
+         on version.tenant_id = revision.tenant_id
+        and version.id = revision.document_version_id
+      where task.tenant_id = $1::uuid and task.id = $2::uuid`,
+    [tenantId, approvalTaskId],
+  );
+  const versionId = versionResult.rows[0]?.id;
+  if (!versionId) throw new ApprovalTaskNotFoundError();
+  await transaction.query(
+    `select id from document_version
+      where tenant_id = $1::uuid and id = $2::uuid
+      for update`,
+    [tenantId, versionId],
+  );
+
   const result = await transaction.query<LockedApprovalTaskRow>(
     `select task.id as task_id,
             task.status as task_status,
@@ -563,7 +603,7 @@ async function startNextStage(
   input: DecisionExecutionInput,
   row: LockedApprovalTaskRow,
   events: AuditEventInput[],
-): Promise<boolean> {
+): Promise<"NONE" | "STARTED" | "BLOCKED"> {
   const nextResult = await transaction.query<NextStageRow>(
     `select id, stage_order, status
        from approval_stage
@@ -574,7 +614,7 @@ async function startNextStage(
     [input.tenantId, row.run_id, row.stage_order + 1],
   );
   const next = nextResult.rows[0];
-  if (!next) return false;
+  if (!next) return "NONE";
   if (next.status !== "PENDING") throw new ApprovalStageNotInProgressError(next.status);
   const participants = frozenParticipantsForStage(row.resolved_participants, next.stage_order);
   const changedStage = await transaction.query<Record<string, unknown> & { id: string }>(
@@ -605,15 +645,45 @@ async function startNextStage(
     configurationVersionId: input.configurationVersionId,
     dedupeKey: `approval_stage.started:${next.id}`,
   });
+  const unresolvableEvents: AuditEventInput[] = [];
+  let blocked = false;
   for (const participant of participants) {
+    const participantResult =
+      participant.type === "USER"
+        ? await transaction.query<ParticipantStatusRow>(
+            `select status::text as status
+               from app_user
+              where tenant_id = $1::uuid and id = $2::uuid`,
+            [input.tenantId, participant.id],
+          )
+        : await transaction.query<ParticipantStatusRow>(
+            `select status::text as status
+               from governance_body
+              where tenant_id = $1::uuid and id = $2::uuid`,
+            [input.tenantId, participant.id],
+          );
+    const participantStatus = participantResult.rows[0]?.status ?? "NOT_FOUND";
+    const eligible = isApprovalParticipantEligible({
+      participantType: participant.type,
+      status: participantStatus,
+    });
+    const taskStatus = eligible ? "PENDING" : "UNRESOLVABLE";
+    blocked ||= !eligible;
     const taskResult = await transaction.query<Record<string, unknown> & { id: string }>(
       `insert into approval_task (
          tenant_id, approval_stage_id, participant_type, participant_id,
          status, assigned_at, due_at, delegated_from_user_id
        ) values ($1::uuid, $2::uuid, $3::approval_participant_type, $4::uuid,
-                 'PENDING', $5::timestamptz, null, null)
+                 $5::approval_task_status, $6::timestamptz, null, null)
        returning id`,
-      [input.tenantId, next.id, participant.type, participant.id, input.occurredAt.toISOString()],
+      [
+        input.tenantId,
+        next.id,
+        participant.type,
+        participant.id,
+        taskStatus,
+        input.occurredAt.toISOString(),
+      ],
     );
     const task = taskResult.rows[0];
     if (!task) throw new Error("approval task insert returned no row");
@@ -637,13 +707,79 @@ async function startNextStage(
         approvalStageId: next.id,
         participantType: participant.type,
         participantId: participant.id,
-        status: "PENDING",
+        status: taskStatus,
       },
       configurationVersionId: input.configurationVersionId,
       dedupeKey: `approval_task.assigned:${task.id}`,
     });
+    if (!eligible) {
+      unresolvableEvents.push({
+        tenantId: input.tenantId,
+        eventType: "approval_task.unresolvable",
+        eventSchemaVersion: 1,
+        occurredAt: input.occurredAt,
+        actor: input.actor,
+        subject: { type: "APPROVAL_TASK", id: task.id },
+        documentId: row.document_id,
+        documentVariantId: row.document_variant_id,
+        documentVersionId: row.document_version_id,
+        action: "MARK_APPROVAL_TASK_UNRESOLVABLE",
+        outcome: "SUCCESS",
+        requestId: input.requestId,
+        correlationId: input.correlationId,
+        sourceChannel: input.sourceChannel,
+        safeBefore: null,
+        safeAfter: {
+          approvalStageId: next.id,
+          participantType: participant.type,
+          participantId: participant.id,
+          status: "UNRESOLVABLE",
+          participantStatus,
+        },
+        configurationVersionId: input.configurationVersionId,
+        dedupeKey: `approval_task.unresolvable:${task.id}`,
+      });
+    }
   }
-  return true;
+  if (!blocked) return "STARTED";
+
+  const blockedStage = await transaction.query<Record<string, unknown> & { id: string }>(
+    `update approval_stage
+        set status = 'BLOCKED', row_version = row_version + 1
+      where tenant_id = $1::uuid and id = $2::uuid and status = 'IN_PROGRESS'
+      returning id`,
+    [input.tenantId, next.id],
+  );
+  if (!blockedStage.rows[0]) throw new ApprovalStageNotInProgressError("IN_PROGRESS");
+  const blockedRun = await transaction.query<Record<string, unknown> & { id: string }>(
+    `update approval_run
+        set status = 'BLOCKED', row_version = row_version + 1
+      where tenant_id = $1::uuid and id = $2::uuid and status = 'RUNNING'
+      returning id`,
+    [input.tenantId, row.run_id],
+  );
+  if (!blockedRun.rows[0]) throw new ApprovalRunNotRunningError(row.run_status);
+  events.push(...unresolvableEvents, {
+    tenantId: input.tenantId,
+    eventType: "approval_run.blocked",
+    eventSchemaVersion: 1,
+    occurredAt: input.occurredAt,
+    actor: input.actor,
+    subject: { type: "APPROVAL_RUN", id: row.run_id },
+    documentId: row.document_id,
+    documentVariantId: row.document_variant_id,
+    documentVersionId: row.document_version_id,
+    action: "BLOCK_APPROVAL_RUN",
+    outcome: "SUCCESS",
+    requestId: input.requestId,
+    correlationId: input.correlationId,
+    sourceChannel: input.sourceChannel,
+    safeBefore: { status: "RUNNING" },
+    safeAfter: { status: "BLOCKED" },
+    configurationVersionId: input.configurationVersionId,
+    dedupeKey: `approval_run.blocked:${row.run_id}`,
+  });
+  return "BLOCKED";
 }
 
 async function executeApprovalDecision(
@@ -745,8 +881,10 @@ async function executeApprovalDecision(
         }),
       );
 
-      const nextStageStarted = await startNextStage(transaction, input, row, events);
-      if (!nextStageStarted) {
+      const nextStageOutcome = await startNextStage(transaction, input, row, events);
+      if (nextStageOutcome === "BLOCKED") {
+        runStatus = "BLOCKED";
+      } else if (nextStageOutcome === "NONE") {
         const runResult = await transaction.query<Record<string, unknown> & { id: string }>(
           `update approval_run
               set status = 'COMPLETED', completed_at = $3::timestamptz,
