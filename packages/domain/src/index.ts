@@ -125,6 +125,18 @@ export {
 } from "./approval-decision.js";
 
 export {
+  getApprovalInboxItem,
+  listApprovalInbox,
+  type ApprovalInboxApplicabilityRule,
+  type ApprovalInboxDecision,
+  type ApprovalInboxItem,
+  type ApprovalInboxParticipantType,
+  type ApprovalInboxRunStatus,
+  type ApprovalInboxScopeTarget,
+  type ApprovalInboxTaskStatus,
+} from "./approval-inbox.js";
+
+export {
   WORKFLOW_COMPLETION_RULES,
   WORKFLOW_PARTICIPANT_TYPES,
   WORKFLOW_TEMPLATE_REQUIRED_CAPABILITIES,

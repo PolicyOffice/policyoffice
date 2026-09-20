@@ -35,6 +35,9 @@ export default async function DocumentRegisterPage() {
           <a href="/author/documents/new">Create document</a>
         </p>
       ) : null}
+      <p>
+        <a href="/approvals">Approval inbox</a>
+      </p>
       <ul>
         {documents.map((document) => (
           <li key={document.id}>
