@@ -118,6 +118,35 @@ select relname, pg_get_userbyid(relowner), relforcerowsecurity
   from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r';
 ```
 
+**When the drifted database holds data you would rather not drop**, build a throwaway
+alongside it instead. The suite takes its connections from four independent variables, and
+overriding only some of them fails in a way that reads like a bug in the code under test:
+fixture teardown connects through `MIGRATION_DATABASE_URL` and the application transaction
+through `DATABASE_URL`, so a partial override quietly keeps using the drifted database and
+reports `permission denied` or `relation … does not exist` from the half you did not
+redirect.
+
+```bash
+docker exec policyoffice-postgres psql -U postgres -d postgres \
+  -c "create database policyoffice_review template template0 locale 'C' encoding 'UTF8';"
+B=localhost:5432/policyoffice_review
+export MIGRATION_ADMIN_URL="postgres://postgres:postgres@$B"
+export MIGRATION_DATABASE_URL="postgres://postgres:postgres@$B"
+export DATABASE_URL="postgres://app_role:app_role@$B"
+export TEST_DATABASE_URL_APP="postgres://app_role:app_role@$B"
+export TEST_DATABASE_URL_MIGRATION="postgres://migration_role:migration_role@$B"
+export TEST_DATABASE_URL_RETENTION="postgres://retention_role:retention_role@$B"
+export TEST_DATABASE_URL_SUPERUSER="postgres://postgres:postgres@$B"
+pnpm --filter @policyoffice/db migrate && pnpm --filter @policyoffice/db dev:credentials
+```
+
+Roles are cluster-wide, so `dev:credentials` is safe to repeat for a second database. Note
+that the administrative connection is the **superuser**, exactly as CI configures it: the
+runner does its own `SET ROLE migration_role` before any DDL, which is what leaves the
+tables owned by `migration_role` and `force row level security` binding. Running the
+migrations as `migration_role` directly is what produces the drifted state, not what
+repairs it.
+
 Migrations are forward-only, hand-written SQL, applied by our own runner:
 
 ```bash
