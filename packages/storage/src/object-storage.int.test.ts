@@ -6,7 +6,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { inspectContentBytes, sha256Digest, type Sha256Digest } from "@policyoffice/domain";
+import { inspectContentBytes, sha256Digest, type Sha256Digest } from "../../domain/src/index.js";
 import {
   contentUploadQuarantineKey,
   createControlledFileStorage,

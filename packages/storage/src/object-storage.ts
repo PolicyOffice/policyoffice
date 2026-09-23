@@ -10,7 +10,7 @@ import {
   inspectContentBytes,
   type InspectedContentBytes,
   type Sha256Digest,
-} from "@policyoffice/domain";
+} from "../../domain/src/index.js";
 import { StorageConfigurationError, type StorageConfiguration } from "./config.js";
 
 export const CONTENT_UPLOAD_SLOT_TTL_SECONDS = 300;
