@@ -153,18 +153,25 @@ Written one at a time, as the authorization epic was.
 | POL-031 (#130) | The request context, and the first capability ever enforced at an entry point | **merged** #133 |
 | POL-032 (#134) | Sign-in and sign-out, so a person rather than a test can hold a session | **merged** #136 |
 | POL-033 (#137) | The author's path — create, draft, submit. Four route-level checks over three distinct capabilities, because `document.edit_draft` covers both starting a version and saving a revision (#139) | **merged** #141 |
-| POL-034 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
-| POL-035 | **The reader view**, built to `information-architecture.md` | POL-033 has landed; in the reference flow it follows approval, since nothing becomes effective without it |
-| POL-036 | Playwright drives the **full** reference flow with three principals | last |
+| POL-034 (#166) | **The approval inbox**, built to `information-architecture.md` | **merged** #167 |
+| POL-035 (#168) | **The reader view**, built to `information-architecture.md` | POL-033 has landed; in the reference flow it follows approval, since nothing becomes effective without it |
+| POL-046 (#174) | **The publication entry point.** Publication has existed below the UI since `0012`; nothing calls it | approval stops at `APPROVED` |
+| POL-045 (#173) | **Serving a controlled file to a reader.** POL-044 stores files; nothing reads them back | needs POL-035 |
+| POL-036 | Playwright drives the **full** reference flow, with a publishing principal beside author, approver and reader | last |
 
 ### What comes next, in order
 
-1. **POL-041 (#159)** — body resolutions, where the institution decides rather than a person.
-   Written on 2026-09-19 and **ready**, now that POL-040 merged as #158: decisions advance an
-   `ALL` stage, and a `BODY_RESOLUTION` stage is deliberately refused until this lands.
-2. **POL-042** — approvers who can no longer act, and cancellation. Written after POL-041 lands,
-   and the last piece of the approval subsystem.
-3. **POL-034** the approval inbox, **POL-035** the reader view, **POL-036** the full Playwright flow.
+1. **POL-046 (#174)** — the publication entry point, and the reason this list gained an entry it
+   did not have. The chain *approve → publish → become effective* had no interface at all:
+   approval sets `lifecycle_state = 'APPROVED'` and stops, `publishDocumentVersion` has existed
+   since `0012`, and nothing under `apps/web/src/app/` calls it. POL-036 could not have passed.
+2. **POL-045 (#173)** — serving a controlled file. POL-044 (#171) stores bytes and
+   `ControlledFileStorage` has no read path, so a reader can see a file's name and size and
+   cannot obtain it.
+3. **POL-036** — the full flow. Note it needs **four** principals, not three: `document.publish`
+   first appears at Compliance Admin, so the approver cannot publish what they approved. The
+   exit criterion says three; the blueprint it derives from says *at least* three. Separation of
+   duties wins, and the fixture should not be bent to keep the count.
 4. Then the unstarted groups in *The work, in dependency order* below — applicability resolution
    and attestation, review cases, and evidence packs last.
 
