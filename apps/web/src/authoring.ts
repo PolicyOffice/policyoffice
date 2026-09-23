@@ -5,6 +5,11 @@ import {
 } from "@policyoffice/db/application-transaction";
 import { authorizationDataLoader } from "@policyoffice/db/authorization";
 import {
+  ControlledFileUploadError,
+  type ContentUploadClaims,
+  type ControlledFileStorage,
+} from "@policyoffice/storage";
+import {
   AuthzContext,
   CONTENT_REVISION_REQUIRED_CAPABILITIES,
   ContentRevisionNotFoundError,
@@ -17,6 +22,7 @@ import {
   decide,
   submitContentRevision,
   type Materiality,
+  type Sha256Digest,
   type VersionLifecycle,
 } from "../../../packages/domain/src/index";
 
@@ -49,11 +55,37 @@ export interface CreateVersionFormRequest {
   readonly documentId: string;
 }
 
-export interface SaveContentRevisionRequest {
+export interface CreateContentUploadSlotRequest {
   readonly sessionToken: string | undefined;
   readonly documentId: string;
   readonly versionId: string;
-  readonly contentBytes: Uint8Array;
+  readonly claimedDigest: string;
+  readonly claimedByteSize: number;
+}
+
+export interface FinalizeContentUploadRequest {
+  readonly sessionToken: string | undefined;
+  readonly documentId: string;
+  readonly versionId: string;
+  readonly revisionId: string;
+  readonly slotId: string;
+  readonly claimedDigest: string;
+  readonly claimedByteSize: number;
+  readonly expiresAt: string;
+}
+
+export interface ContentStorageHandlerOptions extends AuthoringHandlerOptions {
+  readonly storage: ControlledFileStorage;
+}
+
+export interface ContentUploadSlotPayload {
+  readonly revisionId: string;
+  readonly slotId: string;
+  readonly claimedDigest: Sha256Digest;
+  readonly claimedByteSize: number;
+  readonly expiresAt: string;
+  readonly uploadUrl: string;
+  readonly requiredHeaders: Readonly<Record<string, string>>;
 }
 
 export interface DraftWorkspaceRequest {
@@ -103,6 +135,7 @@ interface DraftWorkspaceRow extends Record<string, unknown> {
 
 const RESPONSE_HEADERS = Object.freeze({ "cache-control": "no-store" });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SHA_256 = /^sha-256:[0-9a-f]{64}$/;
 
 function notFound(): Response {
   return Response.json({ error: "not_found" }, { status: 404, headers: RESPONSE_HEADERS });
@@ -118,7 +151,16 @@ function requiredText(value: string): string | null {
 }
 
 function positiveInteger(value: number): boolean {
-  return Number.isInteger(value) && value > 0;
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+function sha256Digest(value: string): Sha256Digest | null {
+  return SHA_256.test(value) ? (value as Sha256Digest) : null;
+}
+
+function validDate(value: string): Date | null {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? null : date;
 }
 
 function parseMateriality(value: string | null): Materiality | null | undefined {
@@ -213,6 +255,28 @@ async function versionBelongsToDocument(
         and variant.id = version.document_variant_id
       where version.tenant_id = $1::uuid and version.id = $2::uuid
         and variant.document_id = $3::uuid`,
+    [tenantId, versionId, documentId],
+  );
+  return rows[0]?.document_id === documentId;
+}
+
+async function draftableVersionBelongsToDocument(
+  transaction: ApplicationTransaction,
+  tenantId: string,
+  documentId: string,
+  versionId: string,
+): Promise<boolean> {
+  const { rows } = await transaction.query<
+    VersionDocumentRow & { lifecycle_state: VersionLifecycle }
+  >(
+    `select variant.document_id, version.lifecycle_state
+       from document_version version
+       join document_variant variant
+         on variant.tenant_id = version.tenant_id
+        and variant.id = version.document_variant_id
+      where version.tenant_id = $1::uuid and version.id = $2::uuid
+        and variant.document_id = $3::uuid
+        and version.lifecycle_state in ('DRAFT', 'CHANGES_REQUESTED')`,
     [tenantId, versionId, documentId],
   );
   return rows[0]?.document_id === documentId;
@@ -486,10 +550,10 @@ export function createVersionHandler(
   };
 }
 
-/** Save one immutable drafting snapshot. Authorization is deliberately local to this route. */
-export function createContentRevisionHandler(
-  options: AuthoringHandlerOptions,
-): (request: SaveContentRevisionRequest) => Promise<Response> {
+/** Issue one revision-scoped direct-upload credential after the edit-draft decision. */
+export function createContentUploadSlotHandler(
+  options: ContentStorageHandlerOptions,
+): (request: CreateContentUploadSlotRequest) => Promise<Response> {
   const clock = options.clock ?? (() => new Date());
   const idFactory = options.idFactory ?? randomUUID;
 
@@ -497,6 +561,8 @@ export function createContentRevisionHandler(
     if (!request.sessionToken || !UUID.test(request.documentId) || !UUID.test(request.versionId)) {
       return notFound();
     }
+    const claimedDigest = sha256Digest(request.claimedDigest);
+    if (!claimedDigest || !positiveInteger(request.claimedByteSize)) return notFound();
     const instant = clock();
     const response = await withTenantTransaction(
       { tenantId: options.tenantId, sessionToken: request.sessionToken, instant },
@@ -515,7 +581,7 @@ export function createContentRevisionHandler(
         if (!decision.allowed) return notFound();
         if (transaction.context.principal.type !== "USER") return notFound();
         if (
-          !(await versionBelongsToDocument(
+          !(await draftableVersionBelongsToDocument(
             transaction,
             options.tenantId,
             request.documentId,
@@ -524,41 +590,143 @@ export function createContentRevisionHandler(
         ) {
           return notFound();
         }
-        if (
-          !(request.contentBytes instanceof Uint8Array) ||
-          request.contentBytes.byteLength === 0
-        ) {
-          return redirect(`/author/documents/${request.documentId}/versions/${request.versionId}`);
-        }
 
-        const configurationVersionId = await activeConfigurationVersionId(
-          transaction,
-          options.tenantId,
-          instant,
-        );
-        const saved = await createContentRevision(transaction, {
+        const slot = await options.storage.createUploadSlot({
           tenantId: options.tenantId,
           revisionId: idFactory(),
           documentVersionId: request.versionId,
-          createdByUserId: transaction.context.principal.id,
-          contentBytes: request.contentBytes,
-          actor: { type: "USER", id: transaction.context.principal.id },
-          configurationVersionId,
-          occurredAt: instant,
-          requestId: idFactory(),
-          correlationId: idFactory(),
-          sourceChannel: "WEB",
+          slotId: idFactory(),
+          claimedDigest,
+          claimedByteSize: request.claimedByteSize,
+          issuedAt: instant,
         });
-        const params = new URLSearchParams({
-          revisionId: saved.id,
-          revisionRowVersion: String(saved.rowVersion),
-          versionRowVersion: String(saved.versionRowVersion),
-        });
-        return redirect(
-          `/author/documents/${request.documentId}/versions/${request.versionId}?${params}`,
+        return Response.json(
+          {
+            revisionId: slot.revisionId,
+            slotId: slot.slotId,
+            claimedDigest: slot.claimedDigest,
+            claimedByteSize: slot.claimedByteSize,
+            expiresAt: slot.expiresAt.toISOString(),
+            uploadUrl: slot.uploadUrl,
+            requiredHeaders: slot.requiredHeaders,
+          } satisfies ContentUploadSlotPayload,
+          { status: 201, headers: RESPONSE_HEADERS },
         );
       },
     );
+    return response ?? notFound();
+  };
+}
+
+/** Verify stored bytes, write the content key once, then record the immutable snapshot. */
+export function createContentRevisionHandler(
+  options: ContentStorageHandlerOptions,
+): (request: FinalizeContentUploadRequest) => Promise<Response> {
+  const clock = options.clock ?? (() => new Date());
+  const idFactory = options.idFactory ?? randomUUID;
+
+  return async (request) => {
+    if (
+      !request.sessionToken ||
+      !UUID.test(request.documentId) ||
+      !UUID.test(request.versionId) ||
+      !UUID.test(request.revisionId) ||
+      !UUID.test(request.slotId)
+    ) {
+      return notFound();
+    }
+    const claimedDigest = sha256Digest(request.claimedDigest);
+    const expiresAt = validDate(request.expiresAt);
+    if (!claimedDigest || !positiveInteger(request.claimedByteSize) || !expiresAt) {
+      return notFound();
+    }
+    const instant = clock();
+    const claims: ContentUploadClaims = {
+      tenantId: options.tenantId,
+      documentVersionId: request.versionId,
+      revisionId: request.revisionId,
+      slotId: request.slotId,
+      claimedDigest,
+      claimedByteSize: request.claimedByteSize,
+      expiresAt,
+    };
+    let stored = false;
+    const response = await withTenantTransaction(
+      { tenantId: options.tenantId, sessionToken: request.sessionToken, instant },
+      async (transaction) => {
+        const context = new AuthzContext({
+          tenantId: options.tenantId,
+          principal: transaction.context.principal,
+          instant,
+          load: authorizationDataLoader(transaction),
+        });
+        const decision = await decide(context, CONTENT_REVISION_REQUIRED_CAPABILITIES.create, {
+          tenantId: options.tenantId,
+          type: "DOCUMENT_VERSION",
+          id: request.versionId,
+        });
+        if (!decision.allowed) return notFound();
+        if (transaction.context.principal.type !== "USER") return notFound();
+        if (
+          !(await draftableVersionBelongsToDocument(
+            transaction,
+            options.tenantId,
+            request.documentId,
+            request.versionId,
+          ))
+        ) {
+          return notFound();
+        }
+
+        try {
+          const uploaded = await options.storage.verifyAndStoreUpload(claims, instant);
+          const configurationVersionId = await activeConfigurationVersionId(
+            transaction,
+            options.tenantId,
+            instant,
+          );
+          const saved = await createContentRevision(transaction, {
+            tenantId: options.tenantId,
+            revisionId: request.revisionId,
+            documentVersionId: request.versionId,
+            createdByUserId: transaction.context.principal.id,
+            contentBytes: uploaded.contentBytes,
+            actor: { type: "USER", id: transaction.context.principal.id },
+            configurationVersionId,
+            occurredAt: instant,
+            requestId: idFactory(),
+            correlationId: idFactory(),
+            sourceChannel: "WEB",
+          });
+          stored = true;
+          const params = new URLSearchParams({
+            revisionId: saved.id,
+            revisionRowVersion: String(saved.rowVersion),
+            versionRowVersion: String(saved.versionRowVersion),
+          });
+          return redirect(
+            `/author/documents/${request.documentId}/versions/${request.versionId}?${params}`,
+          );
+        } catch (error) {
+          if (error instanceof ControlledFileUploadError) {
+            return redirect(
+              `/author/documents/${request.documentId}/versions/${request.versionId}?error=upload`,
+            );
+          }
+          if (error instanceof ContentRevisionNotFoundError) return notFound();
+          throw error;
+        }
+      },
+    );
+    if (stored) {
+      try {
+        await options.storage.consumeUpload(claims);
+      } catch {
+        // The governed object and revision are already committed. The quarantine object
+        // still makes the conditional presigned PUT single-use, so cleanup failure must
+        // not report the completed governance write as failed.
+      }
+    }
     return response ?? notFound();
   };
 }

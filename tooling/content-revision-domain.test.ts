@@ -3,10 +3,12 @@ import {
   CONTENT_REVISION_REQUIRED_CAPABILITIES,
   ContentRevisionLifecycleError,
   addContentAttachment,
+  contentStorageReference,
   createContentRevision,
   inspectContentMediaType,
   type AuditTransaction,
   type CreateContentRevisionInput,
+  type Sha256Digest,
 } from "../packages/domain/src/index.js";
 
 const TENANT = "95000000-0000-0000-0000-000000000001";
@@ -94,5 +96,15 @@ describe("content revision domain contracts", () => {
       "text/plain",
     );
     expect(inspectContentMediaType(new Uint8Array([0, 0xff, 0]))).toBe("application/octet-stream");
+  });
+
+  it("INV-TEN-001 / INV-TEN-003: derives a tenant-partitioned content key", () => {
+    const digest = `sha-256:${"a".repeat(64)}` as Sha256Digest;
+    expect(contentStorageReference(TENANT.toUpperCase(), digest)).toBe(
+      `t/${TENANT}/blob/${"a".repeat(64)}`,
+    );
+    expect(() => contentStorageReference(TENANT, "sha-256:not-a-digest" as Sha256Digest)).toThrow(
+      TypeError,
+    );
   });
 });

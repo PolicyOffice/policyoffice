@@ -11,6 +11,11 @@ if (!foreignDocumentId || !foreignVersionId) {
 test("INV-AUTH-001 / INV-AUTH-004 / INV-AUTH-014 / INV-DOC-007 / INV-TEN-002 / INV-VER-001 / INV-VER-002: sign in, author and submit a policy, and sign out", async ({
   page,
 }, testInfo) => {
+  test.slow();
+  const retrySuffix = testInfo.retry === 0 ? "" : ` Retry ${testInfo.retry}`;
+  const documentCode = testInfo.retry === 0 ? "POL-E2E-033" : `POL-E2E-033-R${testInfo.retry}`;
+  const documentTitle = `Browser Author Path Policy${retrySuffix}`;
+
   await page.goto("/sign-in");
   await expect(page.getByRole("heading", { name: "Sign in to PolicyOffice" })).toBeVisible();
   const beforePath = testInfo.outputPath("sign-in.png");
@@ -38,12 +43,12 @@ test("INV-AUTH-001 / INV-AUTH-004 / INV-AUTH-014 / INV-DOC-007 / INV-TEN-002 / I
 
   await page.getByRole("link", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: "Create document" })).toBeVisible();
-  await page.getByLabel("Document code").fill("POL-E2E-033");
-  await page.getByLabel("Title").fill("Browser Author Path Policy");
+  await page.getByLabel("Document code").fill(documentCode);
+  await page.getByLabel("Title").fill(documentTitle);
   await page.getByRole("button", { name: "Create document" }).click();
 
   await expect(page.getByRole("heading", { name: "Start version" })).toBeVisible();
-  await expect(page.getByText("POL-E2E-033 Browser Author Path Policy — PLANNED")).toBeVisible();
+  await expect(page.getByText(`${documentCode} ${documentTitle} — PLANNED`)).toBeVisible();
   const documentAuthorUrl = page.url();
   const createdPath = testInfo.outputPath("document-created.png");
   await page.screenshot({ path: createdPath, fullPage: true });
@@ -71,7 +76,7 @@ test("INV-AUTH-001 / INV-AUTH-004 / INV-AUTH-014 / INV-DOC-007 / INV-TEN-002 / I
   });
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page.getByRole("button", { name: "Submit for review" })).toBeVisible();
-  expect(page.url()).not.toBe(firstRevisionUrl);
+  await expect(page).not.toHaveURL(firstRevisionUrl);
   const draftPath = testInfo.outputPath("draft-saved.png");
   await page.screenshot({ path: draftPath, fullPage: true });
   await testInfo.attach("draft-saved", { path: draftPath, contentType: "image/png" });
@@ -85,7 +90,7 @@ test("INV-AUTH-001 / INV-AUTH-004 / INV-AUTH-014 / INV-DOC-007 / INV-TEN-002 / I
   await testInfo.attach("version-submitted", { path: submittedPath, contentType: "image/png" });
 
   await page.goto("/");
-  await expect(page.getByText("Browser Author Path Policy")).toBeVisible();
+  await expect(page.getByText(documentTitle)).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL("http://localhost:3000/sign-in");
