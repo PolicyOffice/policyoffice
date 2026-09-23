@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  type ContentStorageHandlerOptions,
+  type ContentUploadSlotPayload,
+  createContentUploadSlotHandler,
   createContentRevisionHandler,
   createDraftWorkspaceHandler,
   createDocumentHandler,
@@ -11,7 +14,17 @@ import {
   createDocumentFormHandler,
   createDocumentRegisterHandler,
 } from "../../../apps/web/src/document-register.js";
-import { issueSession, type Capability } from "../../domain/src/index.js";
+import {
+  inspectContentBytes,
+  issueSession,
+  sha256Digest,
+  type Capability,
+} from "../../domain/src/index.js";
+import {
+  createControlledFileStorage,
+  prepareLocalStorageBucket,
+  storageConfiguration,
+} from "../../storage/src/index.js";
 import { withTenantTransaction, type ApplicationTransaction } from "./application-transaction.js";
 import { buildFixtureSet, loadFixtureSet, removeFixtureSetForTests } from "./fixtures.js";
 
@@ -42,6 +55,8 @@ const CREATED_VARIANT = "c3000000-0000-0000-0019-000000000001";
 const CREATED_VERSION = "c3000000-0000-0000-0020-000000000001";
 const FIRST_REVISION = "c3000000-0000-0000-0021-000000000001";
 const SECOND_REVISION = "c3000000-0000-0000-0021-000000000002";
+const FIRST_SLOT = "c3000000-0000-0000-0022-000000000001";
+const SECOND_SLOT = "c3000000-0000-0000-0022-000000000002";
 const MISSING_DOCUMENT = "c3000000-0000-0000-0099-000000000001";
 const REQUEST_INSTANT = new Date("2026-09-13T12:00:00.000Z");
 const SESSION_INSTANT = new Date("2026-09-13T11:55:00.000Z");
@@ -57,6 +72,27 @@ const NOT_FOUND_SHAPE = Object.freeze({
   cacheControl: "no-store",
   body: '{"error":"not_found"}',
 });
+
+const storageConfig = storageConfiguration({
+  S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:9000",
+  S3_ACCESS_KEY: process.env.S3_ACCESS_KEY ?? "minioadmin",
+  S3_SECRET_KEY: process.env.S3_SECRET_KEY ?? "minioadmin",
+  S3_BUCKET: "policyoffice-pol044-handler-test",
+  S3_REGION: process.env.S3_REGION ?? "us-east-1",
+  S3_FORCE_PATH_STYLE: "true",
+});
+const realStorage = createControlledFileStorage(storageConfig);
+const requestStorage: ContentStorageHandlerOptions["storage"] = {
+  createUploadSlot(input) {
+    return realStorage.createUploadSlot({ ...input, issuedAt: new Date() });
+  },
+  verifyAndStoreUpload(claims, now) {
+    return realStorage.verifyAndStoreUpload(claims, now);
+  },
+  consumeUpload(claims) {
+    return realStorage.consumeUpload(claims);
+  },
+};
 
 const tokens = new Map<string, string>();
 
@@ -76,6 +112,39 @@ function generatedIds(namespace: number, count: number): string[] {
     (_, index) =>
       `c3000000-0000-0000-${String(namespace).padStart(4, "0")}-${String(index + 1).padStart(12, "0")}`,
   );
+}
+
+function storageFor(
+  bytes: Uint8Array,
+  options: Readonly<{ failConsumption?: boolean }> = {},
+): ContentStorageHandlerOptions["storage"] {
+  const copied = new Uint8Array(bytes);
+  return {
+    async createUploadSlot() {
+      throw new Error("this test finalizes a previously issued slot");
+    },
+    async verifyAndStoreUpload(claims) {
+      const inspected = inspectContentBytes(claims.tenantId, copied);
+      return {
+        ...inspected,
+        contentBytes: new Uint8Array(copied),
+        quarantineKey: `quarantine/${claims.slotId}`,
+      };
+    },
+    async consumeUpload() {
+      if (options.failConsumption) throw new Error("simulated quarantine cleanup failure");
+    },
+  };
+}
+
+function finalizationRequest(bytes: Uint8Array, revisionId: string, slotId: string) {
+  return {
+    revisionId,
+    slotId,
+    claimedDigest: sha256Digest(bytes),
+    claimedByteSize: bytes.byteLength,
+    expiresAt: new Date(REQUEST_INSTANT.valueOf() + 60_000).toISOString(),
+  };
 }
 
 async function asPrincipal<T>(
@@ -111,6 +180,48 @@ function token(userId: string): string {
   const value = tokens.get(userId);
   if (!value) throw new Error(`missing test session for ${userId}`);
   return value;
+}
+
+async function directUpload(
+  bytes: Uint8Array,
+  claimedDigest: string,
+  documentId: string = FIXTURE_DOCUMENT_A,
+  versionId: string = FIXTURE_VERSION_A,
+): Promise<{ slot: ContentUploadSlotPayload; finalized: Response }> {
+  const slotResponse = await createContentUploadSlotHandler({
+    tenantId: TENANT_A,
+    clock: () => REQUEST_INSTANT,
+    storage: requestStorage,
+  })({
+    sessionToken: token(FULL_AUTHOR),
+    documentId,
+    versionId,
+    claimedDigest,
+    claimedByteSize: bytes.byteLength,
+  });
+  expect(slotResponse.status).toBe(201);
+  const slot = (await slotResponse.json()) as ContentUploadSlotPayload;
+  const uploadResponse = await fetch(slot.uploadUrl, {
+    method: "PUT",
+    headers: slot.requiredHeaders,
+    body: bytes,
+  });
+  expect(uploadResponse.status).toBe(200);
+  const finalized = await createContentRevisionHandler({
+    tenantId: TENANT_A,
+    clock: () => REQUEST_INSTANT,
+    storage: requestStorage,
+  })({
+    sessionToken: token(FULL_AUTHOR),
+    documentId,
+    versionId,
+    revisionId: slot.revisionId,
+    slotId: slot.slotId,
+    claimedDigest: slot.claimedDigest,
+    claimedByteSize: slot.claimedByteSize,
+    expiresAt: slot.expiresAt,
+  });
+  return { slot, finalized };
 }
 
 async function insertAuthorFixtures(): Promise<void> {
@@ -151,6 +262,7 @@ async function insertAuthorFixtures(): Promise<void> {
 }
 
 beforeAll(async () => {
+  await prepareLocalStorageBucket(storageConfig);
   await removeFixtureSetForTests("test");
   await loadFixtureSet("test");
   await insertAuthorFixtures();
@@ -222,27 +334,31 @@ describe("the author path request boundaries", () => {
       canSubmit: true,
     });
 
+    const firstBytes = new TextEncoder().encode("First author draft.");
+    const secondBytes = new TextEncoder().encode("Second author draft.");
     const firstSave = createContentRevisionHandler({
       tenantId: TENANT_A,
       clock: () => REQUEST_INSTANT,
-      idFactory: ids(FIRST_REVISION, ...generatedIds(32, 2)),
+      idFactory: ids(...generatedIds(32, 2)),
+      storage: storageFor(firstBytes, { failConsumption: true }),
     });
     const secondSave = createContentRevisionHandler({
       tenantId: TENANT_A,
       clock: () => REQUEST_INSTANT,
-      idFactory: ids(SECOND_REVISION, ...generatedIds(33, 2)),
+      idFactory: ids(...generatedIds(33, 2)),
+      storage: storageFor(secondBytes),
     });
     const firstResponse = await firstSave({
       sessionToken: token(FULL_AUTHOR),
       documentId: CREATED_DOCUMENT,
       versionId: CREATED_VERSION,
-      contentBytes: new TextEncoder().encode("First author draft."),
+      ...finalizationRequest(firstBytes, FIRST_REVISION, FIRST_SLOT),
     });
     const secondResponse = await secondSave({
       sessionToken: token(FULL_AUTHOR),
       documentId: CREATED_DOCUMENT,
       versionId: CREATED_VERSION,
-      contentBytes: new TextEncoder().encode("Second author draft."),
+      ...finalizationRequest(secondBytes, SECOND_REVISION, SECOND_SLOT),
     });
     const firstSavedLocation = new URL(firstResponse.headers.get("location") ?? "", "http://local");
     const secondSavedLocation = new URL(
@@ -366,6 +482,71 @@ describe("the author path request boundaries", () => {
     });
   });
 
+  it("INV-AUTH-001 / INV-TEN-001 / INV-VER-009 / INV-VER-010: authorizes a single-use slot and records only server-verified MinIO bytes", async () => {
+    const deniedHandler = createContentUploadSlotHandler({
+      tenantId: TENANT_A,
+      clock: () => REQUEST_INSTANT,
+      storage: requestStorage,
+    });
+    const deniedRequest = {
+      sessionToken: token(NO_SAVE_AUTHOR),
+      documentId: FIXTURE_DOCUMENT_A,
+      versionId: FIXTURE_VERSION_A,
+      claimedDigest: sha256Digest(new TextEncoder().encode("denied")),
+      claimedByteSize: 6,
+    };
+    const denied = await responseShape(await deniedHandler(deniedRequest));
+    const absent = await responseShape(
+      await deniedHandler({ ...deniedRequest, versionId: MISSING_DOCUMENT }),
+    );
+    expect(denied).toEqual(absent);
+
+    const submitted = await deniedHandler({
+      ...deniedRequest,
+      sessionToken: token(FULL_AUTHOR),
+      documentId: CREATED_DOCUMENT,
+      versionId: CREATED_VERSION,
+    });
+    expect(await responseShape(submitted)).toEqual(absent);
+
+    const mismatchedBytes = new TextEncoder().encode("the server measures this content");
+    const mismatched = await directUpload(mismatchedBytes, `sha-256:${"0".repeat(64)}`);
+    expect(mismatched.finalized.status).toBe(303);
+    expect(mismatched.finalized.headers.get("location")).toBe(
+      `/author/documents/${FIXTURE_DOCUMENT_A}/versions/${FIXTURE_VERSION_A}?error=upload`,
+    );
+    await asPrincipal(TENANT_A, FIXTURE_USER_A, async (transaction) => {
+      const { rows } = await transaction.query(
+        "select id from content_revision where tenant_id = $1 and id = $2",
+        [TENANT_A, mismatched.slot.revisionId],
+      );
+      expect(rows).toEqual([]);
+    });
+
+    const verifiedBytes = new TextEncoder().encode("the same server-verified governed bytes");
+    const first = await directUpload(verifiedBytes, sha256Digest(verifiedBytes));
+    const second = await directUpload(verifiedBytes, sha256Digest(verifiedBytes));
+    expect(first.finalized.status).toBe(303);
+    expect(second.finalized.status).toBe(303);
+
+    await asPrincipal(TENANT_A, FIXTURE_USER_A, async (transaction) => {
+      const { rows } = await transaction.query<
+        Record<string, unknown> & { id: string; content_ref: string }
+      >(
+        `select id, content_ref from content_revision
+          where tenant_id = $1 and id = any($2::uuid[])
+          order by id`,
+        [TENANT_A, [first.slot.revisionId, second.slot.revisionId]],
+      );
+      expect(rows).toHaveLength(2);
+      const expectedReference = `t/${TENANT_A}/blob/${sha256Digest(verifiedBytes).slice("sha-256:".length)}`;
+      expect(rows.map(({ content_ref }) => content_ref)).toEqual([
+        expectedReference,
+        expectedReference,
+      ]);
+    });
+  });
+
   it("INV-AUTH-001: denies document creation while the same user holds every other author capability", async () => {
     const handle = createDocumentHandler({
       tenantId: TENANT_A,
@@ -444,19 +625,29 @@ describe("the author path request boundaries", () => {
   });
 
   it("INV-AUTH-001: denies saving a revision identically to a missing version", async () => {
+    const bytes = new TextEncoder().encode("Denied author save.");
+    const countBefore = await asPrincipal(TENANT_A, FIXTURE_USER_A, async (transaction) => {
+      const { rows } = await transaction.query<Record<string, unknown> & { count: number }>(
+        `select count(*)::int as count from content_revision
+          where tenant_id = $1 and document_version_id = $2`,
+        [TENANT_A, FIXTURE_VERSION_A],
+      );
+      return rows[0]?.count ?? -1;
+    });
     const handle = createContentRevisionHandler({
       tenantId: TENANT_A,
       clock: () => REQUEST_INSTANT,
+      storage: storageFor(bytes),
     });
     const request = {
       sessionToken: token(NO_SAVE_AUTHOR),
       documentId: FIXTURE_DOCUMENT_A,
-      contentBytes: new TextEncoder().encode("Denied author save."),
+      ...finalizationRequest(bytes, FIRST_REVISION, FIRST_SLOT),
     };
     const denied = await responseShape(await handle({ ...request, versionId: FIXTURE_VERSION_A }));
     const absent = await responseShape(await handle({ ...request, versionId: MISSING_DOCUMENT }));
     const invalid = await responseShape(
-      await handle({ ...request, versionId: FIXTURE_VERSION_A, contentBytes: new Uint8Array() }),
+      await handle({ ...request, versionId: FIXTURE_VERSION_A, claimedByteSize: 0 }),
     );
 
     expect(denied).toEqual(absent);
@@ -474,11 +665,12 @@ describe("the author path request boundaries", () => {
       ),
     ).toEqual(absent);
     await asPrincipal(TENANT_A, FIXTURE_USER_A, async (transaction) => {
-      const { rows } = await transaction.query(
-        `select id from content_revision where tenant_id = $1 and document_version_id = $2`,
+      const { rows } = await transaction.query<Record<string, unknown> & { count: number }>(
+        `select count(*)::int as count from content_revision
+          where tenant_id = $1 and document_version_id = $2`,
         [TENANT_A, FIXTURE_VERSION_A],
       );
-      expect(rows).toHaveLength(1);
+      expect(rows).toEqual([{ count: countBefore }]);
     });
   });
 
@@ -545,6 +737,7 @@ describe("the author path request boundaries", () => {
   });
 
   it("INV-TEN-002: makes every document-addressed route return the same not-found for foreign ids", async () => {
+    const foreignBytes = new TextEncoder().encode("Foreign save attempt.");
     const createVersionBoundary = createVersionHandler({
       tenantId: TENANT_A,
       clock: () => REQUEST_INSTANT,
@@ -552,6 +745,7 @@ describe("the author path request boundaries", () => {
     const saveBoundary = createContentRevisionHandler({
       tenantId: TENANT_A,
       clock: () => REQUEST_INSTANT,
+      storage: storageFor(foreignBytes),
     });
     const submitBoundary = createSubmitContentRevisionHandler({
       tenantId: TENANT_A,
@@ -587,7 +781,7 @@ describe("the author path request boundaries", () => {
         sessionToken: token(FULL_AUTHOR),
         documentId: FIXTURE_DOCUMENT_B,
         versionId: FIXTURE_VERSION_B,
-        contentBytes: new TextEncoder().encode("Foreign save attempt."),
+        ...finalizationRequest(foreignBytes, SECOND_REVISION, SECOND_SLOT),
       }),
       submitBoundary({
         sessionToken: token(FULL_AUTHOR),

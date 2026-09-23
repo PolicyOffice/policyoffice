@@ -71,7 +71,7 @@ test("INV-AUTH-001 / INV-AUTH-004 / INV-AUTH-014 / INV-DOC-007 / INV-TEN-002 / I
   });
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page.getByRole("button", { name: "Submit for review" })).toBeVisible();
-  expect(page.url()).not.toBe(firstRevisionUrl);
+  await expect(page).not.toHaveURL(firstRevisionUrl);
   const draftPath = testInfo.outputPath("draft-saved.png");
   await page.screenshot({ path: draftPath, fullPage: true });
   await testInfo.attach("draft-saved", { path: draftPath, contentType: "image/png" });

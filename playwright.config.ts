@@ -26,6 +26,12 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ?? "postgres://app_role:app_role@localhost:5432/policyoffice",
       POLICYOFFICE_TENANT_ID: TEST_TENANT_ID,
+      S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:9000",
+      S3_ACCESS_KEY: process.env.S3_ACCESS_KEY ?? "minioadmin",
+      S3_SECRET_KEY: process.env.S3_SECRET_KEY ?? "minioadmin",
+      S3_BUCKET: process.env.S3_BUCKET ?? "policyoffice-playwright",
+      S3_REGION: process.env.S3_REGION ?? "us-east-1",
+      S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE ?? "true",
     },
   },
 });
