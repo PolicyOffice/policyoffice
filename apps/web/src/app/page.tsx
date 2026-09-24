@@ -8,6 +8,13 @@ export const dynamic = "force-dynamic";
 
 interface DocumentRegisterPayload {
   readonly canCreate: boolean;
+  readonly publicationCandidates: readonly Readonly<{
+    documentId: string;
+    versionId: string;
+    documentCode: string;
+    versionTitle: string;
+    displayLabel: string | null;
+  }>[];
   readonly documents: readonly Readonly<{
     id: string;
     documentCode: string;
@@ -25,7 +32,8 @@ export default async function DocumentRegisterPage() {
     sessionToken: cookieStore.get(SESSION_COOKIE.name)?.value,
   });
   if (!response.ok) redirect("/sign-in");
-  const { canCreate, documents } = (await response.json()) as DocumentRegisterPayload;
+  const { canCreate, documents, publicationCandidates } =
+    (await response.json()) as DocumentRegisterPayload;
 
   return (
     <main>
@@ -38,6 +46,23 @@ export default async function DocumentRegisterPage() {
       <p>
         <a href="/approvals">Approval inbox</a>
       </p>
+      {publicationCandidates.length > 0 ? (
+        <section aria-labelledby="publication-heading">
+          <h2 id="publication-heading">Ready to publish</h2>
+          <ul>
+            {publicationCandidates.map((candidate) => (
+              <li key={candidate.versionId}>
+                <a
+                  href={`/author/documents/${candidate.documentId}/versions/${candidate.versionId}/publication`}
+                >
+                  {candidate.documentCode} {candidate.versionTitle}
+                  {candidate.displayLabel ? ` — ${candidate.displayLabel}` : ""}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <ul>
         {documents.map((document) => (
           <li key={document.id}>
