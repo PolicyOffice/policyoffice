@@ -54,14 +54,14 @@ tenant-isolation or authorization test"* carried over from Phase 2 cannot be met
 boolean, deny-beats-allow in one pass with no specificity, containment along the administrative
 chain only, memoisation within a request and never across. It needs decomposing, not designing.
 
-**Decomposed into four tickets. All four are now written; three have landed.**
+**Decomposed into four tickets. All four have landed.**
 
 | | What | Status |
 |---|---|---|
 | POL-023 (#95) | The capability, scope and grant schema, the nine system roles, and a gate keeping them equal to `authorization-model.md`'s role table | **merged** #98 |
 | POL-024 (#100) | `decide()` itself: the `Decision` type, deny-beats-allow, containment, validity at check time, per-request memoisation | **merged** #101 |
 | POL-025 (#103) | The authorization matrix, generated from the role table — `ADR-0003` § *Proving it*, and Phase 2's carried-over exit criterion | **merged** #107 |
-| **POL-026 (#108)** | The context boundary: an architecture test that no repository function is reachable without a principal-carrying context | **ready** |
+| POL-026 (#108) | The context boundary: an architecture test that no repository function is reachable without a principal-carrying context | **merged** #111 |
 
 `decide()` exists and is proven — deny-beats-allow has unit and property coverage, expiry is
 evaluated at the fixed instant, and the evaluator does **one** query against a thousand grants
@@ -153,20 +153,33 @@ Written one at a time, as the authorization epic was.
 | POL-031 (#130) | The request context, and the first capability ever enforced at an entry point | **merged** #133 |
 | POL-032 (#134) | Sign-in and sign-out, so a person rather than a test can hold a session | **merged** #136 |
 | POL-033 (#137) | The author's path — create, draft, submit. Four route-level checks over three distinct capabilities, because `document.edit_draft` covers both starting a version and saving a revision (#139) | **merged** #141 |
-| POL-034 | **The approval inbox**, built to `information-architecture.md` | needs the approval subsystem first |
-| POL-035 | **The reader view**, built to `information-architecture.md` | POL-033 has landed; in the reference flow it follows approval, since nothing becomes effective without it |
-| POL-036 | Playwright drives the **full** reference flow with three principals | last |
+| POL-034 (#166) | **The approval inbox**, built to `information-architecture.md` | **merged** #167 |
+| POL-035 (#168) | **The reader view**, built to `information-architecture.md` | POL-033 has landed; in the reference flow it follows approval, since nothing becomes effective without it |
+| POL-046 (#174) | **The publication entry point.** Publication has existed below the UI since `0012`; nothing calls it | approval stops at `APPROVED` |
+| POL-045 (#173) | **Serving a controlled file to a reader.** POL-044 stores files; nothing reads them back | needs POL-035 |
+| POL-036 | Playwright drives the **full** reference flow, with a publishing principal beside author, approver and reader | last |
 
 ### What comes next, in order
 
-1. **POL-041 (#159)** — body resolutions, where the institution decides rather than a person.
-   Written on 2026-09-19 and **ready**, now that POL-040 merged as #158: decisions advance an
-   `ALL` stage, and a `BODY_RESOLUTION` stage is deliberately refused until this lands.
-2. **POL-042** — approvers who can no longer act, and cancellation. Written after POL-041 lands,
-   and the last piece of the approval subsystem.
-3. **POL-034** the approval inbox, **POL-035** the reader view, **POL-036** the full Playwright flow.
+1. **POL-046 (#174)** — the publication entry point, and the reason this list gained an entry it
+   did not have. The chain *approve → publish → become effective* had no interface at all:
+   approval sets `lifecycle_state = 'APPROVED'` and stops, `publishDocumentVersion` has existed
+   since `0012`, and nothing under `apps/web/src/app/` calls it. POL-036 could not have passed.
+2. **POL-045 (#173)** — serving a controlled file. POL-044 (#171) stores bytes and
+   `ControlledFileStorage` has no read path, so a reader can see a file's name and size and
+   cannot obtain it.
+3. **POL-036** — the full flow. Note it needs **four** principals, not three: `document.publish`
+   first appears at Compliance Admin, so the approver cannot publish what they approved. The
+   exit criterion says three; the blueprint it derives from says *at least* three. Separation of
+   duties wins, and the fixture should not be bent to keep the count.
 4. Then the unstarted groups in *The work, in dependency order* below — applicability resolution
    and attestation, review cases, and evidence packs last.
+
+**This list records sequence; the tables record what merged.** Neither carries *ready* or *in
+progress* for an unmerged ticket. Those live on the issue as labels, they change while a pull
+request to this file waits to be reviewed, and a row asserting them lands false current state —
+which is what happened on #160 and twice on #164. A row gains **merged** and its number when the
+work lands, and that is a fact which never goes stale; until then it names the ticket and stops.
 
 **Split again on 2026-09-12, and this is the last time it should be needed.** POL-032 was going to
 carry sign-in *and* the author's create/draft/submit path. Sign-in alone adds a third input shape to
@@ -219,10 +232,12 @@ Commercial V1, under § *Configurable workflows*. Written one ticket at a time:
 | POL-038 (#146) | Templates and mandated authority as data: `workflow_template` and `workflow_template_version`, versions immutable (INV-APR-010), the Pilot stage shape, `mandated_authority` as a structure, the INV-APR-020 floor checked when a template version is published, and seeded templates as ordinary tenant-owned rows | **merged** #149 |
 | POL-039 (#153) | Runs start at submission: participants resolved and frozen (INV-APR-012), the mandate checked again at run start (INV-APR-020), `approval_run.started`, `approval_stage.started`, `approval_task.assigned` | **merged** #156 |
 | POL-040 (#157) | Approver decisions — `APPROVE`, `REQUEST_CHANGES`, `REJECT` (INV-APR-001, INV-APR-007), serial stages (INV-APR-008), completion exactly once (INV-APR-009), changes ending the snapshot and resubmission opening a fresh run (INV-APR-003, INV-APR-004). `0010` lets `IN_REVIEW → APPROVED` happen without any run today; this closes it | **merged** #158 |
-| **POL-041 (#159)** | Body resolutions — `BODY_RESOLUTION`, `body.act_for` (INV-APR-023), the body distinguished from its recorder (INV-APR-021), no resolution date before submission (INV-APR-022), evidence fields per configuration (INV-APR-024) | **ready** |
-| POL-042 | Approvers who can no longer act — unresolvable tasks and blocked runs (INV-APR-005, INV-APR-013) — and cancellation, `document-lifecycle.md` transition 7 | after POL-040 |
+| POL-041 (#159) | Body resolutions — `BODY_RESOLUTION`, `body.act_for` (INV-APR-023), the body distinguished from its recorder (INV-APR-021), no resolution date before submission (INV-APR-022), evidence fields per configuration (INV-APR-024) | **merged** #161 |
+| **POL-042 (#163)** | Approvers who can no longer act — unresolvable tasks and blocked runs (INV-APR-005, INV-APR-013) — and cancellation, `document-lifecycle.md` transition 7 | **merged** #165 |
 
-POL-034, the inbox, follows POL-040 for individual approvers and POL-041 for bodies.
+POL-034, the inbox, follows POL-042, the last of them: it surfaces individual approvers'
+tasks, body resolutions awaiting a recorder, and the blocked runs POL-042 introduces —
+which #163 calls exactly what the inbox must show.
 
 **The stage shape and the mandated-authority structure were specified on 2026-09-16**, in
 `approval-workflows.md` § *The template, as data* and § *The floor under every template*, and
