@@ -4,6 +4,7 @@ import {
   removeFixtureSetForTests,
 } from "../packages/db/src/fixtures.ts";
 import { withTenantTransaction } from "../packages/db/src/application-transaction.ts";
+import { prepareLocalStorageBucket, storageConfiguration } from "../packages/storage/src/index.ts";
 import { withSuperuser__BYPASSES_RLS } from "../packages/testing/src/index.ts";
 
 const BROWSER_AUTHOR_ID = "c6000000-0000-0000-0001-000000000001";
@@ -49,6 +50,16 @@ async function removeReaderFixture(tenantId: string): Promise<void> {
 }
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
+  await prepareLocalStorageBucket(
+    storageConfiguration({
+      S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:9000",
+      S3_ACCESS_KEY: process.env.S3_ACCESS_KEY ?? "minioadmin",
+      S3_SECRET_KEY: process.env.S3_SECRET_KEY ?? "minioadmin",
+      S3_BUCKET: process.env.S3_BUCKET ?? "policyoffice-playwright",
+      S3_REGION: process.env.S3_REGION ?? "us-east-1",
+      S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE ?? "true",
+    }),
+  );
   const fixture = buildFixtureSet("test");
   const tenant = fixture.tenants[0];
   if (!tenant) throw new Error("the browser fixture requires a tenant");

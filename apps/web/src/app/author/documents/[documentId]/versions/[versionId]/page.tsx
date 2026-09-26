@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createDraftWorkspaceHandler, type DraftWorkspacePayload } from "@/authoring";
 import { installationTenantId } from "@/installation-tenant";
 import { SESSION_COOKIE } from "@/session-cookie";
+import { ContentUploadForm } from "./content-upload-form";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export default async function DraftWorkspacePage({
     workspace.lifecycleState === "DRAFT" || workspace.lifecycleState === "CHANGES_REQUESTED";
   const canSubmit = workspace.lifecycleState === "DRAFT" && workspace.canSubmit && selectedRevision;
   const submitted = workspace.lifecycleState === "IN_REVIEW";
+  const uploadError = queryText(query.error) === "upload";
 
   return (
     <main>
@@ -62,26 +64,20 @@ export default async function DraftWorkspacePage({
         <p>The selected revision is frozen and the version is now in review.</p>
       ) : canDraft ? (
         <>
-          <form
-            action={`/author/documents/${documentId}/versions/${versionId}/revisions`}
-            encType="multipart/form-data"
-            method="post"
-          >
-            <label htmlFor="content">Candidate policy file</label>
-            <input id="content" name="content" required type="file" />
-            <button type="submit">Save draft</button>
-          </form>
-          {canSubmit ? (
-            <form
-              action={`/author/documents/${documentId}/versions/${versionId}/submit`}
-              method="post"
-            >
-              <input name="revisionId" type="hidden" value={revisionId} />
-              <input name="expectedRevisionRowVersion" type="hidden" value={revisionRowVersion} />
-              <input name="expectedVersionRowVersion" type="hidden" value={versionRowVersion} />
-              <button type="submit">Submit for review</button>
-            </form>
-          ) : null}
+          {uploadError ? <p role="alert">The uploaded file could not be verified.</p> : null}
+          <ContentUploadForm
+            documentId={documentId}
+            submission={
+              canSubmit
+                ? {
+                    revisionId,
+                    revisionRowVersion,
+                    versionRowVersion,
+                  }
+                : null
+            }
+            versionId={versionId}
+          />
         </>
       ) : (
         <p>Current version state: {workspace.lifecycleState}.</p>

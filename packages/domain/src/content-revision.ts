@@ -99,6 +99,13 @@ export interface GovernedAttachment {
   rowVersion: number;
 }
 
+export interface InspectedContentBytes {
+  mediaType: string;
+  byteSize: number;
+  digest: Sha256Digest;
+  storageRef: string;
+}
+
 export interface ChangedContentRevision {
   id: string;
   canonicalManifest: string;
@@ -151,6 +158,7 @@ interface AttachmentRow extends Record<string, unknown> {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SHA_256 = /^sha-256:[0-9a-f]{64}$/;
 const ACTOR_TYPES = new Set<AuditActorType>(["USER", "BODY", "API_CLIENT", "SYSTEM"]);
 const SOURCE_CHANNELS = new Set<AuditSourceChannel>(["WEB", "API", "JOB", "IMPORT"]);
 const TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
@@ -296,25 +304,25 @@ export function inspectContentMediaType(bytes: Uint8Array): string {
   return "application/octet-stream";
 }
 
-function storageReference(tenantId: string, digest: Sha256Digest): string {
+/** ADR-0004: content addressing is tenant-partitioned before the digest component. */
+export function contentStorageReference(tenantId: string, digest: Sha256Digest): string {
+  requireUuid(tenantId, "tenantId");
+  if (!SHA_256.test(digest)) {
+    throw new TypeError("digest must use sha-256:<64 lowercase hexadecimal characters>");
+  }
   return `t/${tenantId.toLowerCase()}/blob/${digest.slice("sha-256:".length)}`;
 }
 
-function inspectBytes(
-  tenantId: string,
-  bytes: Uint8Array,
-): {
-  mediaType: string;
-  byteSize: number;
-  digest: Sha256Digest;
-  storageRef: string;
-} {
-  const digest = sha256Digest(bytes);
+/** Measure governed bytes on the server; no caller-supplied property is trusted. */
+export function inspectContentBytes(tenantId: string, bytes: Uint8Array): InspectedContentBytes {
+  requireUuid(tenantId, "tenantId");
+  const copied = copyBytes(bytes, "bytes");
+  const digest = sha256Digest(copied);
   return {
-    mediaType: inspectContentMediaType(bytes),
-    byteSize: bytes.byteLength,
+    mediaType: inspectContentMediaType(copied),
+    byteSize: copied.byteLength,
     digest,
-    storageRef: storageReference(tenantId, digest),
+    storageRef: contentStorageReference(tenantId, digest),
   };
 }
 
@@ -508,7 +516,7 @@ export async function createContentRevision(
   }
   if (version.lifecycle_state !== "DRAFT") throw new ContentRevisionLifecycleError();
 
-  const inspected = inspectBytes(input.tenantId, bytes);
+  const inspected = inspectContentBytes(input.tenantId, bytes);
   const manifest = buildCanonicalManifest({
     contentRevisionId: input.revisionId,
     contentParts: [{ partId: "body", mediaType: inspected.mediaType, digest: inspected.digest }],
@@ -610,7 +618,7 @@ export async function addContentAttachment(
   const bytes = copyBytes(input.bytes, "bytes");
   const revision = await lockRevision(transaction, input.tenantId, input.revisionId);
   requireEditableRevision(revision, input.expectedRevisionRowVersion);
-  const inspected = inspectBytes(input.tenantId, bytes);
+  const inspected = inspectContentBytes(input.tenantId, bytes);
   const { rows } = await transaction.query<AttachmentRow>(
     `insert into content_attachment (
        tenant_id, id, content_revision_id, filename, media_type,
@@ -665,7 +673,7 @@ export async function replaceContentAttachment(
   const bytes = copyBytes(input.bytes, "bytes");
   const revision = await lockRevision(transaction, input.tenantId, input.revisionId);
   requireEditableRevision(revision, input.expectedRevisionRowVersion);
-  const inspected = inspectBytes(input.tenantId, bytes);
+  const inspected = inspectContentBytes(input.tenantId, bytes);
   const { rows } = await transaction.query<AttachmentRow>(
     `update content_attachment
         set filename = $4::text, media_type = $5::text, byte_size = $6::bigint,
