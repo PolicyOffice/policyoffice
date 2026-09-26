@@ -41,8 +41,10 @@ export default async function DocumentRegisterPage() {
       <ul>
         {documents.map((document) => (
           <li key={document.id}>
-            <strong>{document.documentCode}</strong> {document.canonicalTitle} —{" "}
-            {document.lifecycleStatus}
+            <a href={`/documents/${document.id}`}>
+              <strong>{document.documentCode}</strong> {document.canonicalTitle}
+            </a>{" "}
+            — {document.lifecycleStatus}
           </li>
         ))}
       </ul>
