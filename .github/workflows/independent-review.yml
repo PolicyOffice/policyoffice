@@ -9,7 +9,7 @@ name: independent review
 # nobody looked at cannot ride in behind a stale approval.
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
   issue_comment:
     types: [created, edited]
@@ -26,39 +26,38 @@ jobs:
     # wrong one.
     name: record independent review
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.event.issue.pull_request
+    if: github.event_name == 'pull_request_target' || github.event.issue.pull_request
     permissions:
       contents: read
       statuses: write
       pull-requests: read
     steps:
-      # No checkout of pull-request code. This workflow reads comments and writes a commit
-      # status; it must never execute the code it is reporting on.
+      # No checkout of pull-request code. The evaluator and reviewer list are fetched from
+      # the default branch; the pull request's sha is comparison data, never executable code.
       - name: Evaluate
         env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR: ${{ github.event_name == 'pull_request' && github.event.number || github.event.issue.number }}
+          PR: ${{ github.event_name == 'pull_request_target' && github.event.number || github.event.issue.number }}
         run: |
           set -euo pipefail
           HEAD_SHA=$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha)
           echo "head is $HEAD_SHA"
 
-          # A review is recorded by a comment naming the exact commit it covers:
-          #     Reviewed-commit: <full 40-character sha>
-          REVIEWED=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq '.[].body' | grep -oE 'Reviewed-commit: [0-9a-f]{40}' | awk '{print $2}' | tail -1 || true)
+          gh api -H "Accept: application/vnd.github.raw+json" \
+            "repos/$REPO/contents/tooling/independent-review.ts?ref=$DEFAULT_BRANCH" \
+            > "$RUNNER_TEMP/independent-review.ts"
+          gh api -H "Accept: application/vnd.github.raw+json" \
+            "repos/$REPO/contents/.github/independent-reviewers.json?ref=$DEFAULT_BRANCH" \
+            > "$RUNNER_TEMP/independent-reviewers.json"
+          gh api "repos/$REPO/issues/$PR/comments" --paginate --slurp \
+            > "$RUNNER_TEMP/review-comments.json"
 
-          if [ "${REVIEWED:-}" = "$HEAD_SHA" ]; then
-            STATE=success
-            DESC="reviewed against the specification at this commit"
-          elif [ -n "${REVIEWED:-}" ]; then
-            STATE=pending
-            DESC="last review covered ${REVIEWED:0:7}, not this commit"
-          else
-            STATE=pending
-            DESC="awaiting a conformance review of this commit"
-          fi
+          RESULT=$(node "$RUNNER_TEMP/independent-review.ts" "$HEAD_SHA" \
+            "$RUNNER_TEMP/review-comments.json" "$RUNNER_TEMP/independent-reviewers.json")
+          STATE=$(jq -r .state <<< "$RESULT")
+          DESC=$(jq -r .description <<< "$RESULT")
           echo "$STATE — $DESC"
 
           gh api -X POST "repos/$REPO/statuses/$HEAD_SHA" \
