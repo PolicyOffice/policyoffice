@@ -130,6 +130,16 @@ request whose commits you did not write is yours to review, whatever the account
 (rule 8). The risk tier sets how deep the review goes, never whether the `Reviewed-commit`
 comment is needed: without that comment nothing merges at all, Tier 0 included.
 
+When approving, the **reviewer** arms auto-merge before posting `Reviewed-commit`:
+
+```bash
+gh pr merge <n> --auto --squash
+```
+
+The author never arms auto-merge on their own pull request. The order matters because GitHub
+refuses `--auto` once no condition blocks the pull request; the review comment may clear the
+last block. A reviewer sending the change back does not arm it.
+
 The operator should never need to know an issue number. If they do, the backlog is not
 selectable and that is a defect in the tickets.
 

@@ -73,9 +73,15 @@ commit**. A review is recorded by a pull-request comment containing:
 Reviewed-commit: <the full 40-character sha>
 ```
 
-The check compares that sha to the pull request's head. Push a new commit and the recorded
-sha no longer matches, the check returns to pending, and code nobody has read cannot merge
-behind a stale approval. That property is the entire point.
+Only comments from a login in `.github/independent-reviewers.json` count; the list currently
+contains the one account shared by the founder and both agents. The default branch's copy of
+the `pull_request_target` workflow fetches the evaluator and reviewer list from that same
+branch. A pull request therefore cannot change the decision code or allowlist that grades its
+own head.
+
+The check compares the recorded sha to the pull request's head. Push a new commit and the
+recorded sha no longer matches, the check returns to pending, and code nobody has read cannot
+merge behind a stale approval. That property is the entire point.
 
 **The author never posts it.** Recording a review of your own pull request is prohibited
 (`AGENTS.md` rule 8). It is the one merge condition a machine cannot verify, which is
@@ -83,6 +89,11 @@ exactly why it depends on discipline rather than on a check — and why breaking
 process failure rather than a shortcut. If your pull request is blocked on this status it is
 waiting for the other agent — Claude for what Codex implemented, Codex for what Claude
 authored — and that is the system working. It is not waiting for the founder.
+
+**The reviewer arms auto-merge.** When approving, the reviewer enables auto-merge before
+posting `Reviewed-commit`; the author never enables it on their own pull request. The order
+matters because GitHub refuses to enable auto-merge after the review comment clears the last
+blocking condition. A review that requests changes does not arm it.
 
 **What it does not assert.** It is not a human approval, and it is not cryptographic proof
 that a different party reviewed the diff. Both agents in this project authenticate as the
@@ -95,6 +106,13 @@ records its review — Claude reviews what Codex implements, Codex reviews what 
 catches its own misreading of a specification far less reliably than an independent pass
 does. That is why the two passes exist. The check records that the second pass happened; it
 does not prove it.
+
+Nor is the status context bound to a dedicated GitHub App. A pull request could add a new
+workflow that posts a forged `independent review` status, because repository workflows can
+name that context too. The procedural protection is that an author's pull request remains
+unarmed: only the independent reviewer enables auto-merge after examining the diff. Closing
+this residual gap would require a separately credentialed App, which is disproportionate for
+three trusted parties sharing one account.
 
 **Why not require a GitHub review approval instead.** Because the only account that could
 give one belongs to the founder, and the merge policy is explicitly that nobody clicks
