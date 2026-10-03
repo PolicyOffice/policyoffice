@@ -85,6 +85,7 @@ change is to the domain vocabulary only.
 | **Review Case** | One actual scheduled or triggered review, with an outcome: `NO_CHANGE`, `CHANGE_REQUIRED`, `SCOPE_CHANGE_REQUIRED`, `RETIREMENT_RECOMMENDED`. |
 | **Attestation Campaign** | Distribution effort binding one exact Document Version to an audience and a deadline. |
 | **Attestation Assignment** | One principal's obligation within a campaign, retaining why they were targeted. |
+| **Joiner Campaign** | A snapshot campaign that follows up an earlier one for the same version and statement, assigning only those now in scope who hold no live assignment for it. The Pilot's answer to joiners, in place of dynamic audiences. |
 | **Attestation Response** | Recorded acknowledgement, referencing the exact Version, its digest and the statement wording presented. |
 | **Waiver** | A formally approved, time-bound deviation from a requirement, with rationale, owner, expiry and compensating controls. Many organisations call this a *policy exception*; the interface uses the tenant's configured label. Commercial V1. |
 | **Audit Event** | Append-only record of a governance-relevant action. Points at governed records; never contains document bodies. |

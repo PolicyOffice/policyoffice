@@ -268,7 +268,7 @@ Not tickets yet — tickets follow the decisions above. This is the shape.
 | ~~**Authorization**~~ | The evaluator, grants, the capability matrix and its CI gate | **done** — POL-023…027 |
 | ~~**Sessions and identity**~~ | Server-side sessions per `ADR-0002`, sign-in, principal resolution | **done** — POL-029, POL-031, POL-032 |
 | **Approval** | Runs, stages, tasks, decisions, mandated authority, request-changes and resubmission | **decomposed** 2026-09-16 — POL-037 to POL-042 above; #92 decided |
-| **Audience and attestation** | Applicability resolution, assignment, acknowledgement | unstarted. When it is decomposed, bring the founder the cost of assigning joiners automatically — `attestation-model.md` § *Audience modes*, `DYNAMIC` — which was deferred to then on 2026-09-16 |
+| **Audience and attestation** | Applicability resolution, assignment, acknowledgement, joiner campaigns | unstarted. The joiner question deferred on 2026-09-16 was **decided 2026-10-03** — joiner campaigns, not automatic assignment — so nothing now blocks decomposing it |
 | **Read paths** | The register, a version's history, the audit trail as a person can read it | register **done** in POL-031; reader view is POL-035; history and audit views unwritten |
 | **Review cases** | Scheduled review, completion, the obligations that survive it | unstarted — no open decision blocks it |
 | **Evidence packs** | Assembly, the manifest, byte-exact verification outside the application | Everything above |
@@ -338,7 +338,11 @@ Nothing here blocks POL-026. Recorded so it is not rediscovered.
   freezes at submission, as the content revision does, and reopens when changes are requested.
   POL-037 (#142) implements it and carries the invariant note. Raised alongside it and deferred:
   whether the Pilot assigns joiners their team's policies automatically, decided when attestation
-  is decomposed.
+  is decomposed. **Decided 2026-10-03: joiner campaigns**, not automatic assignment — a
+  compliance administrator follows up a campaign for those who entered scope since, as a
+  deliberate dated act (`attestation-model.md` § *Joiner campaigns*, INV-ATT-013). The founder's
+  own institution assigns joiners automatically from HR. The Pilot has no HR feed, so dynamic
+  audiences fed by SCIM stay in Commercial V1.
 
 - **Neon restore timing** remains the only unaddressed ADR verification item outside
   `ADR-0003`. Its trigger is recorded in `phase-2-bootstrap.md`: before any production data

@@ -256,6 +256,7 @@ Governance rules belong to the customer. Product invariants do not.
 | INV-ATT-010 | Duplicate notification delivery never produces duplicate assignments or duplicate governance transitions | At-least-once email, exactly-once obligation | I | MVP |
 | INV-ATT-011 | Extending a campaign's due date never rewrites an outcome already recorded | Otherwise an extension retroactively converts late responders into punctual ones | I, E | MVP |
 | INV-ATT-012 | A principal holds at most one assignment per campaign | Someone caught by three clauses of one audience rule has one obligation, not three | I | MVP |
+| INV-ATT-013 | A joiner campaign assigns only principals in scope at its launch who hold no live assignment for the same Version and statement, and never alters the campaign it follows | One obligation per person per text; the followed campaign is a recorded fact, not a draft | I, E | MVP |
 
 ## INV-AUD — Audit
 
