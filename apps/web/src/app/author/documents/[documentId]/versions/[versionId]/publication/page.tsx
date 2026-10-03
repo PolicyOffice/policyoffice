@@ -39,13 +39,13 @@ export default async function PublicationPage({ params }: PublicationPageProps) 
           <legend>Effective instant</legend>
           <p>
             <label>
-              <input defaultChecked name="effectiveMode" type="radio" value="now" />
+              <input name="effectiveMode" required type="radio" value="now" />
               Immediately
             </label>
           </p>
           <p>
             <label>
-              <input name="effectiveMode" type="radio" value="scheduled" />
+              <input name="effectiveMode" required type="radio" value="scheduled" />
               Schedule for a future instant
             </label>
           </p>

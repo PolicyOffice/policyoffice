@@ -34,6 +34,12 @@ export interface PublishDocumentVersionRequest extends PublicationFormRequest {
   readonly effectiveFrom: Date | null;
 }
 
+export interface PublishDocumentVersionFormRequest extends PublicationFormRequest {
+  readonly expectedRowVersion: number;
+  readonly effectiveMode: string;
+  readonly effectiveFrom: string;
+}
+
 export interface PublicationFormPayload {
   readonly documentCode: string;
   readonly versionTitle: string;
@@ -54,6 +60,14 @@ interface PublicationFormRow extends Record<string, unknown> {
 
 const RESPONSE_HEADERS = Object.freeze({ "cache-control": "no-store" });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UTC_LOCAL_MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+
+class PublicationFormError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+    this.name = "PublicationFormError";
+  }
+}
 
 function notFound(): Response {
   return Response.json({ error: "not_found" }, { status: 404, headers: RESPONSE_HEADERS });
@@ -65,6 +79,22 @@ function failure(status: number, error: string): Response {
 
 function redirect(location: string): Response {
   return new Response(null, { status: 303, headers: { ...RESPONSE_HEADERS, location } });
+}
+
+export function parsePublicationEffectiveFrom(mode: string, value: string): Date | null {
+  if (mode === "now") {
+    if (value !== "") throw new PublicationFormError("ambiguous_effective_instant");
+    return null;
+  }
+  if (mode !== "scheduled") throw new PublicationFormError("invalid_effective_mode");
+  if (!UTC_LOCAL_MINUTE.test(value)) {
+    throw new PublicationFormError("invalid_effective_instant");
+  }
+  const instant = new Date(`${value}:00.000Z`);
+  if (Number.isNaN(instant.valueOf()) || instant.toISOString().slice(0, 16) !== value) {
+    throw new PublicationFormError("invalid_effective_instant");
+  }
+  return instant;
 }
 
 function authorizationContext(
@@ -245,5 +275,29 @@ export function createPublishDocumentVersionHandler(
       if (error instanceof TypeError) return failure(400, "invalid_request");
       throw error;
     }
+  };
+}
+
+/** Reject an absent or ambiguous form choice before entering the publication transaction. */
+export function createPublishDocumentVersionFormHandler(
+  options: PublicationHandlerOptions,
+): (request: PublishDocumentVersionFormRequest) => Promise<Response> {
+  const publish = createPublishDocumentVersionHandler(options);
+
+  return async (request) => {
+    let effectiveFrom: Date | null;
+    try {
+      effectiveFrom = parsePublicationEffectiveFrom(request.effectiveMode, request.effectiveFrom);
+    } catch (error) {
+      if (error instanceof PublicationFormError) return failure(400, error.code);
+      throw error;
+    }
+    return publish({
+      sessionToken: request.sessionToken,
+      documentId: request.documentId,
+      versionId: request.versionId,
+      expectedRowVersion: request.expectedRowVersion,
+      effectiveFrom,
+    });
   };
 }

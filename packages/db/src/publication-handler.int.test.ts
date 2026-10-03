@@ -4,6 +4,7 @@ import { createDocumentRegisterHandler } from "../../../apps/web/src/document-re
 import {
   createPublicationFormHandler,
   createPublishDocumentVersionHandler,
+  createPublishDocumentVersionFormHandler,
   type PublicationFormPayload,
 } from "../../../apps/web/src/publication.js";
 import {
@@ -319,7 +320,8 @@ describe("the publication request boundary", () => {
     );
 
     const futureCorrelationId = randomUUID();
-    const futureResponse = await createPublishDocumentVersionHandler({
+    const futureEffectiveFrom = new Date(REQUEST_INSTANT.valueOf() + 24 * 60 * 60 * 1_000);
+    const futureResponse = await createPublishDocumentVersionFormHandler({
       tenantId: TENANT_A,
       clock: () => REQUEST_INSTANT,
       idFactory: ids(randomUUID(), futureCorrelationId),
@@ -328,7 +330,8 @@ describe("the publication request boundary", () => {
       documentId: candidate.documentId,
       versionId: candidate.versionId,
       expectedRowVersion: form.expectedRowVersion,
-      effectiveFrom: new Date(REQUEST_INSTANT.valueOf() + 24 * 60 * 60 * 1_000),
+      effectiveMode: "scheduled",
+      effectiveFrom: futureEffectiveFrom.toISOString().slice(0, 16),
     });
     expect(futureResponse.status).toBe(303);
     expect(await versionState(candidate.versionId)).toMatchObject({ state: "PUBLISHED" });
@@ -345,7 +348,7 @@ describe("the publication request boundary", () => {
 
     const immediate = await seedVersion();
     const immediateCorrelationId = randomUUID();
-    const immediateResponse = await createPublishDocumentVersionHandler({
+    const immediateResponse = await createPublishDocumentVersionFormHandler({
       tenantId: TENANT_A,
       clock: () => REQUEST_INSTANT,
       idFactory: ids(randomUUID(), immediateCorrelationId),
@@ -354,7 +357,8 @@ describe("the publication request boundary", () => {
       documentId: immediate.documentId,
       versionId: immediate.versionId,
       expectedRowVersion: immediate.rowVersion,
-      effectiveFrom: null,
+      effectiveMode: "now",
+      effectiveFrom: "",
     });
     expect(immediateResponse.status).toBe(303);
     expect(await versionState(immediate.versionId)).toMatchObject({ state: "EFFECTIVE" });
@@ -418,7 +422,53 @@ describe("the publication request boundary", () => {
       }),
     ]);
 
-    expect(await responseShape(foreign)).toEqual(await responseShape(absent));
+    const expectedNotFound = {
+      status: 404,
+      contentType: "application/json",
+      cacheControl: "no-store",
+      body: '{"error":"not_found"}',
+    };
+    expect(await responseShape(foreign)).toEqual(expectedNotFound);
+    expect(await responseShape(absent)).toEqual(expectedNotFound);
+  });
+
+  it("INV-EFF-001: refuses ambiguous or absent effective choices without a write or event", async () => {
+    const ambiguous = await seedVersion();
+    const missing = await seedVersion();
+    const handler = createPublishDocumentVersionFormHandler({
+      tenantId: TENANT_A,
+      clock: () => REQUEST_INSTANT,
+    });
+
+    const ambiguousResponse = await handler({
+      sessionToken: publisherToken,
+      documentId: ambiguous.documentId,
+      versionId: ambiguous.versionId,
+      expectedRowVersion: ambiguous.rowVersion,
+      effectiveMode: "now",
+      effectiveFrom: "2027-02-01T09:00",
+    });
+    const missingResponse = await handler({
+      sessionToken: publisherToken,
+      documentId: missing.documentId,
+      versionId: missing.versionId,
+      expectedRowVersion: missing.rowVersion,
+      effectiveMode: "",
+      effectiveFrom: "",
+    });
+
+    expect(await responseShape(ambiguousResponse)).toMatchObject({
+      status: 400,
+      body: '{"error":"ambiguous_effective_instant"}',
+    });
+    expect(await responseShape(missingResponse)).toMatchObject({
+      status: 400,
+      body: '{"error":"invalid_effective_mode"}',
+    });
+    expect(await versionState(ambiguous.versionId)).toEqual({ state: "APPROVED", rowVersion: 3 });
+    expect(await versionState(missing.versionId)).toEqual({ state: "APPROVED", rowVersion: 3 });
+    expect(await versionEventCount(ambiguous.versionId)).toBe(0);
+    expect(await versionEventCount(missing.versionId)).toBe(0);
   });
 
   it("INV-TIME-003: passes the rendered row version through and conflicts on a stale write", async () => {
