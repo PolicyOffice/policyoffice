@@ -662,10 +662,16 @@ A distribution effort binding one exact Document Version to an audience and a de
 | `launch_at`, `due_at`, `closed_at` | Chronology |
 | `reminder_offsets`, `escalation_rule` | Operational automation |
 | `status` | `DRAFT`, `SCHEDULED`, `OPEN`, `CLOSED`, `CANCELLED` |
-| `owner_user_id`, `origin_reason` | Accountability, and why the campaign exists |
+| `owner_user_id`, `origin_reason` | Accountability, and why the campaign exists — `JOINERS` for a joiner campaign |
+| `follows_campaign_id` | A joiner campaign's predecessor: the earlier campaign for the same version whose audience it re-resolves. Set exactly when `origin_reason` is `JOINERS`, and never alters the campaign it names |
 | `configuration_version_id` | Configuration in force at launch |
 
-**Rules:** INV-ATT-001, INV-ATT-008, INV-ATT-011, INV-AUTH-007.
+A **joiner campaign** is the Pilot's answer to people who enter scope after a launch. It is an
+ordinary snapshot campaign that copies its predecessor's audience definition, resolves it again
+at its own launch, and assigns only those holding no live assignment for the same version and
+statement in any campaign (`attestation-model.md` § *Joiner campaigns*).
+
+**Rules:** INV-ATT-001, INV-ATT-008, INV-ATT-011, INV-ATT-013, INV-AUTH-007.
 
 ### `AttestationAssignment` — MVP
 
@@ -679,7 +685,7 @@ One principal's obligation within a campaign.
 | `due_at` | The deadline that applies to this assignment |
 | `exempted_by`, `exemption_reason`, `exemption_expires_at` | Where exempted |
 
-**Rules:** INV-ATT-003…006, INV-ATT-012. `DUE_SOON` and `OVERDUE` are derived from
+**Rules:** INV-ATT-003…006, INV-ATT-012, INV-ATT-013. `DUE_SOON` and `OVERDUE` are derived from
 `due_at`, not stored states — see `attestation-model.md`.
 
 ### `AttestationResponse` — MVP

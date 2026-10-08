@@ -32,6 +32,7 @@ chapter that says *what that means when it actually happens on a Tuesday afterno
 | A document owner leaves | The document is immediately visible as an ownership exception, and routed to a remediation queue | INV-DOC-006 |
 | An employee moves from Estonia to Poland | Applicability re-resolves from the new membership. New obligations appear, irrelevant ones stop applying, and every historical record stands | INV-APL-009, INV-ORG-002 |
 | Someone changes department during an open snapshot campaign | Their assignment is unchanged. Snapshot means snapshot | INV-ATT-006 |
+| Someone joins a team after its campaign launched | That campaign does not add them. A joiner campaign does, unless they already hold a live assignment for the same version and statement | INV-ATT-006, INV-ATT-013 |
 | A user is a member of two legal entities | Obligations resolve per context and are labelled by context. This is not a conflict | INV-APL-001 |
 | A user's temporary grant expires while their page is open | The next authorization check denies. No logout, no cleanup job required | INV-AUTH-003, INV-AUTH-004 |
 | A deactivated user is reinstated | A new grant is required. Reactivation restores identity, not entitlement | INV-AUTH-001 |
@@ -100,6 +101,7 @@ chapter that says *what that means when it actually happens on a Tuesday afterno
 | A deadline is extended after some people were late | Already-recorded outcomes are untouched | INV-ATT-011 |
 | The notification provider sends twice | One assignment, one obligation, one transition | INV-ATT-010 |
 | An audience rule catches somebody three times | One assignment | INV-ATT-012 |
+| Someone who declined is in scope when a joiner campaign launches | Not assigned again. The decline stands, and was already escalated to the campaign owner | INV-ATT-013 |
 | A material update ships | Re-attestation for the affected audience only. Re-attesting everybody for every change is how acknowledgement becomes meaningless | INV-ATT-009 |
 | A translation is corrected with no normative change | No new attestation by default | INV-ATT-009 |
 | Someone declines to acknowledge | Recorded with a reason and escalated. A decline is a governance fact, not a missing response | INV-ATT-007 |

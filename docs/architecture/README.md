@@ -46,7 +46,7 @@ every service boundary is an opportunity to create a second one.
 
 ## Where the guarantees live
 
-The specification registers 149 invariants and ranks enforcement by strength: structural,
+The specification registers 150 invariants and ranks enforcement by strength: structural,
 then database constraint, then type system, then a single code path, then tests. The
 design target is that **forgetting an invariant should not be sufficient to violate it.**
 

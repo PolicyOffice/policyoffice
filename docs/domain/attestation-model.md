@@ -91,6 +91,54 @@ question a year later, once the org chart has moved.
 Someone caught by three separate clauses of an audience rule has one obligation, not
 three.
 
+### Joiner campaigns — the Pilot's answer to joiners
+
+Snapshot leaves one question open: what happens to someone who enters scope after launch? In
+the Pilot, a compliance administrator answers it deliberately, by launching a **joiner
+campaign**. That is an ordinary snapshot campaign which follows up an earlier campaign for the
+same version:
+
+| | A joiner campaign |
+|---|---|
+| Version and statement | The followed campaign's, unchanged (INV-ATT-001) |
+| Audience definition | The followed campaign's, copied and resolved again at this launch |
+| Who is assigned | Everyone that resolution finds, **minus** anyone already covered (below) |
+| Preflight, due date, lateness | Its own, exactly as for any campaign (INV-AUTH-007, INV-ATT-003) |
+| `origin_reason` | `JOINERS`, with `follows_campaign_id` naming the campaign it follows |
+| Who may launch it | Whoever holds `attestation.manage`, as for any campaign |
+
+> **INV-ATT-013 — A joiner campaign assigns only principals in scope at its launch who hold no
+> live assignment for the same Version and statement, and never alters the campaign it
+> follows.**
+
+A **live** assignment is one in any state except a cancellation: `PENDING`, `COMPLETED`,
+`COMPLETED_LATE`, `DECLINED` or `EXEMPTED`. The live set is drawn from **every** campaign for
+the version under the same statement, not only the followed one. So:
+
+- someone who already holds this obligation, from any campaign, is not given a second one;
+- someone who declined is not quietly asked again — the decline has already been escalated to
+  the campaign owner, and a second request would bury it;
+- someone whose earlier obligation was cancelled, because they left and came back or because an
+  earlier joiner campaign was cancelled, is assigned again.
+
+Matching on the statement as well as the version matters because *"I have read"* and *"I will
+comply"* are different acknowledgements (INV-ATT-002).
+
+The evidence still explains itself, which is why this, rather than dynamic audiences, is the
+Pilot's answer: *these are the people who entered scope between the two launches, added on this
+date by this person.* The followed campaign is untouched (INV-ATT-006, INV-ATT-008). Each
+joiner's `targeting_basis` records the clause that caught them (INV-ATT-004), as for any
+assignment.
+
+A joiner campaign may follow an `Open` or `Closed` campaign, never a `Cancelled` one. It cannot
+be created once the version has been superseded or withdrawn: a joiner acknowledges what governs
+them, not what used to.
+
+**Decided by the founder on 2026-10-03.** At the founder's payment institution, joiners are
+assigned automatically from the HR system. The Pilot has no HR or directory feed — SSO and SCIM
+are Commercial V1 — so joiner campaigns are the bridge, a deliberate dated act in place of an
+automatic one. `DYNAMIC` audiences fed by SCIM remain the full answer, in V1.
+
 ## Assignment
 
 | State | Meaning |

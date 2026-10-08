@@ -19,7 +19,7 @@ The guiding test for every feature and architectural decision:
 **Phase 2 in progress — repository bootstrap.**
 
 The specification is written and settled: 16 chapters under `docs/domain/` and
-`docs/product/`, and 149 invariants with stable identifiers. The architecture is derived
+`docs/product/`, and 150 invariants with stable identifiers. The architecture is derived
 from it: eleven ADRs, a physical data model and a threat model under `docs/architecture/`.
 
 The platform those ADRs depend on is **executed, not assumed** — 34 assertions against

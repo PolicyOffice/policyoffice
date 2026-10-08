@@ -136,6 +136,7 @@ mechanism, or the drop is recorded.
 | INV-ATT-002 responses record the full context | **1** | Version, digest, statement and locale columns all `not null` |
 | INV-ATT-007 responses append-only | 2 | `revoke update, delete` |
 | INV-ATT-012 one assignment per principal | 2 | `unique (tenant_id, campaign_id, user_id)` |
+| INV-ATT-013 joiner campaigns assign only the uncovered | 4 | The exclusion is a launch-time rule in the domain, over every live assignment for the same version and statement. Only the predecessor reference is structural: `follows_only_when_joiners` and `never_follows_itself` (2) |
 | INV-REV-005 completed cases immutable | 2 | Trigger refusing `update` once `completed_at` is set |
 | INV-REV-006 one open case per rule | 2 | Partial unique index on open states |
 | INV-AUD-002 ledger append-only | 2 | `revoke update, delete, truncate` from `app_role` |
@@ -579,7 +580,7 @@ alter table review_case
 
 | Table | Columns |
 |---|---|
-| `attestation_campaign` | `document_version_id` **not null** (INV-ATT-001), `audience_definition jsonb`, `audience_mode`, `enrolment_window_end`, `attestation_statement_id`, `launch_at`, `due_at`, `closed_at`, `status`, `owner_user_id`, `origin_reason`, `configuration_version_id` |
+| `attestation_campaign` | `document_version_id` **not null** (INV-ATT-001), `audience_definition jsonb`, `audience_mode`, `enrolment_window_end`, `attestation_statement_id`, `launch_at`, `due_at`, `closed_at`, `status`, `owner_user_id`, `origin_reason`, `follows_campaign_id` (a joiner campaign's predecessor, INV-ATT-013), `configuration_version_id` |
 | `attestation_assignment` | `campaign_id`, `user_id`, `state assignment_state`, `targeting_basis jsonb` (INV-ATT-004), `due_at`, `exempted_by`, `exemption_reason`, `exemption_expires_at` |
 | `attestation_response` | `assignment_id`, `response_type`, `responded_at`, `document_version_id`, `content_digest`, `attestation_statement_id`, `locale_presented`, `responder_user_id`, `session_assurance` |
 
@@ -588,6 +589,20 @@ alter table review_case
 -- clauses of an audience rule caught them.
 alter table attestation_assignment
   add constraint one_assignment_per_principal unique (tenant_id, campaign_id, user_id);
+
+-- INV-ATT-013: a joiner campaign names the campaign it follows, and only a joiner
+-- campaign does. Composite, like every reference, so it cannot cross tenants
+-- (INV-TEN-003). `is not distinct from`, not `=`: a NULL origin_reason would make
+-- `=` yield NULL, and a check that yields NULL passes. Which principals a joiner
+-- campaign may assign is a launch-time rule over every live assignment for the
+-- same version and statement, enforced in the domain.
+alter table attestation_campaign
+  add constraint joiner_campaign_follows
+    foreign key (tenant_id, follows_campaign_id) references attestation_campaign (tenant_id, id),
+  add constraint follows_only_when_joiners
+    check ((origin_reason is not distinct from 'JOINERS') = (follows_campaign_id is not null)),
+  add constraint never_follows_itself
+    check (follows_campaign_id is distinct from id);
 
 -- INV-ATT-007: a correction adds evidence rather than replacing it.
 revoke update, delete on attestation_response from app_role;

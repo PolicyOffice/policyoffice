@@ -108,6 +108,7 @@ the property-based gate.
 - INV-ATT-010 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-ATT-011 — MVP; no schema or domain code yet (Phase 2/3)
 - INV-ATT-012 — MVP; no schema or domain code yet (Phase 2/3)
+- INV-ATT-013 — MVP; registered 2026-10-03 with joiner campaigns (`attestation-model.md` § *Joiner campaigns*). No attestation schema or domain code exists to enforce it; it arrives with the attestation epic, which is not yet decomposed into tickets
 
 ## INV-AUD — Audit
 
