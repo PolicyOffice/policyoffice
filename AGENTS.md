@@ -100,9 +100,18 @@ gh issue list --label ready --state open
 
 Selection rule, in order:
 
-1. Skip anything whose `Depends on:` issues are still open.
+1. Skip anything whose `Depends on:` issues are still open. The line may name issues or pull
+   requests; a pull request counts as satisfied only once **merged**. One closed without merging
+   means the ticket's premise has changed — skip it and say so on the issue.
 2. Skip anything already labelled `in-progress` or with an open PR referencing it.
 3. Among what remains, take the lowest `POL-` number.
+
+**When a dependency has only just closed, re-check before claiming.** A ticket written ahead of
+its dependency describes that dependency as it stood when the ticket was drafted. Read its
+*Verified while drafting* facts against what actually merged. A fact that no longer holds is a
+Decision Request, not something to build around. This is the check Claude would otherwise make
+when swapping `blocked` for `ready` — tickets now wait on `Depends on:` instead, so nobody has
+to be running at the moment a dependency lands.
 
 Claim it before starting, and release it if you stop:
 
