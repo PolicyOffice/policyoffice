@@ -118,6 +118,40 @@ select relname, pg_get_userbyid(relowner), relforcerowsecurity
   from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r';
 ```
 
+**When the drifted database holds data you would rather not drop**, build a throwaway
+alongside it instead. Every connection has to move, and overriding only some of them fails
+in a way that reads like a bug in the code under test. The suite reads three separate sets —
+fixture teardown connects through `MIGRATION_DATABASE_URL`, the application transaction
+through `DATABASE_URL`, and the behavioural connections through `TEST_DATABASE_URL_*` — and
+the setup commands read a fourth, `MIGRATION_ADMIN_URL`. A partial override quietly keeps
+using the drifted database and reports `permission denied` or `relation … does not exist`
+from whichever set you did not redirect.
+
+```bash
+docker exec policyoffice-postgres psql -U postgres -d postgres \
+  -c "create database policyoffice_review template template0 locale 'C' encoding 'UTF8';"
+B=localhost:5432/policyoffice_review
+export MIGRATION_ADMIN_URL="postgres://postgres:postgres@$B"
+export MIGRATION_DATABASE_URL="postgres://postgres:postgres@$B"
+export DATABASE_URL="postgres://app_role:app_role@$B"
+export TEST_DATABASE_URL_APP="postgres://app_role:app_role@$B"
+export TEST_DATABASE_URL_MIGRATION="postgres://migration_role:migration_role@$B"
+export TEST_DATABASE_URL_RETENTION="postgres://retention_role:retention_role@$B"
+export TEST_DATABASE_URL_SUPERUSER="postgres://postgres:postgres@$B"
+pnpm --filter @policyoffice/db migrate && pnpm --filter @policyoffice/db dev:credentials
+```
+
+Roles are cluster-wide, so `dev:credentials` is safe to repeat for a second database. Note
+that the administrative connection is the **superuser**, exactly as CI configures it: the
+runner does its own `SET ROLE migration_role` before any DDL, which is what leaves the
+tables owned by `migration_role` and `force row level security` binding. The runner cannot
+cause the drift: it refuses a `migration_role` connection before touching anything
+(`assertAdministrativeConnection`, pinned by `runner.int.test.ts`). The drift comes from
+something that changes ownership behind it, which is what `./verification/run.sh` does. It can
+also surface at `migrate` rather than in a test — the next pending migration that alters an
+existing table fails with `must be owner of table …`, because `migration_role` no longer owns
+it.
+
 Migrations are forward-only, hand-written SQL, applied by our own runner:
 
 ```bash

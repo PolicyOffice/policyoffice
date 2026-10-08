@@ -174,7 +174,14 @@ which is exactly why the schema version exists.
   decision
   7. If it cannot be constrained to the EU, this is a Decision Request, not a
      substitution.
-- Presigned single-use PUT semantics and expiry on the chosen provider.
+- Presigned single-use PUT semantics and expiry on the chosen provider. **Partly settled by
+  POL-044 (#171):** single use is obtained by signing `If-None-Match: *` into the presigned
+  PUT itself, so a replayed URL fails against the object the first upload created rather than
+  depending on the provider to count uses, and `expiresIn` bounds the credential separately.
+  Both are exercised against real MinIO in `packages/storage/src/object-storage.int.test.ts`.
+  What stays open is whether the provider finally chosen honours a signed `If-None-Match` on
+  a presigned PUT. If it does not, single use has to be re-established another way, and that
+  is a Decision Request rather than a configuration detail.
 - Free-tier egress and operation limits against expected pack generation and reader
   downloads.
 - A canonical JSON implementation in TypeScript that is deterministic across Node versions
