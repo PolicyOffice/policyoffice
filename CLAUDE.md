@@ -57,25 +57,30 @@ errors, Codex simply reports there is nothing to do. POL-039 sat untouched that 
 until the founder relayed the refusal by hand, which is exactly the courier role
 *Never brief Codex through the operator* exists to remove.
 
-**Which label it carries depends on whether anything blocks it, and the two sets are mutually
-exclusive.** With no open dependency:
+**Every implementation ticket is filed `ready`. A dependency on another issue or pull request is
+stated, not labelled** — as the first line of the body, which `AGENTS.md` § *Picking up work*
+rule 1 already makes Codex skip until it closes:
+
+```text
+Depends on: #176
+```
 
 ```bash
 gh issue create --label implementation --label ready --label tier-2 --label phase-3 …
 ```
 
-With a dependency still open, `blocked` takes the place of `ready`, and they swap when the
-dependency merges:
+This replaced a `blocked` label that swapped to `ready` when the dependency merged. The swap was
+always Claude's, so every dependency that landed while Claude was not running left Codex with
+nothing claimable until the next session. In late September that was three tickets at once —
+POL-045, POL-048 and POL-036 each waiting on a pull request that was days from merging. A ticket
+that waits on `Depends on:` becomes claimable the moment its dependency closes, with nobody
+running. The check the swap used to carry — does the ticket still match what merged? — moved to
+the implementer, who re-reads *Verified while drafting* before claiming.
 
-```bash
-gh issue create --label implementation --label blocked --label tier-2 --label phase-3 …
-gh issue edit <n> --remove-label blocked --add-label ready   # once the dependency lands
-```
-
-**Never both.** `ready` is what Codex selects on, so a ticket carrying both is picked up with its
-dependency still open — the opposite failure, and a worse one than being ignored. POL-039 should
-have been filed `blocked` while its specification was unmerged and flipped when that landed;
-instead it carried neither, and sat.
+`blocked` remains for what `Depends on:` cannot name: a founder decision, an external event, an
+account that does not exist yet. Only Claude removes it, and **never alongside `ready`** —
+`ready` is what Codex selects on, so a ticket carrying both is picked up with its blocker still in
+place. POL-039 is the opposite failure: it carried neither label and sat untouched on 2026-09-17.
 
 Two labels are never yours: `in-progress` is Codex's when it claims the work, and
 `decision-required` belongs to whoever raises one.

@@ -100,9 +100,18 @@ gh issue list --label ready --state open
 
 Selection rule, in order:
 
-1. Skip anything whose `Depends on:` issues are still open.
+1. Skip anything whose `Depends on:` issues are still open. The line may name issues or pull
+   requests; a pull request counts as satisfied only once **merged**. One closed without merging
+   means the ticket's premise has changed — skip it and say so on the issue.
 2. Skip anything already labelled `in-progress` or with an open PR referencing it.
 3. Among what remains, take the lowest `POL-` number.
+
+**When a dependency has only just closed, re-check before claiming.** A ticket written ahead of
+its dependency describes that dependency as it stood when the ticket was drafted. Read its
+*Verified while drafting* facts against what actually merged. A fact that no longer holds is a
+Decision Request, not something to build around. This is the check Claude would otherwise make
+when swapping `blocked` for `ready` — tickets now wait on `Depends on:` instead, so nobody has
+to be running at the moment a dependency lands.
 
 Claim it before starting, and release it if you stop:
 
@@ -123,6 +132,23 @@ while your own pull request sits on a requested change, is the failure this para
 prevent.** It happened on 2026-09-19: #161 had a blocking finding, the only open issue was
 already `in-progress`, the only open pull request was its own — so selection found nothing and
 the finding sat unread until the operator asked.
+
+**A conflict is a requested change too — from `main` rather than from a reviewer.** An approved
+pull request of yours that GitHub reports as `DIRTY` or `BEHIND` cannot merge, and nothing will
+fix it but you. The ruleset requires a branch to be up to date before it merges
+(`strict_required_status_checks_policy`), and auto-merge never updates a branch by itself.
+`gh pr list` shows neither state by default, so ask for it:
+
+```bash
+gh pr list --state open --json number,title,mergeStateStatus,headRefName
+```
+
+Rebase or update the branch, then say on the pull request what changed — *"updated from `main`,
+no change to this diff"*, or which conflict you resolved and how. The new head invalidates the
+recorded `Reviewed-commit`, and the reviewer needs to know whether there is anything new to read.
+It happened on 2026-09-23: #169 was approved, #171 merged beneath it, and #169 sat `DIRTY` while
+POL-046 was picked up instead — a conflict is not a review finding, and the paragraph above named
+only findings.
 
 For review work, `gh pr list --state open` — review every PR with no review from you since
 its most recent commit. **That includes pull requests the other agent authored.** A pull
