@@ -136,6 +136,7 @@ mechanism, or the drop is recorded.
 | INV-ATT-002 responses record the full context | **1** | Version, digest, statement and locale columns all `not null` |
 | INV-ATT-007 responses append-only | 2 | `revoke update, delete` |
 | INV-ATT-012 one assignment per principal | 2 | `unique (tenant_id, campaign_id, user_id)` |
+| INV-ATT-013 joiner campaigns assign only the uncovered | 4 | The exclusion is a launch-time rule in the domain, over every live assignment for the same version and statement. Only the predecessor reference is structural: `follows_only_when_joiners` and `never_follows_itself` (2) |
 | INV-REV-005 completed cases immutable | 2 | Trigger refusing `update` once `completed_at` is set |
 | INV-REV-006 one open case per rule | 2 | Partial unique index on open states |
 | INV-AUD-002 ledger append-only | 2 | `revoke update, delete, truncate` from `app_role` |
